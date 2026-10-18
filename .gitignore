@@ -1,0 +1,23 @@
+# Future generated build and editor files
+bin/
+obj/
+.godot/
+.vs/
+.idea/
+artifacts/
+dist/
+work/
+*.user
+*.log
+*.tmp
+# Local settings and credentials
+.env
+.env.*
+local.settings.json
+*.local.json
+# Read-only research outputs must not be redistributed
+research/decompiled/
+research/extracted/
+# Workshop content is generated from the same release package
+workshop/content/
+# Keep the Workshop identity after first publication; do not ignore mod_id.txt.
