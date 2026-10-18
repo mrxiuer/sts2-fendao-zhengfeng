@@ -1,11 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyName>FendaoZhengfeng</AssemblyName>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../FendaoZhengfeng.Core/*.cs" Link="Core/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Assets/icons/*.png" LogicalName="FendaoZhengfeng.Assets.%(Filename)%(Extension)" />
     <Reference Include="sts2"><HintPath>$(GameData)/sts2.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="0Harmony"><HintPath>$(GameData)/0Harmony.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="GodotSharp"><HintPath>$(GameData)/GodotSharp.dll</HintPath><Private>false</Private></Reference>

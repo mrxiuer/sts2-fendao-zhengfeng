@@ -1,6 +1,6 @@
 # 原生加载与 Steam 创意工坊发布
 
-当前版本：0.1.1 开发构建。已完成本机原生加载与独立目录部署，尚未上传工坊。
+当前版本：0.1.2 开发构建。已完成本机原生加载与独立目录部署，尚未上传工坊。
 
 ## 本地目录与安装
 
@@ -9,7 +9,7 @@
 - 本 MOD 运行目录：`mods\FendaoZhengfeng`。
 - 运行文件：`FendaoZhengfeng.dll`、`FendaoZhengfeng.json`。
 
-项目使用单 DLL，包含规则引擎和原生接入，不要求附属 Core DLL。界面使用 Godot 原生控件，目前无需 PCK。清单声明 has_dll、affects_gameplay，未声明不存在的资源包和 BaseLib 依赖。基于本机 v0.111.0 编译，其他版本兼容性需另行验证。
+项目使用单 DLL，包含规则引擎、原生接入及 30 张透明 PNG 图标，不要求附属 Core DLL。界面使用 Godot 原生控件，目前无需 PCK。清单声明 has_dll、affects_gameplay，未声明不存在的资源包和 BaseLib 依赖。基于本机 v0.111.0 编译，其他版本兼容性需另行验证。
 
 构建、研究、日志、缓存和第三方游戏程序集不会进入运行包。部署脚本仅复制本 MOD 的两份产物，不覆盖游戏 EXE、原版 DLL、原版 PCK 或其他 MOD。
 

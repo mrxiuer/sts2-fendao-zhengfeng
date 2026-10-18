@@ -35,7 +35,7 @@ internal static class NativeVerification
     {
         string? directory = System.Environment.GetEnvironmentVariable("FDZF_SCREENSHOT_DIR");
         if (string.IsNullOrWhiteSpace(directory)) return;
-        await Task.Delay(350);
+        await Task.Delay(2000);
         Directory.CreateDirectory(directory);
         var result = game.GetViewport().GetTexture().GetImage().SavePng(Path.Combine(directory, name + ".png"));
         if (result != Error.Ok) throw new IOException("实机截图保存失败：" + result);
@@ -107,7 +107,8 @@ internal static class NativeVerification
             Check(player.Creature.CurrentHp == 1 && session.Me.Ghosts == 0, "scapegoat preserves one HP and consumes one charge");
             Check(session.Me.RevivalCount == 2, "scapegoat does not count as revival");
             Check(!player.Relics.OfType<LizardTail>().Single().WasUsed, "scapegoat precedes native resurrection");
-            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == 64), "all 29 effect icons load through native SVG renderer");
+            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == EffectIcons.TextureSize), "all 29 hand-painted effect icons load from embedded PNG resources");
+            Check(ReferenceEquals(ModelDb.Modifier<RaceModifier>().Icon, EffectIcons.Mode), "native mode icon replaces missing NOPE placeholder");
             EffectHud.Refresh();
             Check(EffectHud.IsVisible && EffectHud.IconCount == session.Me.Effects.Count, "effect icons stay visible near relics with race panel closed");
             var heldContract = session.Me.Effects["bitter_sweet"];
@@ -141,6 +142,9 @@ internal static class NativeVerification
             int boonRank = session.Me.Effects["battle_hardened"].Rank;
             await MockTesting.GrantEffect("battle_hardened");
             Check(session.Me.Effects["battle_hardened"].Rank == boonRank + 1, "interactive mock grants repeated boon through normal rules transaction");
+            if (!string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("FDZF_SCREENSHOT_DIR")))
+                foreach (var effect in Catalog.All.Where(effect => effect.Kind == EffectKind.Boon && !session.Me.Has(effect.Id)))
+                    await MockTesting.GrantEffect(effect.Id);
             await CaptureVisual(game, "mock-02-persistent-effect-icons");
             if (!string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("FDZF_SCREENSHOT_DIR")))
             {

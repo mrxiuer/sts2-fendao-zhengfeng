@@ -19,6 +19,17 @@ using MegaCrit.Sts2.Core.ValueProps;
 
 namespace FendaoZhengfeng.Mod;
 
+[HarmonyPatch(typeof(ModifierModel), "get_Icon")]
+internal static class RaceModeIconPatch
+{
+    static bool Prefix(ModifierModel __instance, ref Texture2D __result)
+    {
+        if (__instance is not RaceModifier) return true;
+        __result = EffectIcons.Mode;
+        return false;
+    }
+}
+
 // Keep the scope alive until the native async play finishes, including nested plays.
 [HarmonyPatch(typeof(CardModel), nameof(CardModel.OnPlayWrapper))]
 internal static class CardPlayScope
