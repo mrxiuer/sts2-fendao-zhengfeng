@@ -19,15 +19,31 @@ using MegaCrit.Sts2.Core.ValueProps;
 
 namespace FendaoZhengfeng.Mod;
 
-// AsyncLocal keeps nested automatic plays separate across awaited native commands.
+// Keep the scope alive until the native async play finishes, including nested plays.
 [HarmonyPatch(typeof(CardModel), nameof(CardModel.OnPlayWrapper))]
 internal static class CardPlayScope
 {
-    private static readonly AsyncLocal<bool> automatic = new();
-    public static bool IsAutomatic => automatic.Value;
-    static void Prefix(bool isAutoPlay, out bool __state) { __state = automatic.Value; automatic.Value = isAutoPlay; }
-    static void Postfix(bool __state) { automatic.Value = __state; }
-    static Exception? Finalizer(Exception? __exception, bool __state) { automatic.Value = __state; return __exception; }
+    private sealed record Scope(CardModel Card, bool Automatic);
+    private static readonly Dictionary<CardModel, List<Scope>> scopes = [];
+    public static bool IsAutomatic(CardModel card) => scopes.TryGetValue(card, out var stack) && stack.Count > 0 && stack[^1].Automatic;
+    static void Prefix(CardModel __instance, bool isAutoPlay, out Scope __state)
+    {
+        __state = new(__instance, isAutoPlay);
+        if (!scopes.TryGetValue(__instance, out var stack)) scopes[__instance] = stack = [];
+        stack.Add(__state);
+    }
+    static void Postfix(ref Task __result, Scope __state) { __result = Complete(__result, __state); }
+    private static async Task Complete(Task original, Scope scope)
+    {
+        try { await original; } finally { Remove(scope); }
+    }
+    private static void Remove(Scope scope)
+    {
+        if (!scopes.TryGetValue(scope.Card, out var stack)) return;
+        stack.Remove(scope);
+        if (stack.Count == 0) scopes.Remove(scope.Card);
+    }
+    static Exception? Finalizer(Exception? __exception, Scope __state) { if (__exception != null) Remove(__state); return __exception; }
 }
 
 [HarmonyPatch(typeof(Reward), nameof(Reward.SelectUnsynchronized))]
@@ -176,6 +192,11 @@ internal static class LocalizationPatch
     {
         if (__instance.LocTable == ModEntry.Id)
         {
+            if (__instance.LocEntryKey.StartsWith("effect.", StringComparison.Ordinal) && __instance.LocEntryKey.EndsWith(".title", StringComparison.Ordinal))
+            {
+                __result = Catalog.Get(__instance.LocEntryKey[7..^6]).Name;
+                return false;
+            }
             __result = __instance.LocEntryKey switch
             {
                 "repair.title" => "恢复耐久",

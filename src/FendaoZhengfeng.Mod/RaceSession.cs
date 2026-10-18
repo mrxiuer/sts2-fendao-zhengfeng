@@ -16,6 +16,7 @@ public sealed class RaceSession : IDisposable
     public static RaceSession? Current { get; private set; }
     public INetGameService Transport { get; }
     private bool localVerification;
+    public bool IsMock { get; }
     public bool IsHost => localVerification || Transport.Type == NetGameType.Host;
     public ulong HostId { get; }
     public string LocalId => Transport.NetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -42,14 +43,16 @@ public sealed class RaceSession : IDisposable
         ? Path.Combine(Environment.GetEnvironmentVariable("FDZF_REPORT_DIR") ?? throw new InvalidOperationException("验证报告目录未指定。"), "resume", LocalId + ".json")
         : ProjectSettings.GlobalizePath("user://FendaoZhengfeng/resume/" + LocalId + ".json");
     public event Action? Changed;
-    private RaceSession(string seed)
+    private RaceSession(string seed, bool mock = false)
     {
-        if (Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") throw new InvalidOperationException("本地验证未启用。");
+        if (!mock && Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") throw new InvalidOperationException("本地验证未启用。");
+        IsMock = mock;
         Current?.Dispose(); localVerification = true; Transport = new MegaCrit.Sts2.Core.Multiplayer.NetSingleplayerGameService(); HostId = 1;
-        Engine = new(new Match { Id = "native-verification", Seed = seed, Racers = new() { ["1"] = new() { Id = "1", Name = "验证玩家" }, ["2"] = new() { Id = "2", Name = "验证对手" } } });
+        Engine = new(new Match { Id = mock ? "mock-" + Guid.NewGuid().ToString("N")[..8] : "native-verification", Seed = seed, Racers = new() { ["1"] = new() { Id = "1", Name = mock ? "本地玩家" : "验证玩家" }, ["2"] = new() { Id = "2", Name = mock ? "模拟对手" : "验证对手", Health = 80, MaxHealth = 80 } } });
         Current = this;
     }
     internal static RaceSession CreateVerification(string seed) => new(seed);
+    internal static RaceSession CreateMock(string seed) => new(seed, true);
     public RaceSession(StartRunLobby lobby, string seed)
     {
         Current?.Dispose(); Current = this; Transport = lobby.NetService;
@@ -85,7 +88,7 @@ public sealed class RaceSession : IDisposable
     public void Tick()
     {
         if (disposed) return; Transport.Update();
-        if (!localVerification && !sendingTelemetry && !WaitingAtCheckpoint && Environment.TickCount64 - lastTelemetry >= 1000 && RaceRuntime.Live && RaceRuntime.State is { } state)
+        if ((!localVerification || IsMock) && !sendingTelemetry && !WaitingAtCheckpoint && Environment.TickCount64 - lastTelemetry >= 1000 && RaceRuntime.Live && RaceRuntime.State is { } state)
         {
             var p = state.Players.Single();
             if (Me.Health != p.Creature.CurrentHp || Me.MaxHealth != p.Creature.MaxHp)
@@ -190,7 +193,7 @@ public sealed class RaceSession : IDisposable
     private void CommitPause()
     {
         if (checkpointPacket == null || checkpointGate == null) throw new RuleException("个人检查点尚未就绪。");
-        var bundle = new NativeCheckpoint.Bundle("0.1.0", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket);
+        var bundle = new NativeCheckpoint.Bundle("0.1.1", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket);
         Directory.CreateDirectory(Path.GetDirectoryName(ResumePath)!); AtomicWrite(ResumePath, StateJson.Serialize(bundle)); Paused = true;
         RaceUi.Error("共同检查点已保存。可等待房主继续，或全员退出后重建房间并勾选恢复共同检查点。"); RaceUi.Refresh();
     }

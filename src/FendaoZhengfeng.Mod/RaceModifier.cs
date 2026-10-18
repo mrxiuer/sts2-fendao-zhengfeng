@@ -72,7 +72,7 @@ public sealed class RaceModifier : ModifierModel
     { if (amount != 0) await PowerCmd.Apply<T>(Context(), creature, amount, null, null); }
     public override async Task AfterEnergyResetLate(Player player)
     {
-        if (player != Player) return; Turn++; ManualCards = 0; firstDraw = false; hpLost.Clear();
+        if (player != Player) return; Turn++; ManualCards = 0; firstDraw = false; hpLost.Clear(); RefreshHandCosts();
         if (N("fortune_dice") > 0) { int min = Math.Max(50, 80 - 5 * (N("fortune_dice") - 1)); var r = new StableRandom(S.Engine.State.Seed + ":" + S.LocalId + ":" + Me.BattleKey + ":" + Turn); Dice = min + (int)(r.Next() * (111 - min)); } else Dice = 100;
         if (Me.Has("borrowed_time")) { await PlayerCmd.GainEnergy(1, player); await Power<DoomPower>(player.Creature, 3); }
         if (Turn == 1)
@@ -109,7 +109,7 @@ public sealed class RaceModifier : ModifierModel
     public override async Task AfterPlayerTurnStartLate(PlayerChoiceContext ctx, Player player)
     {
         if (player != Player || Turn != 1) return;
-        if (N("clutter") > 0) for (int i = 0; i < 1 + N("clutter"); i++) await CardPileCmd.AddGeneratedCardToCombat(RunState.CreateCard<ClutterCard>(Player), PileType.Hand, null);
+        if (N("clutter") > 0) for (int i = 0; i < 1 + N("clutter"); i++) await CardPileCmd.AddGeneratedCardToCombat(Player.Creature.CombatState!.CreateCard<ClutterCard>(Player), PileType.Hand, null);
         await ApplyReceipts(ctx, true);
     }
     public override decimal ModifyDamageMultiplicative(Creature? target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource, CardPlay? cardPlay)
@@ -133,11 +133,29 @@ public sealed class RaceModifier : ModifierModel
         reflecting = true; try { await CreatureCmd.Damage(ctx, Player.Creature, N("barbs"), ValueProp.Unpowered, null, null, null); } finally { reflecting = false; }
     }
     public override Task BeforeCardPlayed(CardPlay play)
-    { if (play.IsFirstInSeries) barbsHits.RemoveWhere(hit => hit.Item1 == play.Card); if (!play.IsAutoPlay && play.IsFirstInSeries) { ManualCards++; RaceRuntime.CurrentCardPlay = play; } return Task.CompletedTask; }
+    {
+        if (play.IsFirstInSeries) barbsHits.RemoveWhere(hit => hit.Item1 == play.Card);
+        if (!play.IsAutoPlay && play.IsFirstInSeries)
+        {
+            ManualCards++;
+            RaceRuntime.CurrentCardPlay = play;
+            RefreshHandCosts();
+        }
+        return Task.CompletedTask;
+    }
     public override bool TryModifyEnergyCostInCombatLate(CardModel card, decimal originalCost, out decimal modifiedCost)
-    { modifiedCost = originalCost * 2; return Me.Has("bitter_sweet") && ManualCards == 0 && card.Owner == Player; }
+    {
+        bool applies = Me.Has("bitter_sweet") && ManualCards == 0 && card.Owner == Player;
+        // The native hook consumes the out value even when the method returns false.
+        modifiedCost = applies ? originalCost * 2 : originalCost;
+        return applies;
+    }
+    private void RefreshHandCosts()
+    {
+        foreach (var card in PileType.Hand.GetPile(Player).Cards) card.InvokeEnergyCostChanged();
+    }
     public override int ModifyCardPlayCount(CardModel card, Creature? target, int playCount)
-        => Me.Has("bitter_sweet") && ManualCards == 2 && card.Owner == Player && !CardPlayScope.IsAutomatic ? playCount + 1 : playCount;
+        => Me.Has("bitter_sweet") && ManualCards == 2 && card.Owner == Player && !CardPlayScope.IsAutomatic(card) ? playCount + 1 : playCount;
     public override async Task AfterCardPlayedLate(PlayerChoiceContext ctx, CardPlay play)
     {
         if (!play.IsLastInSeries || play.IsAutoPlay) return;
@@ -197,7 +215,7 @@ public sealed class RaceModifier : ModifierModel
                     case "energy": await PlayerCmd.GainEnergy(r.Amount, Player); break;
                     case "status":
                         var model = ModelDb.AllCards.FirstOrDefault(c => c.Id.ToString() == r.Value && c.Type == CardType.Status);
-                        if (model != null) await CardPileCmd.AddGeneratedCardToCombat(RunState.CreateCard(model, Player), PileType.Draw, null); break;
+                        if (model != null) await CardPileCmd.AddGeneratedCardToCombat(Player.Creature.CombatState!.CreateCard(model, Player), PileType.Draw, null); break;
                     case "curse_card":
                         var pool = ModelDb.AllCards.Where(c => c.Type == CardType.Curse && c.IsRemovable).OrderBy(c => c.Id.ToString(), StringComparer.Ordinal).ToList();
                         if (pool.Count > 0) { var rng = new StableRandom(r.Id); await CardPileCmd.AddCursesToDeck([pool[(int)(rng.Next() * pool.Count)]], Player); }
@@ -221,7 +239,7 @@ public sealed class RaceModifier : ModifierModel
             && wear.GetValueOrDefault(original, 8) == 0 && card.Pile?.Type is PileType.Discard or PileType.Draw or PileType.Hand)
         {
             suppressPropagation = true;
-            try { var wilted = RunState.CreateCard<WitheredCard>(Player); wilted.DeckVersion = original; wilted.OriginalPacket = NativeCheckpoint.EncodeCard(original); await CardCmd.Transform(card, wilted); }
+            try { var wilted = Player.Creature.CombatState!.CreateCard<WitheredCard>(Player); wilted.DeckVersion = original; wilted.OriginalPacket = NativeCheckpoint.EncodeCard(original); await CardCmd.Transform(card, wilted); }
             finally { suppressPropagation = false; }
             return;
         }
