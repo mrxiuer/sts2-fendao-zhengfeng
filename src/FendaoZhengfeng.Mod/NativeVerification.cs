@@ -60,6 +60,11 @@ internal static class NativeVerification
             Check(run.CurrentRoom is EventRoom opening && opening.LocalMutableEvent is MegaCrit.Sts2.Core.Models.Events.Neow
                 && opening.LocalMutableEvent.CurrentOptions.Count == 3
                 && opening.LocalMutableEvent.CurrentOptions.All(option => option.Relic != null), "native Neow opening retains three relic choices alongside gifted Lizard Tail");
+            if (!string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("FDZF_SCREENSHOT_DIR")))
+            {
+                await Task.Delay(4000);
+                MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen.Instance?.Close(false);
+            }
             await CaptureVisual(game, "mock-00-opening-relics");
             await RunManager.Instance.EnterRoomDebug(RoomType.Elite);
             var player = run.Players.Single();
