@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>FendaoZhengfeng</AssemblyName>
+    <Version>0.1.0</Version>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../FendaoZhengfeng.Core/*.cs" Link="Core/%(Filename)%(Extension)" />
+    <Reference Include="sts2"><HintPath>$(GameData)/sts2.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(GameData)/0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="GodotSharp"><HintPath>$(GameData)/GodotSharp.dll</HintPath><Private>false</Private></Reference>
+    <None Include="../../packaging/FendaoZhengfeng.json" Link="FendaoZhengfeng.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="CheckGame" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(GameData)/sts2.dll')" Text="未找到游戏程序集，请指定 GameRoot。" />
+  </Target>
+</Project>

@@ -21,3 +21,7 @@ research/extracted/
 # Workshop content is generated from the same release package
 workshop/content/
 # Keep the Workshop identity after first publication; do not ignore mod_id.txt.
+
+.tools/
+research/decompiled/
+*.pdb

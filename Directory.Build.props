@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>13</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GameRoot Condition="'$(GameRoot)' == ''">D:\SteamLibrary\steamapps\common\Slay the Spire 2</GameRoot>
+    <GameData>$(GameRoot)\data_sts2_windows_x86_64</GameData>
+  </PropertyGroup>
+</Project>

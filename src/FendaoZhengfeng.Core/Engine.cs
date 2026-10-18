@@ -1,0 +1,171 @@
+namespace FendaoZhengfeng.Core;
+
+public sealed record Command(string Id, string Actor, string Kind, string Key = "", string Effect = "", int Amount = 0,
+    int Act = 0, int Floor = 0, string Value = "", bool Boss = false, Route Route = Route.Disrupt, int MaxHealth = 0);
+
+/// <summary>Host-ordered rules reducer. Failed commands never partially consume a reward or mutate the live state.</summary>
+public sealed class Engine(Match state)
+{
+    public Match State { get; private set; } = state;
+    public bool Execute(Command c)
+    {
+        if (c.Id.Length is < 1 or > 128 || c.Key.Length > 256 || c.Value.Length > 1024) throw new RuleException("消息超出限制。");
+        if (State.ProcessedCommands.Contains(c.Id)) return false;
+        if (!State.Racers.ContainsKey(c.Actor)) throw new RuleException("玩家不属于本局。");
+        var next = StateJson.Deserialize<Match>(StateJson.Serialize(State));
+        Apply(next, c);
+        next.ProcessedCommands.Add(c.Id); next.Revision++; State = next; return true;
+    }
+    private static void Apply(Match m, Command c)
+    {
+        var p = m.Racers[c.Actor];
+        if (p.Eliminated && c.Kind is not ("ack" or "progress")) throw new RuleException("已淘汰玩家不能执行此操作。");
+        switch (c.Kind)
+        {
+            case "progress":
+                if (c.Act < p.Act || c.Act > p.Act + 1 || c.Floor < 0 || c.Floor > 200) throw new RuleException("无效的进度。");
+                p.Act = c.Act; p.Floor = c.Floor; p.Room = c.Value; p.Health = Math.Max(0, c.Amount); p.MaxHealth = Math.Max(0, c.MaxHealth); break;
+            case "battle_start":
+                if (p.InBattle) { if (p.BattleKey == c.Key) break; throw new RuleException("上一场尚未结束。"); }
+                p.Battle++; p.BattleKey = c.Key; p.InBattle = true; p.BurdenSnapshot = p.Burden; break;
+            case "victory":
+                if (c.Key != p.BattleKey || !p.InBattle) throw new RuleException("战斗记录不匹配。");
+                p.InBattle = false;
+                if (!p.WonBattles.Add(c.Key)) break;
+                p.VictoryCount++;
+                if (p.Has("scapegoat")) { var g = p.Effects["scapegoat"]; g.Used++; if (g.Used % 5 == 0) p.Ghosts = Math.Min(2, p.Ghosts + 1); }
+                if (p.Has("catch_up")) { var h = p.Effects["catch_up"]; if (--h.Used <= 0) p.Effects.Remove("catch_up"); }
+                if (c.Boss && p.KilledBossActs.Add(p.Act))
+                {
+                    foreach (var id in p.Effects.Values.Where(h => h.ExpiresAfterAct >= 0 && h.ExpiresAfterAct <= p.Act).Select(h => h.Id).ToList()) p.Effects.Remove(id);
+                    bool first = m.BossFirstKills.TryAdd(p.Act, p.Id);
+                    p.BossPrizes.Add(p.Act + ":" + (first ? "first" : "later"));
+                }
+                break;
+            case "defeat": p.Eliminated = true; p.InBattle = false; break;
+            case "revive": p.RevivalCount++; break;
+            case "finish":
+                if (!p.Finished) { p.Finished = true; p.InBattle = false; m.FinishOrder.Add(p.Id); }
+                break;
+            case "offer":
+                if (c.Route != Route.FirstKill && !p.WonBattles.Contains(c.Key.Split('|')[0])) throw new RuleException("献祭缺少获胜记录。");
+                if (c.Route == Route.FirstKill && !p.BossPrizes.Contains(c.Key)) throw new RuleException("没有首杀奖励。");
+                if (c.Route == Route.FirstKill && !c.Key.EndsWith(":first", StringComparison.Ordinal)) throw new RuleException("该奖励不含增益。");
+                if (m.ConsumedRewards.Contains(p.Id + ":" + c.Key)) throw new RuleException("奖励已经处理。");
+                var offerId = p.Id + ":" + c.Key + ":" + c.Route;
+                if (!m.Offers.ContainsKey(offerId)) m.Offers[offerId] = new Offer
+                {
+                    Id = offerId,
+                    Player = p.Id,
+                    RewardKey = c.Key,
+                    Route = c.Route,
+                    Boss = c.Boss,
+                    Candidates = Candidates.Generate(m, p, c.Key, c.Route, c.Boss)
+                };
+                break;
+            case "choose":
+                if (!m.Offers.TryGetValue(c.Key, out var offer) || offer.Player != p.Id || offer.Resolved || !offer.Candidates.Contains(c.Effect)) throw new RuleException("无效或已经处理的候选。");
+                var token = p.Id + ":" + offer.RewardKey;
+                if (m.ConsumedRewards.Contains(token)) throw new RuleException("同一奖励已领取或献祭。");
+                var effect = Catalog.Get(c.Effect);
+                if (offer.Route == Route.FirstKill && !p.BossPrizes.Contains(offer.RewardKey)) throw new RuleException("首杀奖励已经领取。");
+                if (offer.Route == Route.Disrupt)
+                {
+                    foreach (var other in m.Racers.Values.Where(r => r.Id != p.Id && !r.Eliminated && !r.Finished)) Attack(m, p, other, effect, c.Id);
+                    if (p.Has("war_feeds_war")) { var w = p.Effects["war_feeds_war"]; if (w.Used < 3 + w.Rank) { w.Used++; p.Receipts.Add(new(c.Id + ":heal", "heal_percent", "", 5)); } }
+                }
+                else Give(m, p, effect, c.Id);
+                m.ConsumedRewards.Add(token); offer.Resolved = true;
+                if (offer.Route == Route.FirstKill) p.BossPrizes.Remove(offer.RewardKey);
+                p.Receipts.Add(new(c.Id + ":choice", "choice", offer.RewardKey));
+                break;
+            case "claim":
+                if (!m.ConsumedRewards.Add(p.Id + ":" + c.Key)) throw new RuleException("奖励已处理。"); break;
+            case "boss_shield":
+                if (!p.BossPrizes.Remove(c.Key)) throw new RuleException("额外奖励已处理。"); m.ConsumedRewards.Add(p.Id + ":" + c.Key); p.Shields++; break;
+            case "boss_cleanse":
+                if (!p.BossPrizes.Contains(c.Key) || !c.Key.EndsWith(":later", StringComparison.Ordinal)) throw new RuleException("没有可用净化奖励。");
+                Cleanse(p, c.Effect, CleanseAt.Boss, c.Id); p.BossPrizes.Remove(c.Key); break;
+            case "camp_cleanse":
+                Service(p, c.Key, "camp"); Cleanse(p, c.Effect, CleanseAt.Camp, c.Id); break;
+            case "shop_cleanse":
+                Service(p, c.Key, "shop"); var cost = Cleanse(p, c.Effect, CleanseAt.Shop, c.Id);
+                if (c.Amount < cost) throw new RuleException("金币不足。"); p.Receipts.Add(new(c.Id + ":cost", "spend_gold", "", cost)); break;
+            case "repair":
+                if (!p.Has("bloom_decay")) throw new RuleException("没有可恢复的契约。"); Service(p, c.Key, "camp"); p.Receipts.Add(new(c.Id + ":repair", "repair")); break;
+            case "siphon":
+                if (!p.Has("siphon") || !p.WonBattles.Contains(c.Key)) throw new RuleException("当前不能汲取。");
+                Service(p, c.Key, "siphon"); p.PendingEnergy += 2; p.Receipts.Add(new(c.Id + ":gold", "gold", "", 10 + 2 * p.Effects["siphon"].Rank)); break;
+            case "consume_opening":
+                if (!p.InBattle || p.BattleKey != c.Key) throw new RuleException("开战记录不匹配。");
+                Service(p, c.Key, "opening"); p.Receipts.Add(new(c.Id + ":energy", "energy", "", p.PendingEnergy)); p.PendingEnergy = 0;
+                foreach (var card in p.PendingStatuses) p.Receipts.Add(new(c.Id + ":status:" + p.Receipts.Count, "status", card)); p.PendingStatuses.Clear(); break;
+            case "status":
+                if (!p.Has("shared_misery") || !p.InBattle || c.Amount is < 1 or > 100) break;
+                foreach (var other in m.Racers.Values.Where(r => r.Id != p.Id && !r.Eliminated && !r.Finished))
+                    for (int i = 0; i < c.Amount && other.PendingStatuses.Count < 5; i++) other.PendingStatuses.Add(c.Value); break;
+            case "gold":
+                if (c.Amount is < 0 or > 100000) throw new RuleException("金币收入无效。");
+                foreach (var other in m.Racers.Values.Where(r => r.Id != p.Id && r.Has("shared_fortune"))) other.FortuneIncome[p.Id] = other.FortuneIncome.GetValueOrDefault(p.Id) + c.Amount; break;
+            case "node_end":
+                Service(p, c.Key, "node");
+                if (p.Has("shared_fortune"))
+                {
+                    int income = p.FortuneIncome.Values.DefaultIfEmpty().Max() / 2; int cap = 30 + 5 * p.Effects["shared_fortune"].Rank;
+                    if (income > 0) p.Receipts.Add(new(c.Id + ":fortune", "gold", "", Math.Min(cap, income)));
+                }
+                p.FortuneIncome.Clear(); break;
+            case "ghost":
+                if (p.Ghosts <= 0) throw new RuleException("没有替死鬼。"); p.Ghosts--; break;
+            case "ack": p.Receipts.RemoveAll(r => r.Id == c.Key); break;
+            default: throw new RuleException("未知操作：" + c.Kind);
+        }
+    }
+    private static void Service(Racer p, string key, string kind)
+    { if (!p.UsedServices.Add(kind + ":" + key)) throw new RuleException("当前节点的服务已使用。"); }
+    private static void Attack(Match m, Racer source, Racer target, Effect e, string eventId)
+    {
+        if (target.Shields > 0) { target.Shields--; return; }
+        if (!target.Effects.TryGetValue(e.Id, out var h)) { h = new Holding { Id = e.Id }; target.Effects.Add(e.Id, h); }
+        h.Grants.Add(new Grant { Source = source.Id, EventId = eventId, ActiveBattle = target.Battle + 1 });
+        if (target.Has("retaliation"))
+        {
+            var r = target.Effects["retaliation"]; int used = r.Counters.GetValueOrDefault(source.Id);
+            if (used < 2 + r.Rank) { r.Counters[source.Id] = used + 1; source.Receipts.Add(new(eventId + ":retaliation:" + target.Id, "curse_card")); }
+        }
+    }
+    private static void Give(Match m, Racer p, Effect e, string eventId)
+    {
+        p.History[e.Id] = p.History.GetValueOrDefault(e.Id) + 1;
+        if (e.Kind == EffectKind.Contract)
+        {
+            if (p.Effects.ContainsKey(e.Id)) throw new RuleException("契约不能重复持有。");
+            p.Effects[e.Id] = new Holding { Id = e.Id, Grants = [new Grant { EventId = eventId, Source = p.Id, ActiveBattle = p.Battle + 1 }] }; return;
+        }
+        if (p.Effects.TryGetValue(e.Id, out var h))
+        {
+            h.Rank++; if (e.Id == "shared_misery") p.Shields++;
+            if (e.Id == "scapegoat") p.Ghosts = Math.Min(2, p.Ghosts + 1);
+            if (e.Id == "catch_up") h.Used++;
+        }
+        else
+        {
+            h = new Holding { Id = e.Id }; p.Effects[e.Id] = h;
+            if (e.Id == "catch_up") h.Used = m.Racers.Values.Any(r => r.Act > p.Act) ? 2 : 1;
+        }
+        h.ExpiresAfterAct = e.Permanent || e.Id == "catch_up" ? -1 : p.Act + (p.KilledBossActs.Contains(p.Act) ? 1 : 0);
+    }
+    private static int Cleanse(Racer p, string id, CleanseAt at, string commandId)
+    {
+        var e = Catalog.Get(id);
+        if (e.Kind == EffectKind.Boon || !p.Effects.TryGetValue(id, out var h)) throw new RuleException("没有可净化的效果。");
+        if (at == CleanseAt.Camp && e.Tier != Tier.Ordinary || at == CleanseAt.Shop && e.Tier == Tier.Boss) throw new RuleException("此渠道不能净化该档位。");
+        int cost = at == CleanseAt.Shop ? Balance.CleansePrice(e, h.Grants.Count) ?? throw new RuleException("不可净化。") : 0;
+        int burden = e.Kind == EffectKind.Curse ? h.Grants.Count(g => g.ActiveBattle <= p.Battle) * e.Burden : 0;
+        p.Effects.Remove(id);
+        if (id == "bloom_decay") p.Receipts.Add(new(commandId + ":restore", "restore_deck"));
+        if (at != CleanseAt.Boss && burden > 0 && p.Has("adversity_profit"))
+        { var b = p.Effects["adversity_profit"]; int gold = Math.Min(burden * 3, 45 + 15 * b.Rank - b.Used); if (gold > 0) { b.Used += gold; p.Receipts.Add(new(commandId + ":profit", "gold", "", gold)); } }
+        return cost;
+    }
+}
