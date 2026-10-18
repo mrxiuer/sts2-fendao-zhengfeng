@@ -36,4 +36,45 @@ Test("unavailable contract offer preserves reward", () => { var e = New(); Ready
 Test("permanent boon repeat strengthens one instance", () => { var e = New(); OfferEffect(e, "one", "battle_hardened", Route.Grow); e.Execute(new("1", "a", "choose", "one", "battle_hardened")); e.State.Offers["two"] = new() { Id = "two", Player = "a", RewardKey = "battle|1", Route = Route.Grow, Candidates = ["battle_hardened"] }; e.Execute(new("2", "a", "choose", "two", "battle_hardened")); Check(e.State.Racers["a"].Effects.Count == 1); Check(e.State.Racers["a"].Effects["battle_hardened"].Rank == 1); Check(e.State.Racers["a"].History["battle_hardened"] == 2); });
 Test("new post-boss boon survives its granting boss", () => { var e = New(); e.Execute(new("start", "a", "battle_start", "boss")); e.Execute(new("win", "a", "victory", "boss", Boss: true)); OfferEffect(e, "boon", "shared_fortune", Route.Grow); e.Execute(new("pick", "a", "choose", "boon", "shared_fortune")); Check(e.State.Racers["a"].Effects["shared_fortune"].ExpiresAfterAct == 1); });
 Test("ghost cap has no hidden charges", () => { var e = New(); e.State.Racers["a"].Effects["scapegoat"] = new() { Id = "scapegoat" }; for (int i = 0; i < 20; i++) ReadyReward(e, "a", i.ToString()); Check(e.State.Racers["a"].Ghosts == 2); Check(e.State.Racers["a"].Effects["scapegoat"].Used == 20); e.Execute(new("spend", "a", "ghost")); Check(e.State.Racers["a"].Ghosts == 1); });
+Test("mixed elite pool has no fixed category slots and no boss curses", () => {
+    var e = New(); var kinds = new HashSet<EffectKind>(); bool repeatsCategory = false;
+    for (int i = 0; i < 200; i++) {
+        var picks = Candidates.Generate(e.State, e.State.Racers["a"], "mixed" + i, Route.Mixed, false).Select(Catalog.Get).ToList();
+        Check(picks.Count == 3 && picks.Select(x => x.Id).Distinct().Count() == 3);
+        Check(picks.All(x => x.Kind != EffectKind.Curse || x.Tier != Tier.Boss));
+        foreach (var x in picks) kinds.Add(x.Kind);
+        repeatsCategory |= picks.Select(x => x.Kind).Distinct().Count() < 3;
+    }
+    Check(kinds.Count == 3 && repeatsCategory);
+});
+Test("mixed boss pool guarantees a boss curse and shuffles its slot", () => {
+    var e = New(); var positions = new HashSet<int>();
+    for (int i = 0; i < 100; i++) {
+        var picks = Candidates.Generate(e.State, e.State.Racers["a"], "boss" + i, Route.Mixed, true).Select(Catalog.Get).ToList();
+        Check(picks.Count == 3 && picks.Any(x => x.Kind == EffectKind.Curse && x.Tier == Tier.Boss));
+        positions.Add(picks.FindIndex(x => x.Kind == EffectKind.Curse && x.Tier == Tier.Boss));
+    }
+    Check(positions.Count == 3);
+});
+Test("mixed selections dispatch by effect kind and consume only their relic", () => {
+    foreach (var id in new[] { "exhaustion", "borrowed_time", "battle_hardened" }) {
+        var e = New(); OfferEffect(e, "mixed", id, Route.Mixed);
+        e.Execute(new("pick", "a", "choose", "mixed", id));
+        Check(e.State.ConsumedRewards.Contains("a:battle|0"));
+        Check(!e.State.ConsumedRewards.Contains("a:battle|cards"));
+        bool curse = Catalog.Get(id).Kind == EffectKind.Curse;
+        Check(e.State.Racers["a"].Effects.ContainsKey(id) != curse);
+        Check(e.State.Racers["b"].Effects.ContainsKey(id) == curse);
+        Check(e.State.Racers["c"].Effects.ContainsKey(id) == curse);
+    }
+});
+Test("mixed candidates survive cancel and restore without reroll", () => {
+    var e = New(); ReadyReward(e);
+    e.Execute(new("offer1", "a", "offer", "battle|0", Route: Route.Mixed));
+    var first = e.State.Offers.Values.Single().Candidates.ToList();
+    e = new Engine(StateJson.Deserialize<Match>(StateJson.Serialize(e.State)));
+    e.Execute(new("offer2", "a", "offer", "battle|0", Route: Route.Mixed));
+    Check(first.SequenceEqual(e.State.Offers.Values.Single().Candidates));
+    Check(!e.State.ConsumedRewards.Contains("a:battle|0"));
+});
 Console.WriteLine($"{passed} checks passed");

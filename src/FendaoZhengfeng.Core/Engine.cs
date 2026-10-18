@@ -69,7 +69,7 @@ public sealed class Engine(Match state)
                 if (m.ConsumedRewards.Contains(token)) throw new RuleException("同一奖励已领取或献祭。");
                 var effect = Catalog.Get(c.Effect);
                 if (offer.Route == Route.FirstKill && !p.BossPrizes.Contains(offer.RewardKey)) throw new RuleException("首杀奖励已经领取。");
-                if (offer.Route == Route.Disrupt)
+                if (effect.Kind == EffectKind.Curse)
                 {
                     foreach (var other in m.Racers.Values.Where(r => r.Id != p.Id && !r.Eliminated && !r.Finished)) Attack(m, p, other, effect, c.Id);
                     if (p.Has("war_feeds_war")) { var w = p.Effects["war_feeds_war"]; if (w.Used < 3 + w.Rank) { w.Used++; p.Receipts.Add(new(c.Id + ":heal", "heal_percent", "", 5)); } }

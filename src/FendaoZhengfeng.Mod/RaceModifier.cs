@@ -175,7 +175,7 @@ public sealed class RaceModifier : ModifierModel
         await ApplyReceipts(Context(), false); RaceRuntime.Checkpoint();
     }
     public override async Task BeforeCombatRewardOffered(RewardsSet rewards, CombatRoom room)
-    { RaceRuntime.RewardRoom = room; await Task.CompletedTask; }
+    { RaceRuntime.RewardRoom = room; RaceRuntime.CombatRewards = rewards; await Task.CompletedTask; }
     public override async Task AfterRoomEntered(AbstractRoom room)
     {
         await RaceRuntime.NodeChanged();
@@ -186,7 +186,7 @@ public sealed class RaceModifier : ModifierModel
     {
         if (player != Player || !Me.Has("bloom_decay") || room is not CombatRoom) return false;
         var original = rewards.OfType<CardReward>().FirstOrDefault(); if (original == null || !expandedRewards.Add(original)) return false;
-        var options = (CardCreationOptions)HarmonyLib.AccessTools.PropertyGetter(typeof(CardReward), "Options").Invoke(original, null)!;
+        var options = (CardCreationOptions)HarmonyLib.AccessTools.PropertyGetter(typeof(CardReward), "RerollOptions").Invoke(original, null)!;
         rewards.Add(new CardReward(options, 3, Player)); return true;
     }
     public override async Task AfterPreventingDeath(Creature creature)

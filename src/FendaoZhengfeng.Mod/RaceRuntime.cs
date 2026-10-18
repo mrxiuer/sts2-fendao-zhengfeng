@@ -21,6 +21,7 @@ public static class RaceRuntime
     public static bool Enabled { get; set; } = true;
     public static bool ResumeRequested { get; set; }
     public static CombatRoom? RewardRoom { get; set; }
+    internal static RewardsSet? CombatRewards { get; set; }
     public static CardPlay? CurrentCardPlay { get; set; }
     public static RunState? State => RunManager.Instance.DebugOnlyGetState();
     public static string RoomKey => State is { } s ? $"{s.CurrentActIndex}:{s.ActFloor}:{s.CurrentRoom?.Id}:{s.CurrentMapCoord}" : "";
@@ -29,7 +30,7 @@ public static class RaceRuntime
     private static string lastNode = "";
     public static async Task<RunState> Start(NGame game, StartRunLobby lobby, IReadOnlyList<ActModel> acts, IReadOnlyList<ModifierModel> modifiers, string seed, int ascension)
     {
-        rewardIds.Clear(); RewardRoom = null; CurrentCardPlay = null; lastNode = "";
+        rewardIds.Clear(); RewardRoom = null; CombatRewards = null; CurrentCardPlay = null; lastNode = "";
         var session = new RaceSession(lobby, seed);
         try
         {
@@ -64,7 +65,7 @@ public static class RaceRuntime
         {
             var s = RaceSession.Current!; var save = RunManager.Instance.ToSave(State?.CurrentRoom is CombatRoom room && room.IsPreFinished ? room : null);
             var writer = new PacketWriter(); save.Serialize(writer);
-            var bundle = new NativeCheckpoint.Bundle("0.1.2", s.Engine.State.Version, s.Engine.State.Revision, StateJson.Serialize(s.Engine.State), Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
+            var bundle = new NativeCheckpoint.Bundle("0.1.3", s.Engine.State.Version, s.Engine.State.Revision, StateJson.Serialize(s.Engine.State), Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
             Directory.CreateDirectory(s.SaveDirectory); RaceSession.AtomicWrite(Path.Combine(s.SaveDirectory, "checkpoint.json"), StateJson.Serialize(bundle));
         }
         catch (Exception e) { RaceUi.Error("个人检查点保存失败：" + e.Message); }

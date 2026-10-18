@@ -56,6 +56,11 @@ internal static class NativeVerification
             Check(session.IsMock && session.Engine.State.Racers.Count == 2, "interactive mock starts locally with one simulated opponent");
             Check(run.Players.Count == 1, "personal run has one player");
             Check(run.Players.Single().Relics.Any(r => r is LizardTail), "starting Lizard Tail granted");
+            await RunManager.Instance.EnterRoom(new EventRoom(ModelDb.Event<MegaCrit.Sts2.Core.Models.Events.Neow>()));
+            Check(run.CurrentRoom is EventRoom opening && opening.LocalMutableEvent is MegaCrit.Sts2.Core.Models.Events.Neow
+                && opening.LocalMutableEvent.CurrentOptions.Count == 3
+                && opening.LocalMutableEvent.CurrentOptions.All(option => option.Relic != null), "native Neow opening retains three relic choices alongside gifted Lizard Tail");
+            await CaptureVisual(game, "mock-00-opening-relics");
             await RunManager.Instance.EnterRoomDebug(RoomType.Elite);
             var player = run.Players.Single();
             long until = System.Environment.TickCount64 + 30000;
@@ -148,7 +153,7 @@ internal static class NativeVerification
             await CaptureVisual(game, "mock-02-persistent-effect-icons");
             if (!string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("FDZF_SCREENSHOT_DIR")))
             {
-                _ = MockTesting.SelectEffect(EffectKind.Boon);
+                _ = RaceUi.ChooseEffect(session.Me.WonBattles.First() + "|visual", Route.Mixed, false);
                 await CaptureVisual(game, "mock-03-effect-test-menu");
             }
             else
@@ -166,6 +171,31 @@ internal static class NativeVerification
                 Check(MegaCrit.Sts2.Core.Entities.RestSite.RestSiteOption.Generate(player).OfType<RaceRestOption>().Any(), "interactive mock camp exposes native cleanse option");
                 await session.Submit(session.New("camp_cleanse", RaceRuntime.RoomKey, "imbalance"));
                 Check(!session.Me.Effects.ContainsKey("imbalance"), "interactive mock camp cleanse uses ordinary-only rules");
+            }
+            if (string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("FDZF_SCREENSHOT_DIR")))
+            {
+                await RunManager.Instance.EnterRoomDebug(RoomType.Boss);
+                var bossRoom = (CombatRoom)run.CurrentRoom!;
+                await MockTesting.WinBattle();
+                long rewardDeadline = System.Environment.TickCount64 + 20000;
+                while (RaceRuntime.RewardRoom != bossRoom || RaceRuntime.CombatRewards?.Rewards.Any(reward => !reward.IsPopulated) != false)
+                {
+                    if (System.Environment.TickCount64 > rewardDeadline) throw new TimeoutException("Boss奖励生成超时。");
+                    await Task.Delay(30);
+                }
+                var bossRewards = RaceRuntime.CombatRewards!;
+                var relics = bossRewards.Rewards.OfType<MegaCrit.Sts2.Core.Rewards.RelicReward>().ToList();
+                Check(relics.Count == 1, "actual boss victory exposes one populated relic for claim or sacrifice");
+                Check(bossRewards.Rewards.OfType<MegaCrit.Sts2.Core.Rewards.CardReward>().Any()
+                    && bossRewards.Rewards.OfType<MegaCrit.Sts2.Core.Rewards.GoldReward>().Any(), "boss relic choice preserves native card and gold rewards");
+                string key = RaceRuntime.RewardKey(relics.Single());
+                await session.Submit(session.New("offer", key, boss: true, route: Route.Mixed));
+                var offer = session.Engine.State.Offers[session.LocalId + ":" + key + ":" + Route.Mixed];
+                string curse = offer.Candidates.First(id => Catalog.Get(id).Kind == EffectKind.Curse && Catalog.Get(id).Tier == Tier.Boss);
+                await session.Submit(session.New("choose", offer.Id, curse));
+                Check(session.Engine.State.Racers["2"].Effects.ContainsKey(curse)
+                    && session.Engine.State.ConsumedRewards.Contains(session.LocalId + ":" + key), "boss mixed sacrifice consumes relic and queues boss curse for opponent");
+                Check(session.Me.BossPrizes.Any(prize => prize.EndsWith(":first", StringComparison.Ordinal)), "boss sacrifice leaves first-kill extra prize available");
             }
             GD.Print("[FDZF VERIFY COMPLETE] Native checks passed; no player save backend was used.");
             game.GetTree().Quit(0);

@@ -145,7 +145,7 @@ public static class RaceUi
         var s = RaceSession.Current ?? throw new InvalidOperationException("会话已结束。");
         await s.Submit(s.New("offer", reward, boss: boss, route: route));
         var offer = s.Engine.State.Offers[s.LocalId + ":" + reward + ":" + route];
-        int index = await Choose("选择效果 · " + (route == Route.Disrupt ? "施加给所有对手" : "施加给自己"), offer.Candidates.Select(id => { var e = Catalog.Get(id); return e.Name + " · " + TierName(e.Tier) + "\n" + e.Description; }).ToList(), offer.Candidates.Select(EffectIcons.Get).ToList());
+        int index = await Choose("选择效果 · " + (route == Route.Mixed ? "混合三选一" : route == Route.Disrupt ? "施加给所有对手" : "施加给自己"), offer.Candidates.Select(id => { var e = Catalog.Get(id); return e.Name + " · " + TierName(e.Tier) + " · " + (e.Kind == EffectKind.Curse ? "诅咒 · 所有对手" : e.Kind == EffectKind.Contract ? "双刃契约 · 自己" : "增益 · 自己") + "\n" + e.Description; }).ToList(), offer.Candidates.Select(EffectIcons.Get).ToList());
         if (index < 0) return false;
         await s.Submit(s.New("choose", offer.Id, offer.Candidates[index])); await Apply(); RaceRuntime.Checkpoint(); Refresh(); return true;
     }

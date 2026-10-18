@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Reflection.Emit;
 using FendaoZhengfeng.Core;
 using Godot;
 using HarmonyLib;
@@ -18,6 +19,42 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.ValueProps;
 
 namespace FendaoZhengfeng.Mod;
+
+// Neow treats any modifier as a custom-run replacement. Ignore only our infrastructure modifier.
+[HarmonyPatch]
+internal static class OpeningRelicOptionsPatch
+{
+    static IEnumerable<MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(MegaCrit.Sts2.Core.Models.Events.Neow), "GenerateInitialOptions");
+        yield return AccessTools.PropertyGetter(typeof(MegaCrit.Sts2.Core.Models.Events.Neow), "InitialDescription");
+    }
+    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+    {
+        foreach (var instruction in instructions)
+        {
+            if (instruction.operand is MethodInfo method && method.Name == "get_Modifiers")
+            {
+                instruction.opcode = OpCodes.Call;
+                instruction.operand = AccessTools.Method(typeof(OpeningRelicOptionsPatch), nameof(ForOpening));
+            }
+            yield return instruction;
+        }
+    }
+    private static IReadOnlyList<ModifierModel> ForOpening(IRunState run) => run.Modifiers.Where(modifier => modifier is not RaceModifier).ToList();
+}
+
+// Native Boss rewards contain gold/cards but no relic. Supply the mode's relic-or-sacrifice choice.
+[HarmonyPatch(typeof(RewardsSet), nameof(RewardsSet.WithRewardsFromRoom))]
+internal static class BossRelicRewardPatch
+{
+    static void Postfix(RewardsSet __instance, AbstractRoom room)
+    {
+        if (RaceRuntime.Live && room.RoomType == MegaCrit.Sts2.Core.Rooms.RoomType.Boss
+            && !__instance.Rewards.OfType<RelicReward>().Any())
+            __instance.Rewards.Add(new RelicReward(__instance.Player));
+    }
+}
 
 [HarmonyPatch(typeof(ModifierModel), "get_Icon")]
 internal static class RaceModeIconPatch
@@ -75,11 +112,11 @@ internal static class RewardChoicePatch
             var s = RaceSession.Current!; var type = RaceRuntime.State!.CurrentRoom?.RoomType.ToString();
             if (reward is RelicReward && type is "Elite" or "Boss")
             {
-                int action = await RaceUi.Choose("遗物奖励", ["领取遗物", "献祭遗物：干扰对手", "献祭遗物：自我契约", "献祭遗物：自身成长"]);
+                int action = await RaceUi.Choose("遗物奖励", ["领取遗物", "献祭遗物：混合效果三选一"]);
                 if (action < 0) return false;
                 if (action > 0)
                 {
-                    var route = action switch { 1 => Route.Disrupt, 2 => Route.Contract, _ => Route.Grow };
+                    var route = Route.Mixed;
                     bool done = await RaceUi.ChooseEffect(RaceRuntime.RewardKey(reward), route, type == "Boss");
                     if (done) { reward.OnSkipped(); AccessTools.PropertySetter(typeof(Reward), nameof(Reward.SuccessfullySelected)).Invoke(reward, [true]); }
                     return done;

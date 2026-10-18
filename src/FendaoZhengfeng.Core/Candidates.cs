@@ -29,6 +29,12 @@ public static class Candidates
         var candidates = new List<Effect>();
         var available = Catalog.All.Where(e => route switch
         {
+            Route.Mixed => e.Kind switch
+            {
+                EffectKind.Curse => boss ? e.Tier != Tier.Ordinary : e.Tier != Tier.Boss,
+                EffectKind.Contract => !p.Effects.ContainsKey(e.Id),
+                _ => boss ? e.BossPool : e.ElitePool
+            },
             Route.Disrupt => e.Kind == EffectKind.Curse && (boss ? e.Tier != Tier.Ordinary : e.Tier != Tier.Boss),
             Route.Contract => e.Kind == EffectKind.Contract && !p.Effects.ContainsKey(e.Id),
             Route.Grow => e.Kind == EffectKind.Boon && (boss ? e.BossPool : e.ElitePool),
@@ -41,7 +47,18 @@ public static class Candidates
             if (pool.Count == 0) return;
             var chosen = rng.Pick(pool, Weight); candidates.Add(chosen); available.Remove(chosen);
         }
-        if (route == Route.Disrupt && boss) { Take(e => e.Tier == Tier.Boss); Take(e => e.Tier == Tier.Elite); Take(e => e.Tier == Tier.Elite); }
+        if (route == Route.Mixed)
+        {
+            if (boss) Take(e => e.Kind == EffectKind.Curse && e.Tier == Tier.Boss);
+            while (candidates.Count < 3 && available.Count > 0) Take(_ => true);
+            // The guarantee has no fixed screen position and there are no category slots.
+            for (int i = candidates.Count - 1; i > 0; i--)
+            {
+                int j = (int)(rng.Next() * (i + 1));
+                (candidates[i], candidates[j]) = (candidates[j], candidates[i]);
+            }
+        }
+        else if (route == Route.Disrupt && boss) { Take(e => e.Tier == Tier.Boss); Take(e => e.Tier == Tier.Elite); Take(e => e.Tier == Tier.Elite); }
         else if (route == Route.Contract && boss) { Take(e => e.Tier == Tier.Elite); Take(e => e.Tier == Tier.Elite); Take(_ => true); }
         else if (route == Route.FirstKill) { Take(e => e.Rarity != Rarity.Common); while (candidates.Count < 3 && available.Count > 0) Take(_ => true); }
         else if (route is Route.Disrupt or Route.Contract)
