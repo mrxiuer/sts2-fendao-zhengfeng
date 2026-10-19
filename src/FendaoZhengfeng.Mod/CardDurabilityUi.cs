@@ -7,38 +7,61 @@ namespace FendaoZhengfeng.Mod;
 
 internal static class CardDurabilityUi
 {
-    private static readonly Dictionary<NCard, Label> labels = [];
-    internal static int VisibleCount => labels.Values.Count(label => GodotObject.IsInstanceValid(label) && label.IsVisibleInTree());
+    private static readonly Dictionary<NCard, TextureRect> badges = [];
+    internal static int VisibleCount => badges.Values.Count(badge => GodotObject.IsInstanceValid(badge) && badge.IsVisibleInTree());
     internal static void Update(NCard node)
     {
         if (!node.IsNodeReady()) return;
         int? remaining = RaceRuntime.Live && node.Model is { } model ? RaceModifier.Active?.RemainingWear(model) : null;
-        if (!labels.TryGetValue(node, out var label) || !GodotObject.IsInstanceValid(label))
+        if (!badges.TryGetValue(node, out var badge) || !GodotObject.IsInstanceValid(badge))
         {
             if (!remaining.HasValue) return;
-            var energy = node.GetNode<Control>("%EnergyIcon");
-            label = new Label { Name = "FdzfDurability", Text = "", MouseFilter = Control.MouseFilterEnum.Ignore, ZIndex = 20,
-                HorizontalAlignment = HorizontalAlignment.Center, Size = new Vector2(60, 56) };
-            label.AddThemeFontSizeOverride("font_size", 40);
-            label.AddThemeColorOverride("font_outline_color", new Color("281d16")); label.AddThemeConstantOverride("outline_size", 8);
-            energy.GetParent().AddChild(label); labels[node] = label;
-            node.TreeExiting += () => labels.Remove(node);
+            var energy = node.GetNode<TextureRect>("%EnergyIcon");
+            var energyLabel = node.GetNode<Control>("%EnergyLabel");
+            badge = new TextureRect
+            {
+                Name = "FdzfDurability", MouseFilter = Control.MouseFilterEnum.Ignore,
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = energy.StretchMode
+            };
+            var value = new Label
+            {
+                Name = "Value", MouseFilter = Control.MouseFilterEnum.Ignore,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+            };
+            value.AddThemeFontOverride("font", energyLabel.GetThemeFont("font"));
+            value.AddThemeFontSizeOverride("font_size", energyLabel.GetThemeFontSize("font_size"));
+            value.AddThemeColorOverride("font_outline_color", energyLabel.GetThemeColor("font_outline_color"));
+            value.AddThemeConstantOverride("outline_size", energyLabel.GetThemeConstant("outline_size"));
+            badge.AddChild(value);
+            energy.GetParent().AddChild(badge); badges[node] = badge;
+            node.TreeExiting += () => badges.Remove(node);
         }
-        label.Visible = remaining.HasValue;
+        badge.Visible = remaining.HasValue;
         if (!remaining.HasValue) return;
-        var energyIcon = node.GetNode<Control>("%EnergyIcon");
-        label.Size = new Vector2(energyIcon.Size.X, energyIcon.Size.Y);
-        label.Position = new Vector2(-energyIcon.Position.X - label.Size.X, energyIcon.Position.Y);
-        label.VerticalAlignment = VerticalAlignment.Center;
+        var energyIcon = node.GetNode<TextureRect>("%EnergyIcon");
+        badge.ZIndex = energyIcon.ZIndex;
+        badge.ZAsRelative = energyIcon.ZAsRelative;
+        badge.Texture = energyIcon.Texture;
+        badge.Size = energyIcon.Size;
+        badge.Position = new Vector2(-energyIcon.Position.X - badge.Size.X, energyIcon.Position.Y);
+        var label = badge.GetNode<Label>("Value");
+        label.Size = badge.Size;
         label.Text = remaining.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         label.AddThemeColorOverride("font_color", remaining <= 2 ? new Color("ff8672") : new Color("fff1c4"));
     }
     internal static void Tick()
     {
-        foreach (var node in labels.Keys.ToList())
-        { if (!GodotObject.IsInstanceValid(node)) labels.Remove(node); else Update(node); }
+        foreach (var node in badges.Keys.ToList())
+        { if (!GodotObject.IsInstanceValid(node)) badges.Remove(node); else Update(node); }
     }
-    internal static string? ValueOn(NCard node) => labels.TryGetValue(node, out var label) && label.Visible ? label.Text : null;
+    internal static bool HasFrameOn(NCard node) => badges.TryGetValue(node, out var badge) && badge.Visible
+        && badge.Texture == node.GetNode<TextureRect>("%EnergyIcon").Texture
+        && badge.Size == node.GetNode<TextureRect>("%EnergyIcon").Size;
+    internal static bool HasNativeLayerOn(NCard node) => badges.TryGetValue(node, out var badge)
+        && badge.GetParent() == node.GetNode<TextureRect>("%EnergyIcon").GetParent()
+        && badge.ZIndex == node.GetNode<TextureRect>("%EnergyIcon").ZIndex
+        && badge.ZAsRelative == node.GetNode<TextureRect>("%EnergyIcon").ZAsRelative;
+    internal static string? ValueOn(NCard node) => badges.TryGetValue(node, out var badge) && badge.Visible ? badge.GetNode<Label>("Value").Text : null;
 }
 [HarmonyPatch(typeof(NCard), nameof(NCard.UpdateVisuals))]
 internal static class DurabilityVisualPatch { static void Postfix(NCard __instance) => CardDurabilityUi.Update(__instance); }

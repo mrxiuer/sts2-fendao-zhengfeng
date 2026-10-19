@@ -121,7 +121,12 @@ internal static class NativeAdvancedVerification
             var displayCard = NCard.Create(skill)!; game.AddChild(displayCard); displayCard.Position = new Vector2(960, 560); displayCard.UpdateVisuals(PileType.Deck, CardPreviewMode.Normal);
             CardDurabilityUi.Update(displayCard);
             Check(CardDurabilityUi.ValueOn(displayCard) == (originalWear - 1).ToString(), "native card view exposes the exact remaining durability number");
-            await Capture(game, "advanced-01-card-durability"); displayCard.QueueFree();
+            Check(CardDurabilityUi.HasFrameOn(displayCard), "durability uses the native energy frame and dimensions at the opposite corner");
+            Check(CardDurabilityUi.HasNativeLayerOn(displayCard), "durability inherits the native energy layer and cannot float above other cards");
+            var frontCard = NCard.Create(skill)!; game.AddChild(frontCard);
+            frontCard.Position = displayCard.Position + new Vector2(145, -35);
+            frontCard.UpdateVisuals(PileType.Deck, CardPreviewMode.Normal);
+            await Capture(game, "advanced-01-card-durability"); displayCard.QueueFree(); frontCard.QueueFree();
             await Capture(game, "advanced-02-combat-status");
             await MockTesting.GrantEffect("carapace");
             var choose = RaceUi.ChooseCleanse(CleanseAt.Shop);
