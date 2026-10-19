@@ -1,6 +1,19 @@
 # 实现与验证记录
 
-版本：0.1.5 开发预览；日期：2026-10-19。完整设计范围不变，本记录描述实际证据，不代表工坊正式版验收。
+当前版本：0.3.2 开发预览；日期：2026-10-19。下文保留各版本历史验证记录，本记录不代表工坊正式版验收。
+
+## 0.3.2 R键后跨幕修复
+
+先在未修复构建中加入回归：进入第四幕双Boss地图，使用R键回到第一幕，等待旧节点释放，再调用原版 `RunManager.EnterNextAct`。测试复现 `ObjectDisposedException / NBossMapPoint / NMapScreen.SetMap`，与用户日志一致。原始失败日志保存在本机忽略目录 `artifacts/verification/network/r-transition-before-fix.log`。
+
+修复在本模式清理旧地图节点后清空原生第二Boss节点引用，避免单Boss地图继续使用旧节点；不捕获或吞掉异常，也不修改游戏程序集。修复后的验证：
+
+- Release 编译 0 警告、0 错误，51 项独立规则检查通过。
+- Advanced 原生图形验证 37 项通过，覆盖第四幕R键后原版跨幕、随后调试跨幕、第五幕第二次R键后原版跨幕，以及资源保留、怪物强化、耐久和原生状态展示。
+- Campaign 原生检查 92 项通过，覆盖五幕、双Boss、地图生成与原生存档；无 `ObjectDisposedException`。
+- 安装目录 DLL 与已构建产物 SHA256 一致。脚本将 `ObjectDisposedException` 纳入日志失败条件。
+
+原生测试使用内存存档。本次未重跑 ENet/Steam 多机，未验证既有报错存档恢复。仍有既有退出资源释放警告。图形证据保留在本机 `outputs/advanced-0.3.2`，README 不展示模拟截图。
 
 ## 0.3.1 耐久徽标与文档修正
 

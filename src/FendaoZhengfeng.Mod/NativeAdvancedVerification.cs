@@ -143,6 +143,9 @@ internal static class NativeAdvancedVerification
             int hpBefore = player.Creature.CurrentHp, maxBefore = player.Creature.MaxHp, goldBefore = player.Gold;
             bool tailBefore = player.Relics.OfType<LizardTail>().Single().WasUsed;
             int stashBefore = modifier.VaultCount;
+            await RunManager.Instance.EnterAct(3, false);
+            await Task.Delay(100);
+            Check(run.Map.SecondBossMapPoint != null, "R regression begins on a real double-boss map");
             run.Acts[3].MarkRoomVisited(RoomType.Boss); run.Acts[4].MarkRoomVisited(RoomType.Boss);
             await AdvancedEffects.ResetRun();
             Check(run.Acts.Skip(3).All(act => act.PullNextEncounter(RoomType.Boss).Id == act.BossEncounter.Id), "R key resets native double-boss encounter cursors to the first boss");
@@ -153,6 +156,9 @@ internal static class NativeAdvancedVerification
                 && StateJson.Serialize(player.Deck.Cards.Select(NativeCheckpoint.EncodeCard).ToList()) == deckBefore && modifier.VaultCount == stashBefore,
                 "R key preserves actual player HP, max HP, gold, relics, Lizard Tail use, exact deck packets and skill vault");
             await Capture(game, "advanced-04-reset-map");
+            await Task.Delay(100); // Let the old double-boss UI nodes actually be freed.
+            await RunManager.Instance.EnterNextAct();
+            Check(run.CurrentActIndex == 1 && run.Map.SecondBossMapPoint == null, "native next-act transition after R rebuilds a single-boss map without disposed UI nodes");
             await Battle();
             var enemy = player.Creature.CombatState!.Enemies.First(); int scaled = enemy.MaxHp;
             Check(scaled == (int)Math.Ceiling(modifier.ResetBaseHp(enemy) * 1.2m)
@@ -164,6 +170,15 @@ internal static class NativeAdvancedVerification
             Check(alliedSummon.MaxHp == alliedMax && modifier.ModifyDamageMultiplicative(player.Creature, 10, ValueProp.Unpowered, alliedSummon, null, null) == 1m
                 && modifier.ModifyBlockMultiplicative(alliedSummon, 10, ValueProp.Unpowered, null, null) == 1m, "R and late-act monster scaling exclude allied monster summons such as Osty");
             await Win();
+            await MockTesting.NextAct();
+            Check(run.CurrentActIndex == 2, "debug next-act transition after R also succeeds");
+            await RunManager.Instance.EnterAct(4, false);
+            await MockTesting.GrantEffect("r_key");
+            await AdvancedEffects.ResetRun();
+            await Task.Delay(100);
+            await RunManager.Instance.EnterNextAct();
+            Check(run.CurrentActIndex == 1 && session.Me.ResetCount == 2 && session.Me.ResetCharges == 0,
+                "a second R from the fifth-act double-boss map also permits native next-act travel");
             session.Me.BossPrizes.Add("advanced:later");
             await session.Submit(session.New("boss_cleanse", "advanced:later", "no_plan"));
             await modifier.ApplyReceipts(new ThrowingPlayerChoiceContext(), false);

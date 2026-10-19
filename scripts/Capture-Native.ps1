@@ -24,7 +24,7 @@ try{
     $deadline=[DateTime]::UtcNow.AddSeconds(300)
     while(!$process.HasExited){if([DateTime]::UtcNow -gt $deadline){throw 'Visual verification timed out.'};Start-Sleep -Milliseconds 500}
     $logText=Get-Content -LiteralPath $logPath -Raw
-    if($process.ExitCode -ne 0 -or !$logText.Contains($(if($Campaign){'[FDZF CAMPAIGN COMPLETE]'}elseif($Advanced){'[FDZF ADVANCED COMPLETE]'}else{'[FDZF VERIFY COMPLETE]'})) -or $logText -match 'LocException|turn loop died|\[FDZF (?:VERIFY|ADVANCED|CAMPAIGN) FAILED\]'){throw "Visual verification failed: $logPath"}
+    if($process.ExitCode -ne 0 -or !$logText.Contains($(if($Campaign){'[FDZF CAMPAIGN COMPLETE]'}elseif($Advanced){'[FDZF ADVANCED COMPLETE]'}else{'[FDZF VERIFY COMPLETE]'})) -or $logText -match 'LocException|ObjectDisposedException|turn loop died|\[FDZF (?:VERIFY|ADVANCED|CAMPAIGN) FAILED\]'){throw "Visual verification failed: $logPath"}
     $expected=if($Campaign){@('campaign-01-tier-status.png','campaign-02-fourth-act-map.png')}elseif($Advanced){@('advanced-01-card-durability.png','advanced-02-combat-status.png','advanced-03-native-cleanse-tooltip.png','advanced-04-reset-map.png')}else{@('mock-01-clean-opening.png','mock-02-persistent-effect-icons.png','mock-03-effect-test-menu.png')}
     foreach($name in $expected){
         if(!(Test-Path -LiteralPath (Join-Path $OutputDirectory $name))){throw "Missing native screenshot: $name"}

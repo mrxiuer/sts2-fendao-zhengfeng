@@ -1,6 +1,6 @@
 # 原生加载与 Steam 创意工坊发布
 
-当前版本：0.3.1 开发预览。通过 GitHub Releases 分发，尚未上传工坊。
+当前版本：0.3.2 开发预览。通过 GitHub Releases 分发，尚未上传工坊。
 
 0.3.0 起清单使用对象式依赖 `{ "id": "BaseLib", "min_version": "3.4.7" }`，修复旧字符串依赖触发的原生清单迁移错误。`scripts/Package.ps1` 从已构建的 DLL/JSON 生成安装 ZIP 和 SHA256SUMS.txt，不包括第三方程序集或个人配置。
 

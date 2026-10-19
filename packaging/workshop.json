@@ -2,7 +2,7 @@
   "title": "杀戮尖塔2：分道争锋",
   "description": "独立选路、独立战斗的多人竞速模式。献祭遗物后从诅咒、双刃契约、增益混合三选一；默认公开队友血量、牌组、遗物和已走路线。需要 BaseLib；配置位于独立的分道争锋条目。当前为开发验证版本。",
   "visibility": "private",
-  "changeNote": "0.3.1 开发预览：耐久数字使用原版费用样式的右上角边框，README 移除模拟测试截图。",
+  "changeNote": "0.3.2 开发预览：修复双Boss幕使用R键后再次跨幕访问已释放Boss地图节点的异常，补充连续跨幕与重复R键回归测试。",
   "tags": [],
   "dependencies": [],
   "contentDescriptors": []

@@ -3,6 +3,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes;
+using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Random;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Rooms;
@@ -73,5 +74,17 @@ internal static class FiveActMapPatch
     {
         if (!RaceRuntime.Live || runState != RaceRuntime.State || runState.CurrentActIndex < 3) return true;
         __result = FiveActCampaign.CreateLateMap(runState); return false;
+    }
+}
+
+// Native SetMap only assigns this field when the new map has two bosses. The
+// previous node is freed during cleanup, so a later single-boss map must not
+// retain it for focus navigation or boss travelability checks.
+[HarmonyPatch(typeof(NMapScreen), "RemoveAllMapPointsAndPaths")]
+internal static class MapBossNodeCleanupPatch
+{
+    static void Postfix(ref NBossMapPoint? ____secondBossPointNode)
+    {
+        if (RaceRuntime.Live) ____secondBossPointNode = null;
     }
 }

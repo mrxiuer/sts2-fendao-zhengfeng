@@ -2,14 +2,16 @@
 
 独立选路、独立战斗、遗物献祭的多人竞速 MOD。共享一张地图，各自推进；固定5幕，率先击败第五幕最终Boss的玩家获胜。
 
-**当前版本：0.3.1 开发预览。** 基于 Windows 版游戏 **v0.111.0**、**BaseLib 3.4.7** 验证。已完成本机原生战斗、图形和双进程网络测试，仍需 Steam 多机、三至四人和完整竞赛验收。详细证据见 [验证记录](docs/VERIFICATION.md)。
+**当前版本：0.3.2 开发预览。** 基于 Windows 版游戏 **v0.111.0**、**BaseLib 3.4.7** 验证。已完成本机原生战斗、图形和双进程网络测试，仍需 Steam 多机、三至四人和完整竞赛验收。详细证据见 [验证记录](docs/VERIFICATION.md)。
+
+0.3.2 修复双Boss幕使用R键重开后，再进入下一幕出现已释放Boss地图节点的异常。
 
 [下载安装包](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases) · [效果一览](docs/EFFECTS.md) · [本地模拟测试](docs/MOCK_TESTING.md) · [反馈问题](https://github.com/mrxiuer/sts2-fendao-zhengfeng/issues)
 
 ## 安装与更新
 
 1. 所有参与者使用相同游戏版本，安装并启用 **BaseLib 3.4.7 或更新版本**。目前只验证了 3.4.7，更新版本仍需兼容核验。本包不附带 BaseLib 或游戏程序集。
-2. 从 Releases 下载 `FendaoZhengfeng-0.3.1-preview.zip`，不要把自动生成的 `Source code` 源码压缩包当作安装包。
+2. 从 Releases 下载 `FendaoZhengfeng-0.3.2-preview.zip`，不要把自动生成的 `Source code` 源码压缩包当作安装包。
 3. 退出游戏，将 ZIP 中的 `FendaoZhengfeng` 文件夹放入游戏的 `mods` 目录。可在 Steam → 游戏 → 管理 → 浏览本地文件找到游戏目录。
 
 ```text

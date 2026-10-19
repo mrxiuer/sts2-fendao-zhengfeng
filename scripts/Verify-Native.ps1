@@ -34,7 +34,7 @@ function Wait-Verification($Records) {
       $log=Get-Content -LiteralPath $record.Log -Raw
       $marker=if($record.Vanilla) {'[FDZF VANILLA COMPLETE]'} elseif($record.Role -eq 'campaign') {'[FDZF CAMPAIGN COMPLETE]'} elseif($record.Role -eq 'advanced') {'[FDZF ADVANCED COMPLETE]'} elseif($record.Role -eq 'single') {'[FDZF VERIFY COMPLETE]'} elseif($record.Resume) {'[FDZF NETWORK RESUME COMPLETE]'} else {'[FDZF NETWORK COMPLETE]'}
       if($record.Process.ExitCode -ne 0 -or !$log.Contains($marker)) {throw "Verification failed: $($record.Log)"}
-      if($log -match 'LocException|turn loop died|\[FDZF (?:VERIFY|NETWORK|ADVANCED|CAMPAIGN) FAILED\]') {throw "Native runtime error: $($record.Log)"}
+      if($log -match 'LocException|ObjectDisposedException|turn loop died|\[FDZF (?:VERIFY|NETWORK|ADVANCED|CAMPAIGN) FAILED\]') {throw "Native runtime error: $($record.Log)"}
       Write-Output "PASS $($record.Role) resume=$($record.Resume): $($record.Log)"
     }
   } finally {
