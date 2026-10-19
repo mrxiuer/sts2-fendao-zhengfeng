@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Powers;
 using MegaCrit.Sts2.Core.Localization;
+using MegaCrit.Sts2.Core.HoverTips;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
@@ -17,7 +18,7 @@ public sealed class RaceDisplayPower : PowerModel
 {
     public string EffectId { get; set; } = "exhaustion";
     public override PowerType Type => Catalog.Get(EffectId).Kind == EffectKind.Boon ? PowerType.Buff : PowerType.Debuff;
-    public override PowerStackType StackType => EffectId is "fortune_dice" or "bitter_sweet" or "hard_shell" or "scapegoat" or "no_plan" or "r_key" ? PowerStackType.Counter : PowerStackType.Single;
+    public override PowerStackType StackType => EffectId is "fortune_dice" or "bitter_sweet" or "hard_shell" or "scapegoat" or "no_plan" or "r_key" or "expedition" or "combo_tax" or "cornered" or "disorder" or "combat_cycle" or "heavy_followup" or "desperate_echo" ? PowerStackType.Counter : PowerStackType.Single;
     public override bool ShouldReceiveCombatHooks => false;
     public override bool ShouldPlayVfx => false;
     public override LocString Title => new(ModEntry.Id, "display." + EffectId + ".title");
@@ -75,12 +76,23 @@ internal static class CombatEffectDisplay
             }
             int amount = key.Item2 switch
             {
+                "sharpen" or "light_step" or "poise" => 1 + session.Me.Effects[key.Item2].Rank,
+                "prepared" => 6 + 3 * session.Me.Effects[key.Item2].Rank,
+                "restoration" => 2 + session.Me.Effects[key.Item2].Rank,
+                "abrasion" => 1 + session.Me.Count(key.Item2),
                 "fortune_dice" => modifier.Dice,
                 "bitter_sweet" => modifier.ManualCards,
                 "hard_shell" => modifier.RemainingEnemyBudget(key.Item1),
                 "scapegoat" => session.Me.Ghosts,
                 "no_plan" => modifier.VaultCount,
                 "r_key" => session.Me.ResetCharges,
+                "expedition" => session.Me.ExpeditionProgress,
+                "combo_tax" => modifier.ManualCards % 4,
+                "cornered" => modifier.CorneredUsed ? 0 : 1,
+                "disorder" => modifier.DisorderUsed ? 0 : 1,
+                "combat_cycle" => modifier.CycleUsed ? 0 : 1,
+                "heavy_followup" => modifier.HeavyUsed ? 0 : 1,
+                "desperate_echo" => modifier.EchoUsed ? 0 : 1,
                 _ => session.Me.Count(key.Item2)
             };
             AccessTools.Field(typeof(PowerModel), "_amount").SetValue(entry.Model, amount);
@@ -96,6 +108,20 @@ internal static class InformationalPowerIconPatch
     { yield return AccessTools.PropertyGetter(typeof(PowerModel), nameof(PowerModel.Icon)); yield return AccessTools.PropertyGetter(typeof(PowerModel), nameof(PowerModel.BigIcon)); }
     static bool Prefix(PowerModel __instance, ref Texture2D __result)
     { if (__instance is not RaceDisplayPower marker) return true; __result = EffectIcons.Get(marker.EffectId); return false; }
+}
+
+// Native PowerModel formats descriptions directly through LocManager.SmartFormat,
+// which also requires an on-disk localization table. Our informational effects use
+// dynamic text, so provide their complete native hover tip before that formatter.
+[HarmonyPatch(typeof(PowerModel), "get_HoverTips")]
+internal static class InformationalPowerHoverPatch
+{
+    static bool Prefix(PowerModel __instance, ref IEnumerable<IHoverTip> __result)
+    {
+        if (__instance is not RaceDisplayPower marker) return true;
+        __result = [new HoverTip(marker.Title, EffectDetails.Describe(marker.EffectId), EffectIcons.Get(marker.EffectId))];
+        return false;
+    }
 }
 
 [HarmonyPatch(typeof(NPower), nameof(NPower._Ready))]

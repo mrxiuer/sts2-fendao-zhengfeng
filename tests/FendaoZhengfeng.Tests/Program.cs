@@ -19,7 +19,12 @@ Test("owned permanent actives leave every pool and stale grants are atomic", () 
         Check(rejected && StateJson.Serialize(e.State) == before);
     }
 });
-Test("catalog has 34 unique effects", () => { Check(Catalog.All.Count == 34); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 34); });
+Test("small and light is a rare boss boon with no elite sacrifice access", () => {
+    var effect = Catalog.Get("small_light");
+    Check(effect.Tier == Tier.Boss && effect.Rarity == Rarity.Rare && !effect.ElitePool && effect.BossPool && effect.FirstKillPool);
+    Check(effect.Description.Contains("失去3最大生命"));
+});
+Test("catalog has 50 unique effects", () => { Check(Catalog.All.Count == 50); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 50); });
 Test("cleanse prices", () => { Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 1) == 60); Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 3) == 80); Check(Balance.CleansePrice(Catalog.Get("carapace"), 3) == 195); Check(Balance.CleansePrice(Catalog.Get("hard_shell"), 1) == null); });
 Test("repeat weight floor", () => { Check(Balance.RepeatWeight(0) == 1); Check(Balance.RepeatWeight(1) == 0.4); Check(Math.Abs(Balance.RepeatWeight(2) - 0.16) < 1e-10); Check(Balance.RepeatWeight(10) == 0.1); });
 Test("burden saturates monotonically", () => { Check(Balance.RareMultiplier(0, false) == 1); Check(Balance.RareMultiplier(8, false) == 2); Check(Balance.RareMultiplier(100000, false) < 3); Check(Balance.RareMultiplier(32, false) > Balance.RareMultiplier(8, false)); });
@@ -171,6 +176,43 @@ Test("R cannot reset an active fight", () => {
     var before=StateJson.Serialize(e.State);try{e.Execute(new("invalid-r","a","reset_use"));}catch(RuleException){}Check(StateJson.Serialize(e.State)==before);
 });
 Test("cleansing no plan schedules recovery rather than deleting stored skills", () => {
-    var e=New();Grant(e,"a","no_plan");e.Execute(new("plan-clean","a","shop_cleanse","shop","no_plan",1000)); Check(e.State.Racers["a"].Receipts.Any(r=>r.Kind=="restore_skills"));
+    var e=New();Grant(e,"a","no_plan");e.State.Racers["a"].BossPrizes.Add("0:later");e.Execute(new("plan-clean","a","boss_cleanse","0:later","no_plan")); Check(e.State.Racers["a"].Receipts.Any(r=>r.Kind=="restore_skills"));
+});
+Test("boss effects including contracts never leak into elite sacrifices", () => {
+    var e=New();
+    foreach(var route in new[]{Route.Mixed,Route.Contract,Route.Grow,Route.Disrupt})
+        for(int i=0;i<100;i++) Check(Candidates.Generate(e.State,e.State.Racers["a"],route+":"+i,route,false).All(id=>Catalog.Get(id).Tier!=Tier.Boss));
+});
+Test("boon tier and pool classifications agree", () => {
+    foreach(var b in Catalog.All.Where(x=>x.Kind==EffectKind.Boon)) {
+        Check(b.ElitePool==(b.Tier!=Tier.Boss));Check(b.BossPool==(b.Tier!=Tier.Ordinary));
+    }
+    Check(Catalog.Get("no_plan").Tier==Tier.Boss && Catalog.Get("abet").Tier==Tier.Ordinary);
+});
+Test("promoted boss contracts cannot be cleansed at shops", () => {
+    var e=New();Grant(e,"a","bloom_decay");var before=StateJson.Serialize(e.State);bool rejected=false;
+    try{e.Execute(new("illegal-cleanse","a","shop_cleanse","shop","bloom_decay",9999));}catch(RuleException){rejected=true;}
+    Check(rejected && StateJson.Serialize(e.State)==before);
+});
+Test("expedition uses only post-acquisition elite wins and scales with act", () => {
+    var e=New();var p=e.State.Racers["a"];p.VictoryCount=99;Grant(e,"a","expedition");
+    for(int i=0;i<3;i++){e.Execute(new("es"+i,"a","battle_start","elite"+i));e.Execute(new("ev"+i,"a","victory","elite"+i,Value:"Elite"));}
+    Check(e.State.Racers["a"].ExpeditionRewards.Count==1 && e.State.Racers["a"].ExpeditionProgress==0);
+    e.State.Racers["a"].Act=2;e.Execute(new("m1","a","battle_start","monster"));e.Execute(new("m2","a","victory","monster",Value:"Monster"));Check(e.State.Racers["a"].ExpeditionProgress==0);
+    e.State.Racers["a"].Act=4;e.Execute(new("l1","a","battle_start","late"));e.Execute(new("l2","a","victory","late",Value:"Elite"));Check(e.State.Racers["a"].ExpeditionRewards.Count==2);
+});
+Test("repeat expedition adds progress and emission cannot replay", () => {
+    var e=New();Grant(e,"a","expedition");e.State.Racers["a"].Act=4;
+    OfferEffect(e,"exp","expedition",Route.Grow);e.Execute(new("pick-exp","a","choose","exp","expedition"));
+    var ticket=e.State.Racers["a"].ExpeditionRewards.Single();e.Execute(new("emit","a","expedition_emit",ticket));
+    Check(e.State.Racers["a"].ExpeditionRewards.Count==0);var before=StateJson.Serialize(e.State);
+    try{e.Execute(new("emit-again","a","expedition_emit",ticket));}catch(RuleException){}Check(StateJson.Serialize(e.State)==before);
+});
+Test("first double boss does not expire boons or award act-first prize", () => {
+    var e=New();Grant(e,"a","sharpen");e.State.Racers["a"].Effects["sharpen"].ExpiresAfterAct=3;e.State.Racers["a"].Act=3;
+    e.Execute(new("b1","a","battle_start","boss1"));e.Execute(new("v1","a","victory","boss1",Boss:false,Value:"Boss"));
+    Check(e.State.Racers["a"].Has("sharpen") && e.State.Racers["a"].BossPrizes.Count==0);
+    e.Execute(new("b2","a","battle_start","boss2"));e.Execute(new("v2","a","victory","boss2",Boss:true,Value:"Boss"));
+    Check(!e.State.Racers["a"].Has("sharpen") && e.State.Racers["a"].BossPrizes.Single()=="3:first");
 });
 Console.WriteLine($"{passed} checks passed");

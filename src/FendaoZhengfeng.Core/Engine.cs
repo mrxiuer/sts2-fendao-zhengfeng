@@ -53,6 +53,9 @@ public sealed class Engine(Match state)
                 p.InBattle = false;
                 if (!p.WonBattles.Add(c.Key)) break;
                 p.VictoryCount++;
+                if (p.Has("restoration")) p.Receipts.Add(new(c.Id + ":restoration", "heal", "", 2 + p.Effects["restoration"].Rank));
+                if (p.Has("expedition") && c.Value == "Elite") AdvanceExpedition(p, c.Id);
+
                 if (p.Position is { } cleared && p.Room is "Monster" or "Elite" or "Boss") p.ClearedNodes.Add(cleared);
                 if (p.Has("scapegoat")) { var g = p.Effects["scapegoat"]; g.Used++; if (g.Used % 5 == 0) p.Ghosts = Math.Min(2, p.Ghosts + 1); }
                 if (p.Has("catch_up")) { var h = p.Effects["catch_up"]; if (--h.Used <= 0) p.Effects.Remove("catch_up"); }
@@ -63,6 +66,8 @@ public sealed class Engine(Match state)
                     p.BossPrizes.Add((p.ResetCount > 0 ? "lap" + p.ResetCount + ":" : "") + p.Act + ":" + (first ? "first" : "later"));
                 }
                 break;
+            case "expedition_emit":
+                if (!p.ExpeditionRewards.Remove(c.Key)) throw new RuleException("悬赏奖励已处理。"); break;
             case "defeat": p.Eliminated = true; p.InBattle = false; break;
             case "revive": p.RevivalCount++; break;
             case "finish":
@@ -187,6 +192,7 @@ public sealed class Engine(Match state)
         if (e.Id is "small_light" or "good_connections" && p.Has(e.Id)) throw new RuleException("此常驻主动增益不能重复持有。");
         p.History[e.Id] = p.History.GetValueOrDefault(e.Id) + 1;
         if (e.Id == "r_key") p.ResetCharges++;
+        if (e.Id == "expedition" && p.Has(e.Id)) AdvanceExpedition(p, eventId);
         if (e.Kind == EffectKind.Contract)
         {
             if (p.Effects.ContainsKey(e.Id)) throw new RuleException("契约不能重复持有。");
@@ -204,6 +210,13 @@ public sealed class Engine(Match state)
             if (e.Id == "catch_up") h.Used = m.Racers.Values.Any(r => r.Act > p.Act) ? 2 : 1;
         }
         h.ExpiresAfterAct = e.Permanent || e.Id == "catch_up" ? -1 : p.Act + (p.KilledBossActs.Contains(p.Act) ? 1 : 0);
+    }
+    public static int ExpeditionGoal(int act) => act < 2 ? 3 : act < 4 ? 2 : 1;
+    private static void AdvanceExpedition(Racer p, string eventId)
+    {
+        p.ExpeditionProgress++;
+        int goal = ExpeditionGoal(p.Act);
+        while (p.ExpeditionProgress >= goal) { p.ExpeditionProgress -= goal; p.ExpeditionRewards.Add(p.BattleKey + "|expedition:" + eventId + ":" + p.ExpeditionRewards.Count); }
     }
     private static int Cleanse(Racer p, string id, CleanseAt at, string commandId)
     {

@@ -35,8 +35,8 @@ public sealed partial class RaceModifier : ModifierModel
     internal int ResetBaseHp(Creature creature) => resetBaseHp.GetValueOrDefault(creature, creature.MaxHp);
     public override async Task AfterCreatureAddedToCombat(Creature creature)
     {
-        if (creature.IsMonster && Me.ResetCount > 0 && resetScaled.Add(creature))
-        { resetBaseHp[creature] = creature.MaxHp; await CreatureCmd.SetMaxAndCurrentHp(creature, Math.Ceiling(creature.MaxHp * (1 + 0.2m * Me.ResetCount))); }
+        if (creature.IsEnemy && FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) > 1 && resetScaled.Add(creature))
+        { resetBaseHp[creature] = creature.MaxHp; await CreatureCmd.SetMaxAndCurrentHp(creature, Math.Ceiling(creature.MaxHp * (FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount)))); }
     }
     private bool firstDraw;
     private bool suppressPropagation;
@@ -60,6 +60,7 @@ public sealed partial class RaceModifier : ModifierModel
     private PlayerChoiceContext Context() => new ThrowingPlayerChoiceContext();
     public override async Task BeforeCombatStart()
     {
+        ResetTierCombat();
         Turn = 0; ManualCards = 0; firstDraw = false; barbsHits.Clear(); hpLost.Clear(); initialEnemies.Clear(); openingMaxHp.Clear();
         string key = RaceRuntime.RoomKey;
         await S.Submit(S.New("battle_start", key));
@@ -76,6 +77,7 @@ public sealed partial class RaceModifier : ModifierModel
             if (N("overgrowth") > 0) await CreatureCmd.SetMaxAndCurrentHp(enemy, Math.Ceiling(enemy.MaxHp * (1 + 0.1m * N("overgrowth"))));
             openingMaxHp[enemy] = enemy.MaxHp;
         }
+        await TierOpening();
         await UpdateMaxHp();
         await S.Submit(S.New("consume_opening", key));
     }
@@ -83,7 +85,7 @@ public sealed partial class RaceModifier : ModifierModel
     { if (amount != 0) await PowerCmd.Apply<T>(Context(), creature, amount, null, null); }
     public override async Task AfterEnergyResetLate(Player player)
     {
-        if (player != Player) return; Turn++; ManualCards = 0; firstDraw = false; hpLost.Clear(); RefreshHandCosts();
+        if (player != Player) return; ResetTierTurn(); Turn++; ManualCards = 0; firstDraw = false; hpLost.Clear(); RefreshHandCosts();
         if (N("fortune_dice") > 0) { int min = Math.Max(50, 80 - 5 * (N("fortune_dice") - 1)); var r = new StableRandom(S.Engine.State.Seed + ":" + S.LocalId + ":" + Me.BattleKey + ":" + Turn); Dice = min + (int)(r.Next() * (111 - min)); } else Dice = 100;
         if (Me.Has("borrowed_time")) { await PlayerCmd.GainEnergy(1, player); await Power<DoomPower>(player.Creature, 3); }
         if (Turn == 1)
@@ -108,7 +110,7 @@ public sealed partial class RaceModifier : ModifierModel
     public override decimal ModifyHandDrawLate(Player player, decimal count)
     {
         if (player != Player) return count;
-        if (Turn == 1) { if (Me.Has("tomorrow")) count++; if (Me.Has("catch_up")) count++; if (Me.Has("greedy_pocket")) count = Math.Max(1, count - 1); }
+        if (Turn == 1) { if (Me.Has("tomorrow")) count++; count += RankValue("poise", 1, 1); if (Me.Has("catch_up")) count++; if (Me.Has("greedy_pocket")) count = Math.Max(1, count - 1); }
         if (Turn == 2 && Me.Has("tomorrow")) count = Math.Max(0, count - 1); return count;
     }
     public override async Task AfterCardDrawn(PlayerChoiceContext ctx, CardModel card, bool fromHandDraw)
@@ -119,14 +121,16 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override async Task AfterPlayerTurnStartLate(PlayerChoiceContext ctx, Player player)
     {
-        if (player != Player || Turn != 1) return;
+        if (player != Player) return;
+        await TierTurnStart(ctx);
+        if (Turn != 1) return;
         if (N("clutter") > 0) for (int i = 0; i < 1 + N("clutter"); i++) await CardPileCmd.AddGeneratedCardToCombat(Player.Creature.CombatState!.CreateCard<ClutterCard>(Player), PileType.Hand, null);
         await ApplyReceipts(ctx, true);
     }
     public override decimal ModifyDamageMultiplicative(Creature? target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource, CardPlay? cardPlay)
-        => dealer == Player.Creature && cardSource?.Type == CardType.Attack ? (decimal)(1 + Me.Growth) * Dice / 100m : dealer?.IsMonster == true ? 1 + 0.2m * Me.ResetCount : 1m;
+        => dealer == Player.Creature && cardSource?.Type == CardType.Attack ? (decimal)(1 + Me.Growth) * Dice / 100m : dealer?.IsEnemy == true ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1m;
     public override decimal ModifyBlockMultiplicative(Creature target, decimal block, ValueProp props, CardModel? cardSource, CardPlay? cardPlay)
-        => target == Player.Creature ? (Me.Has("all_in") && Turn == 1 ? 0 : (decimal)(1 + Me.Growth)) : target.IsMonster ? 1 + 0.2m * Me.ResetCount : 1;
+        => target == Player.Creature ? (Me.Has("all_in") && Turn == 1 ? 0 : (decimal)(1 + Me.Growth)) : target.IsEnemy ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1;
     public override decimal ModifyHpLostAfterOstyLate(Creature target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource)
     {
         if (initialEnemies.Contains(target) && N("hard_shell") > 0 && Turn <= 3)
@@ -148,6 +152,7 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override Task BeforeCardPlayed(CardPlay play)
     {
+        TierBeforePlay(play);
         if (play.IsFirstInSeries) barbsHits.RemoveWhere(hit => hit.Item1 == play.Card);
         if (!play.IsAutoPlay && play.IsFirstInSeries)
         {
@@ -169,10 +174,11 @@ public sealed partial class RaceModifier : ModifierModel
         foreach (var card in PileType.Hand.GetPile(Player).Cards) card.InvokeEnergyCostChanged();
     }
     public override int ModifyCardPlayCount(CardModel card, Creature? target, int playCount)
-        => Me.Has("bitter_sweet") && ManualCards == 2 && card.Owner == Player && !CardPlayScope.IsAutomatic(card) ? playCount + 1 : playCount;
+        => Me.Has("bitter_sweet") && ManualCards == 2 && card.Owner == Player && !CardPlayScope.IsAutomatic(card) ? playCount + 1 + (ShouldEcho(card) ? 1 : 0) : playCount + (ShouldEcho(card) ? 1 : 0);
     public override async Task AfterCardPlayedLate(PlayerChoiceContext ctx, CardPlay play)
     {
         if (!play.IsLastInSeries || play.IsAutoPlay) return;
+        await TierAfterPlay(ctx, play);
         var original = play.Card.DeckVersion;
         if (Me.Has("bloom_decay") && original != null && original.Type is not (CardType.Status or CardType.Curse))
         { wear[original] = Math.Max(0, wear.GetValueOrDefault(original, 8) - 1); }
@@ -180,7 +186,7 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override async Task AfterCombatVictory(CombatRoom room)
     {
-        await S.Submit(S.New("victory", Me.BattleKey, boss: room.RoomType.ToString() == "Boss"));
+        await S.Submit(S.New("victory", Me.BattleKey, value: room.RoomType.ToString(), boss: room.RoomType == RoomType.Boss && FiveActCampaign.IsFinalBoss(RunState)));
         resetScaled.Clear();
         if (room.RoomType.ToString() == "Boss" && RunState.CurrentActIndex == RunState.Acts.Count - 1)
         {
@@ -192,6 +198,7 @@ public sealed partial class RaceModifier : ModifierModel
     public override async Task BeforeCombatRewardOffered(RewardsSet rewards, CombatRoom room)
     {
         RaceRuntime.RewardRoom = room; RaceRuntime.CombatRewards = rewards;
+        await AddExpeditionRewards(rewards);
         if (CanRecoverSkill) rewards.Rewards.Add(new RaceActionReward(Player, 1));
         if (room.RoomType == RoomType.Boss && Me.BossPrizes.Count > 0) rewards.Rewards.Add(new RaceActionReward(Player, 2));
         await Task.CompletedTask;
@@ -239,6 +246,7 @@ public sealed partial class RaceModifier : ModifierModel
                 {
                     case "gold": await PlayerCmd.GainGold(r.Amount, Player); break;
                     case "spend_gold": await PlayerCmd.LoseGold(r.Amount, Player); break;
+                    case "heal": await CreatureCmd.Heal(Player.Creature, r.Amount); break;
                     case "heal_percent": await CreatureCmd.Heal(Player.Creature, Math.Max(1, Math.Floor(Player.Creature.MaxHp * r.Amount / 100m))); break;
                     case "energy": await PlayerCmd.GainEnergy(r.Amount, Player); break;
                     case "status":

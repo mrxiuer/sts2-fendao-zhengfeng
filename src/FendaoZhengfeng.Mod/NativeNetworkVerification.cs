@@ -55,7 +55,7 @@ internal static class NativeNetworkVerification
             var listener = new Listener(); var lobby = new StartRunLobby(GameMode.Standard, transport, listener, 2);
             lobby.Players.Add(new() { id = 1, character = ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
             lobby.Players.Add(new() { id = 2, character = ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
-            bool remoteDone = false, remoteSaved = false; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; });
+            bool remoteDone = false, remoteSaved = false; string? remoteCampaign = null; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; if (msg.Kind == "verification_campaign") remoteCampaign = msg.Content; });
             bool resume = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESUME") == "1"; RaceRuntime.ResumeRequested = resume;
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_VANILLA") == "1")
             {
@@ -79,6 +79,19 @@ internal static class NativeNetworkVerification
             await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
             string otherId = host ? "2" : "1";
             await Wait(() => session.Engine.State.Racers[otherId].PublicPacket.Length > 0 && PublicProfiles.Read(session.Engine.State.Racers[otherId])?.Relics.Any(relic => relic is MegaCrit.Sts2.Core.Models.Relics.LizardTail) == true, "peer public profile including late starting relic");
+            Check(run.Acts.Count == 5, "race run contains five acts on both real ENet peers");
+            var campaignPreview = RunState.FromSerializable(RunManager.Instance.ToSave(null));
+            var signatures = new List<string>();
+            for (int index = 3; index < 5; index++)
+            {
+                campaignPreview.CurrentActIndex = index;
+                var map = FiveActCampaign.CreateLateMap(campaignPreview);
+                signatures.Add(campaignPreview.Act.BossEncounter.Id + "/" + campaignPreview.Act.SecondBossEncounter!.Id + ":" + NativeCampaignVerification.MapSignature(map));
+            }
+            string campaignDigest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join("|", signatures))));
+            transport.SendMessage(new RaceMessage { Kind = "verification_campaign", Content = campaignDigest });
+            await Wait(() => remoteCampaign != null, "remote fourth/fifth act map digest");
+            Check(remoteCampaign == campaignDigest, "fourth and fifth maps including links node types and both bosses match across actual ENet processes");
             var peerView = PublicProfiles.Read(session.Engine.State.Racers[otherId]);
             Check(peerView != null && peerView.Deck.Cards.Count > 0 && peerView.Relics.Any(relic => relic is MegaCrit.Sts2.Core.Models.Relics.LizardTail), "peer native deck and relic snapshot crosses real ENet transport");
 

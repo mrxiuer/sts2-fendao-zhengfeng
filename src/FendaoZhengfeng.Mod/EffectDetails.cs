@@ -10,7 +10,7 @@ internal static class EffectDetails
         var session = RaceSession.Current;
         var racer = session?.Me;
         string kind = effect.Kind switch { EffectKind.Curse => "诅咒", EffectKind.Contract => "双刃契约", _ => "增益" };
-        string result = kind + " · " + RaceUi.TierName(effect.Tier) + "\n" + effect.Description;
+        string result = kind + " · " + RaceUi.TierName(effect.Tier) + " · " + (effect.Rarity == Rarity.Rare ? "稀有" : effect.Rarity == Rarity.Uncommon ? "罕见" : "普通") + "\n" + effect.Description;
         if (racer == null || !racer.Effects.TryGetValue(id, out var holding)) return result;
         int active = racer.Count(id);
         int pending = effect.Kind == EffectKind.Boon ? 0 : holding.Grants.Count - active;
@@ -29,6 +29,13 @@ internal static class EffectDetails
             "war_feeds_war" => $"\n剩余 {Math.Max(0, 3 + holding.Rank - holding.Used)} 次治疗。",
             "adversity_profit" => $"\n已领取 {holding.Used}/{45 + 15 * holding.Rank} 金币。",
             "no_plan" => $"\n暂存 {modifier?.VaultCount ?? 0} 张技能牌。每次战胜后的原生奖励栏提供一次取回选择。",
+            "combat_cycle" => $"\n本回合{(modifier?.CycleUsed == true ? "已触发" : "尚未触发")}；每回合一次。",
+            "heavy_followup" => $"\n本回合{(modifier?.HeavyUsed == true ? "已触发" : "尚未触发")}；本场强化额外抽牌已用 {modifier?.HeavyBonusUsed ?? 0}/{holding.Rank}。",
+            "cornered" => $"\n本场{(modifier?.CorneredUsed == true ? "已触发" : "尚未触发")}。",
+            "combo_tax" => $"\n本回合手动出牌 {modifier?.ManualCards ?? 0} 张；每4张缴税一次。",
+            "disorder" => $"\n本场{(modifier?.DisorderUsed == true ? "已触发" : "尚未触发")}；首次重洗后加入临时晕眩。",
+            "desperate_echo" => $"\n本回合{(modifier?.EchoUsed == true ? "已触发" : "尚未触发")}；支付2生命，最低保留1。",
+            "expedition" => $"\n当前悬赏进度 {racer.ExpeditionProgress}/{Engine.ExpeditionGoal(racer.Act)}；待结算额外遗物 {racer.ExpeditionRewards.Count} 份。",
             "small_light" => $"\n点击图标使用；累计支付 {modifier?.SmallLightLoss ?? 0} 点最大生命。战斗中不可用。",
             "good_connections" => $"\n点击图标购买；下次价格 {100 + 50 * racer.Purchases} 金币，已购买 {racer.Purchases} 次。待接收 {session!.Engine.State.Trades.Count(trade => trade.Buyer == racer.Id && !trade.Delivered)} 张，待交出 {session.Engine.State.Trades.Count(trade => trade.Seller == racer.Id && !trade.Removed)} 张。",
             "r_key" => $"\n点击图标使用；可用 {racer.ResetCharges} 次，已重置 {racer.ResetCount} 次，怪物生命/伤害/格挡额外 +{20 * racer.ResetCount}%。",

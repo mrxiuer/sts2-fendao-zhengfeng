@@ -56,6 +56,8 @@ public sealed class Racer
     public int MaxHealth { get; set; }
     public bool Eliminated { get; set; }
     public bool Finished { get; set; }
+    public int ExpeditionProgress { get; set; }
+    public List<string> ExpeditionRewards { get; set; } = [];
     public int VictoryCount { get; set; }
     public int RevivalCount { get; set; }
     public long Battle { get; set; }

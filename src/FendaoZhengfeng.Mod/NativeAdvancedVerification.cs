@@ -66,11 +66,18 @@ internal static class NativeAdvancedVerification
             var reader = new PacketReader(); reader.Reset(writer.Buffer.Take(writer.BytePosition).ToArray()); var decoded = new SerializableReward(); decoded.Deserialize(reader);
             Check(Reward.FromSerializable(decoded, player) is RaceActionReward, "custom N-choice reward survives native packet serialization");
 
+            Check(new MegaCrit.Sts2.Core.Localization.LocString(ModEntry.Id, "action.remove.title").GetFormattedText().Contains("3点最大生命"), "small-and-light native card-selector title shows the actual three-max-HP price");
             await MockTesting.GrantEffect("small_light");
             var toRemove = player.Deck.Cards.First(card => card.Type == CardType.Attack);
             int beforeCount = player.Deck.Cards.Count, beforeMax = player.Creature.MaxHp;
             await modifier.RemoveWithSmallLight(toRemove); await modifier.UpdateMaxHp();
-            Check(player.Deck.Cards.Count == beforeCount - 1 && player.Creature.MaxHp == beforeMax - 1 && modifier.SmallLightLoss == 1, "small and light removes the chosen permanent card and exactly one max HP");
+            Check(player.Deck.Cards.Count == beforeCount - 1 && player.Creature.MaxHp == beforeMax - 3 && modifier.SmallLightLoss == 3, "small and light removes the chosen permanent card and exactly three max HP");
+            int afterRemovalMax = player.Creature.MaxHp;
+            await CreatureCmd.SetMaxHp(player.Creature, 3);
+            bool lowMaxRejected = false;
+            try { await modifier.RemoveWithSmallLight(player.Deck.Cards.First()); } catch (RuleException) { lowMaxRejected = true; }
+            Check(lowMaxRejected && player.Deck.Cards.Count == beforeCount - 1 && modifier.SmallLightLoss == 3 && player.Creature.MaxHp == 3, "small and light rejects insufficient max HP without removing a card or charging again");
+            await CreatureCmd.SetMaxHp(player.Creature, afterRemovalMax);
             await MockTesting.GrantEffect("farewell_upgrades");
             var upgraded = player.Deck.Cards.First(card => card.IsUpgradable); CardCmd.Upgrade(upgraded);
             int preservedUpgrade = upgraded.CurrentUpgradeLevel;
@@ -116,6 +123,7 @@ internal static class NativeAdvancedVerification
             Check(CardDurabilityUi.ValueOn(displayCard) == (originalWear - 1).ToString(), "native card view exposes the exact remaining durability number");
             await Capture(game, "advanced-01-card-durability"); displayCard.QueueFree();
             await Capture(game, "advanced-02-combat-status");
+            await MockTesting.GrantEffect("carapace");
             var choose = RaceUi.ChooseCleanse(CleanseAt.Shop);
             await Task.Delay(200);
             var overlay = game.GetTree().Root.FindChildren("FdzfNativeChoice", "", true, false).OfType<Control>().Last();
@@ -130,7 +138,9 @@ internal static class NativeAdvancedVerification
             int hpBefore = player.Creature.CurrentHp, maxBefore = player.Creature.MaxHp, goldBefore = player.Gold;
             bool tailBefore = player.Relics.OfType<LizardTail>().Single().WasUsed;
             int stashBefore = modifier.VaultCount;
+            run.Acts[3].MarkRoomVisited(RoomType.Boss); run.Acts[4].MarkRoomVisited(RoomType.Boss);
             await AdvancedEffects.ResetRun();
+            Check(run.Acts.Skip(3).All(act => act.PullNextEncounter(RoomType.Boss).Id == act.BossEncounter.Id), "R key resets native double-boss encounter cursors to the first boss");
             Check(run.CurrentActIndex == 0 && run.ActFloor == 0 && session.Me.ResetCount == 1 && session.Me.ResetCharges == 0 && !session.Me.ResetPending, "R key returns to act-one map start and consumes exactly one charge");
             Check(player.Creature.CurrentHp == hpBefore && player.Creature.MaxHp == maxBefore && player.Gold == goldBefore
                 && string.Join("|", player.Relics.Select(relic => relic.Id.ToString())) == relicsBefore
@@ -144,8 +154,13 @@ internal static class NativeAdvancedVerification
                 && modifier.ModifyDamageMultiplicative(player.Creature, 10, ValueProp.Unpowered, enemy, null, null) == 1.2m
                 && modifier.ModifyBlockMultiplicative(enemy, 10, ValueProp.Unpowered, null, null) == 1.2m, "R key scales native monster health, damage and block by 20 percent");
             await modifier.AfterCreatureAddedToCombat(enemy); Check(enemy.MaxHp == scaled, "monster reset scaling is applied once per creature");
+            var alliedSummon = new MegaCrit.Sts2.Core.Entities.Creatures.Creature(ModelDb.Monster<MegaCrit.Sts2.Core.Models.Monsters.Osty>().ToMutable(), CombatSide.Player, null);
+            int alliedMax = alliedSummon.MaxHp; await modifier.AfterCreatureAddedToCombat(alliedSummon);
+            Check(alliedSummon.MaxHp == alliedMax && modifier.ModifyDamageMultiplicative(player.Creature, 10, ValueProp.Unpowered, alliedSummon, null, null) == 1m
+                && modifier.ModifyBlockMultiplicative(alliedSummon, 10, ValueProp.Unpowered, null, null) == 1m, "R and late-act monster scaling exclude allied monster summons such as Osty");
             await Win();
-            await session.Submit(session.New("shop_cleanse", "advanced-cleanse", "no_plan", player.Gold));
+            session.Me.BossPrizes.Add("advanced:later");
+            await session.Submit(session.New("boss_cleanse", "advanced:later", "no_plan"));
             await modifier.ApplyReceipts(new ThrowingPlayerChoiceContext(), false);
             Check(modifier.VaultCount == 0 && player.Deck.Cards.Count(card => card.Type == CardType.Skill) >= initialSkills, "cleansing no plan restores every remaining saved skill without duplication");
             GD.Print("[FDZF ADVANCED COMPLETE] Native advanced checks passed using memory saves."); game.GetTree().Quit(0);

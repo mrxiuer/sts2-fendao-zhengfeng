@@ -71,12 +71,13 @@ internal static class RaceModeIconPatch
 [HarmonyPatch(typeof(CardModel), nameof(CardModel.OnPlayWrapper))]
 internal static class CardPlayScope
 {
-    private sealed record Scope(CardModel Card, bool Automatic);
+    private sealed record Scope(CardModel Card, bool Automatic, ResourceInfo Resources);
     private static readonly Dictionary<CardModel, List<Scope>> scopes = [];
     public static bool IsAutomatic(CardModel card) => scopes.TryGetValue(card, out var stack) && stack.Count > 0 && stack[^1].Automatic;
-    static void Prefix(CardModel __instance, bool isAutoPlay, out Scope __state)
+    public static int EnergySpent(CardModel card) => scopes.TryGetValue(card, out var stack) && stack.Count > 0 ? stack[^1].Resources.EnergySpent : 0;
+    static void Prefix(CardModel __instance, bool isAutoPlay, ResourceInfo resources, out Scope __state)
     {
-        __state = new(__instance, isAutoPlay);
+        __state = new(__instance, isAutoPlay, resources);
         if (!scopes.TryGetValue(__instance, out var stack)) scopes[__instance] = stack = [];
         stack.Add(__state);
     }
@@ -252,7 +253,7 @@ internal static class LocalizationPatch
             __result = __instance.LocEntryKey switch
             {
                 "action.recover.title" => "取回1张暂存技能牌",
-                "action.remove.title" => "删除1张牌，失去1点最大生命",
+                "action.remove.title" => "删除1张牌，失去3点最大生命",
                 "action.buy.title" => "选择要购买的卡牌",
                 "reward.sacrifice" => "遗物奖励 · 领取或献祭",
                 "repair.title" => "恢复耐久",
@@ -260,7 +261,7 @@ internal static class LocalizationPatch
                 "cleanse.title" => "净化诅咒",
                 "cleanse.description" => "移除一个普通档诅咒或双刃契约，包括全部强化。占用本次营地行动。",
                 "mode.title" => "分道争锋",
-                "mode.description" => "独立推进的多人竞速模式。",
+                "mode.description" => "共享地图、独立推进的五幕竞速模式。第四、第五幕各有两场Boss。",
                 _ => __instance.LocEntryKey
             }; return false;
         }

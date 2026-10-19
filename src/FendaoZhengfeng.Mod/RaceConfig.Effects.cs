@@ -36,4 +36,20 @@ public sealed partial class RaceConfig
     [ConfigIgnore] public static bool Effect_farewell_upgrades { get => EnabledIds().Contains("farewell_upgrades"); set => SetEffect("farewell_upgrades", value); }
     [ConfigIgnore] public static bool Effect_good_connections { get => EnabledIds().Contains("good_connections"); set => SetEffect("good_connections", value); }
     [ConfigIgnore] public static bool Effect_r_key { get => EnabledIds().Contains("r_key"); set => SetEffect("r_key", value); }
+    [ConfigIgnore] public static bool Effect_sharpen { get => EnabledIds().Contains("sharpen"); set => SetEffect("sharpen", value); }
+    [ConfigIgnore] public static bool Effect_light_step { get => EnabledIds().Contains("light_step"); set => SetEffect("light_step", value); }
+    [ConfigIgnore] public static bool Effect_prepared { get => EnabledIds().Contains("prepared"); set => SetEffect("prepared", value); }
+    [ConfigIgnore] public static bool Effect_poise { get => EnabledIds().Contains("poise"); set => SetEffect("poise", value); }
+    [ConfigIgnore] public static bool Effect_restoration { get => EnabledIds().Contains("restoration"); set => SetEffect("restoration", value); }
+    [ConfigIgnore] public static bool Effect_thin_armor { get => EnabledIds().Contains("thin_armor"); set => SetEffect("thin_armor", value); }
+    [ConfigIgnore] public static bool Effect_exposed { get => EnabledIds().Contains("exposed"); set => SetEffect("exposed", value); }
+    [ConfigIgnore] public static bool Effect_abrasion { get => EnabledIds().Contains("abrasion"); set => SetEffect("abrasion", value); }
+    [ConfigIgnore] public static bool Effect_combat_cycle { get => EnabledIds().Contains("combat_cycle"); set => SetEffect("combat_cycle", value); }
+    [ConfigIgnore] public static bool Effect_heavy_followup { get => EnabledIds().Contains("heavy_followup"); set => SetEffect("heavy_followup", value); }
+    [ConfigIgnore] public static bool Effect_cornered { get => EnabledIds().Contains("cornered"); set => SetEffect("cornered", value); }
+    [ConfigIgnore] public static bool Effect_combo_tax { get => EnabledIds().Contains("combo_tax"); set => SetEffect("combo_tax", value); }
+    [ConfigIgnore] public static bool Effect_disorder { get => EnabledIds().Contains("disorder"); set => SetEffect("disorder", value); }
+    [ConfigIgnore] public static bool Effect_lone_crown { get => EnabledIds().Contains("lone_crown"); set => SetEffect("lone_crown", value); }
+    [ConfigIgnore] public static bool Effect_desperate_echo { get => EnabledIds().Contains("desperate_echo"); set => SetEffect("desperate_echo", value); }
+    [ConfigIgnore] public static bool Effect_expedition { get => EnabledIds().Contains("expedition"); set => SetEffect("expedition", value); }
 }

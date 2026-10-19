@@ -12,7 +12,7 @@ StartRacePatch 接管启用模式后的多人开局。普通单人流程不添�
 
 | 模块 | 已实现职责 |
 | --- | --- |
-| Core/Catalog | 34 项效果定义、渠道、档位、稀有度、净化价格与负担曲线 |
+| Core/Catalog | 50 项效果定义、渠道、档位、稀有度、净化价格与负担曲线 |
 | Core/Engine | 房主顺序裁定，原子状态迁移、命令去重、候选、攻击、护盾、首杀和名次 |
 | Core/Candidates | 确定性候选、保证位、历史降权与非法候选排除 |
 | RaceSession | 大厅身份、版本握手、原生消息、压缩快照、命令确认、共同存档屏障 |
@@ -49,3 +49,9 @@ LobbyRules 在 StartNewMultiplayerRun 前协商房主规则（含关闭模式路
 公开资料使用原生 SerializablePlayer 包传递永久牌组、升级、遗物、药水等持久内容；Host 按发送身份提交资料，带限长与基本位置边界校验，不提供战斗重放防作弊。详情由独立只读 Player/RunState 重建后进入原生 NMultiplayerPlayerExpandedState，不添加到运行中的单人战局。同步间隔 1 秒、房间入口立即发布；已打开的详情保留打开时快照，重新打开读取更新。
 
 路径使用 Act/row/col 持久记录连续实际节点，停留不重复记录。RaceMapOverlay 在同一滚动容器中读取原生节点位置，绘制按角色原版 MapDrawingColor 着色的原生 map_circle_4 纹理。用独立 shader 保留笔触 alpha、替换墨色，不改写游戏资源。胜利时记入每名玩家自己的 ClearedNodes，失败或进入节点不计；多名胜者在同节点并排显示。当前位置仍独立显示；不画路线。跨幕数据保留，当前没有独立的历史幕地图查看器。已实现的资料公开不提供远程战斗画面。
+
+## 五幕与新效果
+
+FiveActCampaign扩展起始幕列表，后两幕各自持有原生ActModel可变实例，配置两个不同Boss。StandardActMap以幕号种子生成后两幕的增加精英地图，保留原生连线和修复逻辑；不写原版程序集或资源。非模式运行不启用这些钩子。
+
+TierEffects复用RaceModifier的开战、回合、出牌、洗牌钩子；实际支付能量来自OnPlayWrapper的ResourceInfo作用域，自动出牌与重放不重复计次。远征进度与待发票据由房主Engine保存，生成原生RelicReward后消费一次，奖励继续使用原有领取/献祭事务。每幕最终Boss才向Engine发送幕完成标记。

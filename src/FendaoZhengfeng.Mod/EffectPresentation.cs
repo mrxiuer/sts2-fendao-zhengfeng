@@ -71,6 +71,7 @@ internal static class EffectHud
             if (effect.Id is "small_light" or "good_connections" or "r_key") badge.GuiInput += input =>
             { if (input is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { badge.AcceptEvent(); RaceUi.Run(() => AdvancedEffects.Click(effect.Id)); } };
             string stack = effect.Kind == EffectKind.Boon ? holding.Rank > 0 ? "+" + holding.Rank : "" : pending > 0 ? active > 0 ? $"{active}+{pending}" : "待" : active > 1 ? active.ToString() : "";
+            if (effect.Id == "expedition") stack = $"{session.Me.ExpeditionProgress}/{FendaoZhengfeng.Core.Engine.ExpeditionGoal(session.Me.Act)}";
             if (stack.Length > 0)
             {
                 var count = new Label { Text = stack, Position = new Vector2(29, 38), MouseFilter = Control.MouseFilterEnum.Ignore };

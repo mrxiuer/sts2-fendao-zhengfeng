@@ -64,6 +64,21 @@ internal static class MockTesting
         }
         RaceUi.Refresh();
     }
+    public static async Task NextAct()
+    {
+        _ = Session; var run = RaceRuntime.State!;
+        if (Session.Me.InBattle || CombatManager.Instance.IsInProgress) throw new InvalidOperationException("请先结算当前战斗。");
+        if (run.CurrentActIndex >= 4) throw new InvalidOperationException("第五幕已是最后一幕。");
+        await RunManager.Instance.EnterAct(run.CurrentActIndex + 1, false);
+    }
+    public static async Task SelectCampaignBoss()
+    {
+        _ = Session; var run = RaceRuntime.State!;
+        if (Session.Me.InBattle || CombatManager.Instance.IsInProgress) throw new InvalidOperationException("请先结算当前战斗。");
+        var points = new[] { run.Map.BossMapPoint, run.Map.SecondBossMapPoint }.Where(point => point != null).ToList();
+        int index = await RaceUi.Choose("进入本幕Boss节点", points.Select((point, i) => $"第{i + 1}个Boss" + (i == points.Count - 1 ? " · 本幕最终Boss" : "")).ToList());
+        if (index >= 0) await RunManager.Instance.EnterMapCoord(points[index]!.coord);
+    }
     public static async Task EnterBattle()
     {
         _ = Session;

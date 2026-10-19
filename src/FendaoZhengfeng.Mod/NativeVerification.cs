@@ -26,7 +26,8 @@ internal static class NativeVerification
     {
         if (started || System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") return;
         started = true;
-        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "advanced") _ = NativeAdvancedVerification.Run(game);
+        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "campaign") _ = NativeCampaignVerification.Run(game);
+        else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "advanced") _ = NativeAdvancedVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "host" or "client") _ = NativeNetworkVerification.Run(game);
         else _ = Verify(game);
     }
@@ -58,7 +59,7 @@ internal static class NativeVerification
             var configPage = mainMenu.SubmenuStack.PushSubmenuType<BaseLib.Config.UI.NModConfigSubmenu>();
             HarmonyLib.AccessTools.Method(typeof(BaseLib.Config.UI.NModConfigSubmenu), "LoadModConfig").Invoke(configPage, [RaceConfig.Instance]);
             await Task.Delay(200);
-            Check(configPage.FindChildren("*", "", true, false).OfType<BaseLib.Config.UI.NConfigTickbox>().Count() == Catalog.All.Count + 2, "config renders mode and debug toggles plus 34 effect checkboxes");
+            Check(configPage.FindChildren("*", "", true, false).OfType<BaseLib.Config.UI.NConfigTickbox>().Count() == Catalog.All.Count + 2, "config renders mode and debug toggles plus 50 effect checkboxes");
             RaceConfig.Effect_exhaustion = false;
             Check(!RaceConfig.EnabledIds().Contains("exhaustion"), "effect checkbox updates next-match whitelist");
             RaceConfig.Effect_exhaustion = true;
@@ -129,7 +130,7 @@ internal static class NativeVerification
             await CaptureVisual(game, "mock-01-clean-opening");
             await MockTesting.WinBattle();
             while (session.Me.InBattle) await Task.Delay(30);
-            foreach (var e in Catalog.All.Where(e => (e.Kind == EffectKind.Curse || e.Kind == EffectKind.Contract) && e.Id is not ("no_plan" or "farewell_upgrades")))
+            foreach (var e in Catalog.All.Where(e => (e.Kind == EffectKind.Curse || e.Kind == EffectKind.Contract) && e.Id is not ("no_plan" or "farewell_upgrades" or "thin_armor" or "exposed" or "abrasion" or "combo_tax" or "disorder" or "lone_crown" or "desperate_echo")))
                 session.Me.Effects[e.Id] = new() { Id = e.Id, Grants = [new() { EventId = e.Id, Source = "2", ActiveBattle = session.Me.Battle + 1 }] };
             session.Me.Effects["battle_hardened"] = new() { Id = "battle_hardened" }; session.Me.VictoryCount = 20;
             session.Me.Effects["death_defiance"] = new() { Id = "death_defiance" }; session.Me.RevivalCount = 2;
@@ -177,7 +178,7 @@ internal static class NativeVerification
                 && session.Me.Ghosts == 1, "scapegoat excludes player card life payments without consuming a charge");
             session.Me.Ghosts = 0;
 
-            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == EffectIcons.TextureSize), "all 34 hand-painted effect icons load from embedded PNG resources");
+            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == EffectIcons.TextureSize), "all 50 hand-painted effect icons load from embedded PNG resources");
             Check(ReferenceEquals(ModelDb.Modifier<RaceModifier>().Icon, EffectIcons.Mode), "native mode icon replaces missing NOPE placeholder");
             EffectHud.Refresh();
             Check(EffectHud.IsVisible && EffectHud.IconCount == session.Me.Effects.Count, "effect icons stay visible near relics with race panel closed");
@@ -239,6 +240,7 @@ internal static class NativeVerification
             }
             if (string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("FDZF_SCREENSHOT_DIR")))
             {
+                run.AddVisitedMapCoord((run.Map.SecondBossMapPoint ?? run.Map.BossMapPoint).coord);
                 await RunManager.Instance.EnterRoomDebug(RoomType.Boss);
                 var bossRoom = (CombatRoom)run.CurrentRoom!;
                 await MockTesting.WinBattle();

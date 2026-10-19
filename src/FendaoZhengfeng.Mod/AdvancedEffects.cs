@@ -129,12 +129,12 @@ public sealed partial class RaceModifier
     internal async Task RemoveWithSmallLight(CardModel? chosen = null)
     {
         if (!Me.Has("small_light") || Me.InBattle || CombatManager.Instance.IsInProgress || Me.Finished || Me.ResetPending) throw new RuleException("小而轻只能在非战斗时使用。");
-        if (Player.Creature.MaxHp <= 1) throw new RuleException("最大生命不能降到1以下。");
+        if (Player.Creature.MaxHp <= 3) throw new RuleException("需要支付3点最大生命，支付后至少保留1点。");
         var card = chosen ?? (await CardSelectCmd.FromDeckGeneric(Player,
             new CardSelectorPrefs(new LocString(ModEntry.Id, "action.remove.title"), 1) { Cancelable = true }, candidate => !IsReserved(candidate))).FirstOrDefault();
         if (card == null) return;
-        if (!Player.Deck.Cards.Contains(card) || IsReserved(card) || Player.Creature.MaxHp <= 1) throw new RuleException("该卡牌已不可移除。");
-        await RemovePermanent(card); SmallLightLoss++; await CreatureCmd.SetMaxHp(Player.Creature, Player.Creature.MaxHp - 1);
+        if (!Player.Deck.Cards.Contains(card) || IsReserved(card) || Player.Creature.MaxHp <= 3) throw new RuleException("该卡牌已不可移除。");
+        await RemovePermanent(card); SmallLightLoss += 3; await CreatureCmd.SetMaxHp(Player.Creature, Player.Creature.MaxHp - 3);
         await S.Submit(S.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(RunState)) }); RaceRuntime.Checkpoint(); RaceUi.Refresh();
     }
 }
@@ -199,6 +199,7 @@ internal static class AdvancedEffects
         // Keep the current run and its actual player objects; only regenerate act/map state.
         // No second Neow/opening relic or fresh Lizard Tail is granted.
         run.ExtraFields.StartedWithNeow = false;
+        FiveActCampaign.ResetEncounters(run);
         await RunManager.Instance.EnterAct(0, false);
         await session.Submit(session.New("reset_ready"));
         await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });

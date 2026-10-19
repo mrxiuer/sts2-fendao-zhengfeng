@@ -38,7 +38,7 @@ public sealed partial class RaceConfig : ModConfig
             row.AddThemeConstantOverride("separation", 18);
             row.AddChild(new TextureRect { Texture = EffectIcons.Get(effect.Id), CustomMinimumSize = new Vector2(64, 64), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered });
             string kind = effect.Kind switch { EffectKind.Curse => "诅咒 · 对手", EffectKind.Contract => "双刃契约 · 自己", _ => "增益 · 自己" };
-            var text = CreateRawLabelControl(effect.Name + " · " + kind + "\n" + effect.Description, 23);
+            var text = CreateRawLabelControl(effect.Name + " · " + kind + " · " + RaceUi.TierName(effect.Tier) + "\n" + effect.Description, 23);
             text.CustomMinimumSize = new Vector2(650, 95); text.FitContent = true; text.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             row.AddChild(text);
             row.AddChild(CreateRawTickboxControl(typeof(RaceConfig).GetProperty("Effect_" + effect.Id)!));

@@ -81,6 +81,8 @@ public static class RaceUi
                 Button("测试：取得自身双刃契约", () => MockTesting.SelectEffect(EffectKind.Contract));
                 Button("测试：取得自身增益", () => MockTesting.SelectEffect(EffectKind.Boon));
                 Button("测试：进入普通 / 精英 / Boss 战斗", MockTesting.EnterBattle);
+                Button("测试：进入下一幕（最多第五幕）", MockTesting.NextAct);
+                Button("测试：进入本幕第一 / 第二个Boss", MockTesting.SelectCampaignBoss);
                 Button("测试：进入商店 / 营地", MockTesting.SelectService);
                 Button("测试：击杀当前敌人并结算奖励", MockTesting.WinBattle);
                 Button("测试：模拟对手抢先击杀本幕 Boss", MockTesting.OpponentBoss);
