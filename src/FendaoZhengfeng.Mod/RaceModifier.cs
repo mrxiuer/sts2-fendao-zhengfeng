@@ -217,8 +217,13 @@ public sealed partial class RaceModifier : ModifierModel
         var options = (CardCreationOptions)HarmonyLib.AccessTools.PropertyGetter(typeof(CardReward), "RerollOptions").Invoke(original, null)!;
         rewards.Add(new CardReward(options, 3, Player)); return true;
     }
-    public override async Task AfterPreventingDeath(Creature creature)
-    { if (creature == Player.Creature) { await S.Submit(S.New("revive")); await UpdateMaxHp(); } }
+    internal async Task RecordRevival(Creature creature)
+    {
+        if (creature != Player.Creature || creature.CurrentHp <= 0 || !creature.IsAlive) return;
+        // Record every successful native revival, even before this boon is owned.
+        await S.Submit(S.New("revive"));
+        await UpdateMaxHp(); RaceRuntime.Checkpoint(); RaceUi.Refresh();
+    }
     public async Task UpdateMaxHp()
     {
         decimal basis = Player.Creature.MaxHp - AppliedMaxHpBonus + SmallLightLoss;

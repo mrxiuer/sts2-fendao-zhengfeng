@@ -154,6 +154,12 @@ internal static class NativeNetworkVerification
             }
             await RunManager.Instance.EnterRoomDebug(host ? RoomType.Elite : RoomType.Monster);
             await Wait(() => RaceModifier.Active?.Turn == 1 && run.Players[0].PlayerCombatState?.Phase == PlayerTurnPhase.Play, "first combat ready");
+            await CreatureCmd.Damage(new ThrowingPlayerChoiceContext(), run.Players.Single().Creature, 9999,
+                MegaCrit.Sts2.Core.ValueProps.ValueProp.Unpowered, run.Players.Single().Creature.CombatState!.Enemies.First(), null, null);
+            Check(session.Me.RevivalCount == 1 && run.Players.Single().Creature.CurrentHp > 0,
+                "real native revival records the correct local racer over ENet before owning its boon");
+            await Wait(() => session.Engine.State.Racers[otherId].RevivalCount == 1, "remote revival history synchronization");
+            Check(session.Engine.State.Racers[otherId].RevivalCount == 1, "peer revival history arrives exactly once over actual ENet");
             await Wait(() => session.Engine.State.Trades.Single().Delivered && session.Engine.State.Trades.Single().Removed, "independent ENet card handoffs");
             Check(run.Players.Single().Deck.Cards.Count == beforeMarketDeck + (host ? 1 : -1), "real ENet handoff changes each native deck exactly once");
             GD.Print($"[FDZF NETWORK GOLD] initial={beforeMarketGold} actual={run.Players.Single().Gold} host={host}");

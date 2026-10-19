@@ -3,7 +3,7 @@
   "name": "杀戮尖塔2：分道争锋",
   "author": "分道争锋项目组",
   "description": "独立路线、独立战斗、遗物献祭与诅咒交锋的多人竞速模式。开发预览版本。",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "has_pck": false,
   "has_dll": true,
   "affects_gameplay": true,

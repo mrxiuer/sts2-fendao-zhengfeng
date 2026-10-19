@@ -215,4 +215,20 @@ Test("first double boss does not expire boons or award act-first prize", () => {
     e.Execute(new("b2","a","battle_start","boss2"));e.Execute(new("v2","a","victory","boss2",Boss:true,Value:"Boss"));
     Check(!e.State.Racers["a"].Has("sharpen") && e.State.Racers["a"].BossPrizes.Single()=="3:first");
 });
+Test("retroactive growth keeps pre-acquisition wins and revivals across R and serialization", () => {
+    var e=New();for(int i=0;i<3;i++) ReadyReward(e,"a","historical-win:"+i);
+    e.Execute(new("real-revive:1","a","revive"));e.Execute(new("real-revive:2","a","revive"));
+    Grant(e,"a","battle_hardened");Grant(e,"a","death_defiance");Grant(e,"a","r_key");
+    e.State.Racers["a"].ResetCharges=1;
+    e.Execute(new("historical-reset","a","reset_use"));e.Execute(new("historical-ready","a","reset_ready"));
+    var p=StateJson.Deserialize<Match>(StateJson.Serialize(e.State)).Racers["a"];
+    Check(p.VictoryCount==3 && p.RevivalCount==2 && Math.Abs(p.Growth-0.23)<0.00001);
+});
+Test("scapegoat does not retroactively charge old victories", () => {
+    var e=New();for(int i=0;i<5;i++) ReadyReward(e,"a","before-ghost:"+i);
+    Grant(e,"a","scapegoat");
+    for(int i=0;i<4;i++) ReadyReward(e,"a","after-ghost:"+i);
+    Check(e.State.Racers["a"].Ghosts==0);
+    ReadyReward(e,"a","after-ghost:4");Check(e.State.Racers["a"].Ghosts==1);
+});
 Console.WriteLine($"{passed} checks passed");

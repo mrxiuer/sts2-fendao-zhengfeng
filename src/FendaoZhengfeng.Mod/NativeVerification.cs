@@ -27,6 +27,7 @@ internal static class NativeVerification
         if (started || System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") return;
         started = true;
         if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "campaign") _ = NativeCampaignVerification.Run(game);
+        else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "revival") _ = NativeRevivalVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "advanced") _ = NativeAdvancedVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "host" or "client") _ = NativeNetworkVerification.Run(game);
         else _ = Verify(game);

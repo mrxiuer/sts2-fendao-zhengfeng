@@ -197,7 +197,7 @@ public sealed class RaceSession : IDisposable
     private void CommitPause()
     {
         if (checkpointPacket == null || checkpointGate == null) throw new RuleException("个人检查点尚未就绪。");
-        var bundle = new NativeCheckpoint.Bundle("0.3.3", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket);
+        var bundle = new NativeCheckpoint.Bundle("0.3.4", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket);
         Directory.CreateDirectory(Path.GetDirectoryName(ResumePath)!); AtomicWrite(ResumePath, StateJson.Serialize(bundle)); Paused = true;
         RaceUi.Error("共同检查点已保存。可等待房主继续，或全员退出后重建房间并勾选恢复共同检查点。"); RaceUi.Refresh();
     }

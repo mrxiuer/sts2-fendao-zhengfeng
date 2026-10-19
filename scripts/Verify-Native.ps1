@@ -1,4 +1,4 @@
-param([ValidateSet('Single','Campaign','Advanced','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2')
+param([ValidateSet('Single','Campaign','Advanced','Revival','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2')
 $ErrorActionPreference='Stop'
 $repoRoot=Split-Path -Parent $PSScriptRoot
 $reportRoot=Join-Path $repoRoot 'artifacts\verification'
@@ -32,9 +32,9 @@ function Wait-Verification($Records) {
     }
     foreach($record in $Records) {
       $log=Get-Content -LiteralPath $record.Log -Raw
-      $marker=if($record.Vanilla) {'[FDZF VANILLA COMPLETE]'} elseif($record.Role -eq 'campaign') {'[FDZF CAMPAIGN COMPLETE]'} elseif($record.Role -eq 'advanced') {'[FDZF ADVANCED COMPLETE]'} elseif($record.Role -eq 'single') {'[FDZF VERIFY COMPLETE]'} elseif($record.Resume) {'[FDZF NETWORK RESUME COMPLETE]'} else {'[FDZF NETWORK COMPLETE]'}
+      $marker=if($record.Vanilla) {'[FDZF VANILLA COMPLETE]'} elseif($record.Role -eq 'campaign') {'[FDZF CAMPAIGN COMPLETE]'} elseif($record.Role -eq 'revival') {'[FDZF REVIVAL COMPLETE]'} elseif($record.Role -eq 'advanced') {'[FDZF ADVANCED COMPLETE]'} elseif($record.Role -eq 'single') {'[FDZF VERIFY COMPLETE]'} elseif($record.Resume) {'[FDZF NETWORK RESUME COMPLETE]'} else {'[FDZF NETWORK COMPLETE]'}
       if($record.Process.ExitCode -ne 0 -or !$log.Contains($marker)) {throw "Verification failed: $($record.Log)"}
-      if($log -match 'LocException|ObjectDisposedException|turn loop died|\[FDZF (?:VERIFY|NETWORK|ADVANCED|CAMPAIGN) FAILED\]') {throw "Native runtime error: $($record.Log)"}
+      if($log -match 'LocException|ObjectDisposedException|turn loop died|\[FDZF (?:VERIFY|NETWORK|ADVANCED|CAMPAIGN|REVIVAL) FAILED\]') {throw "Native runtime error: $($record.Log)"}
       Write-Output "PASS $($record.Role) resume=$($record.Resume): $($record.Log)"
     }
   } finally {
@@ -50,3 +50,5 @@ if($Suite -in @('Vanilla','All')) {Write-Output 'Starting host-off native cooper
 if($Suite -in @('Advanced','All')) {Write-Output 'Starting native advanced effects verification';Wait-Verification @((Start-VerificationProcess 'advanced' $false))}
 
 if($Suite -in @('Campaign','All')) {Write-Output 'Starting native five-act and tier-effects verification';Wait-Verification @((Start-VerificationProcess 'campaign' $false))}
+
+if($Suite -in @('Revival','All')) {Write-Output 'Starting native revival history verification';Wait-Verification @((Start-VerificationProcess 'revival' $false))}
