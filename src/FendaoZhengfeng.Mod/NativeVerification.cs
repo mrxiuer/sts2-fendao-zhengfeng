@@ -50,11 +50,42 @@ internal static class NativeVerification
             mock.InitProfileId(1); mock.InitSettingsDataForTest(); mock.InitPrefsDataForTest(); mock.InitProgressData();
             mock.SetFtuesEnabled(false);
             SaveManager.MockInstanceForTesting(mock);
+            RaceConfig.ModeEnabled = true; RaceConfig.DebugMode = false; RaceConfig.DisabledEffects = "";
+            Check(BaseLib.Config.ModConfigRegistry.Get(ModEntry.Id) == RaceConfig.Instance
+                && BaseLib.Config.ModConfigRegistry.Get("BaseLib") != RaceConfig.Instance, "mod config is registered beside BaseLib as an independent entry");
+            var mainMenu = game.GetTree().Root.FindChildren("*", "", true, false).OfType<MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu>().First();
+            var configPage = mainMenu.SubmenuStack.PushSubmenuType<BaseLib.Config.UI.NModConfigSubmenu>();
+            HarmonyLib.AccessTools.Method(typeof(BaseLib.Config.UI.NModConfigSubmenu), "LoadModConfig").Invoke(configPage, [RaceConfig.Instance]);
+            await Task.Delay(200);
+            Check(configPage.FindChildren("*", "", true, false).OfType<BaseLib.Config.UI.NConfigTickbox>().Count() == 31, "config renders mode and debug toggles plus 29 effect checkboxes");
+            RaceConfig.Effect_exhaustion = false;
+            Check(!RaceConfig.EnabledIds().Contains("exhaustion"), "effect checkbox updates next-match whitelist");
+            RaceConfig.Effect_exhaustion = true;
+            await CaptureVisual(game, "mock-04-independent-mod-config");
+            mainMenu.SubmenuStack.Pop();
+            await Task.Delay(500);
             const string seed = "FDZFVERIFY";
             var run = await MockTesting.StartWithCharacter(ModelDb.Character<Ironclad>(), seed);
             var session = RaceSession.Current!;
             Check(session.IsMock && session.Engine.State.Racers.Count == 2, "interactive mock starts locally with one simulated opponent");
             Check(run.Players.Count == 1, "personal run has one player");
+            RaceUi.Refresh();
+            Check(!RaceUi.DebugButtonVisible, "debug-off hides the top text entry while normal match UI remains");
+            var starting = run.Map.StartingMapPoint;
+            var next = starting.Children.First();
+            var peerProfile = PublicProfiles.Capture(run) with { Position = new(run.CurrentActIndex, starting.coord.row, starting.coord.col) };
+            await session.Submit(session.New("profile") with { Actor = "2", Profile = StateJson.Serialize(peerProfile) });
+            peerProfile = peerProfile with { Position = new(run.CurrentActIndex, next.coord.row, next.coord.col), Room = "Monster" };
+            await session.Submit(session.New("profile") with { Actor = "2", Profile = StateJson.Serialize(peerProfile) });
+            await session.Submit(session.New("battle_start", "mock-cleared-node") with { Actor = "2" });
+            await session.Submit(session.New("victory", "mock-cleared-node") with { Actor = "2" });
+            var preview = PublicProfiles.Read(session.Engine.State.Racers["2"])!;
+            Check(preview.Deck.Cards.Count == run.Players.Single().Deck.Cards.Count
+                && preview.Relics.Count == run.Players.Single().Relics.Count
+                && !ReferenceEquals(preview, run.Players.Single()), "public player packet recreates isolated native deck and relic preview");
+            RaceUi.Refresh();
+            Check(RaceRoster.Count == 1 && session.Engine.State.Racers["2"].Trail.Count == 2, "default teammate roster has a peer and exact visited-node trail");
+
             Check(run.Players.Single().Relics.Any(r => r is LizardTail), "starting Lizard Tail granted");
             await RunManager.Instance.EnterRoom(new EventRoom(ModelDb.Event<MegaCrit.Sts2.Core.Models.Events.Neow>()));
             Check(run.CurrentRoom is EventRoom opening && opening.LocalMutableEvent is MegaCrit.Sts2.Core.Models.Events.Neow
@@ -66,6 +97,19 @@ internal static class NativeVerification
                 MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen.Instance?.Close(false);
             }
             await CaptureVisual(game, "mock-00-opening-relics");
+            if (!string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("FDZF_SCREENSHOT_DIR")))
+            {
+                await RaceRoster.OpenPlayer("2");
+                await CaptureVisual(game, "mock-06-native-teammate-details");
+                MegaCrit.Sts2.Core.Nodes.Screens.Capstones.NCapstoneContainer.Instance!.Close();
+                MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen.Instance!.Open();
+                RaceMapOverlay.Ensure();
+                await CaptureVisual(game, "mock-05-shared-map-completions");
+                GD.Print("[FDZF MAP] " + RaceMapOverlay.Current?.Diagnostic);
+                Check(RaceMapOverlay.Current?.DrawnMarks > 0, "native map renders character-colored native completion ink without route lines");
+                MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen.Instance.Close(false);
+            }
+
             await RunManager.Instance.EnterRoomDebug(RoomType.Elite);
             var player = run.Players.Single();
             long until = System.Environment.TickCount64 + 30000;

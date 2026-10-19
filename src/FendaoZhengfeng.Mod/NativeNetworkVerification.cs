@@ -57,11 +57,30 @@ internal static class NativeNetworkVerification
             lobby.Players.Add(new() { id = 2, character = ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
             bool remoteDone = false, remoteSaved = false; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; });
             bool resume = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESUME") == "1"; RaceRuntime.ResumeRequested = resume;
-            var runTask = RaceRuntime.Start(game, lobby, ActModel.GetDefaultList(), [], "FDZFNETVERIFY", 0);
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_VANILLA") == "1")
+            {
+                RaceConfig.ModeEnabled = !host;
+                var normal = await RaceRuntime.StartConfigured(game, lobby, ActModel.GetDefaultList(), [], "FDZFVANILLA", 0, false);
+                Check(RaceSession.Current == null && normal.Players.Count == 2 && normal.Modifiers.All(modifier => modifier is not RaceModifier), "host mode-off uses native two-player run despite client mode-on");
+                transport.SendMessage(new RaceMessage { Kind = "verification_done" });
+                await Wait(() => remoteDone, "vanilla peer completion");
+                GD.Print("[FDZF VANILLA COMPLETE] host-off native cooperative flow passed.");
+                game.GetTree().Quit(0); return;
+            }
+            RaceConfig.ModeEnabled = host; RaceConfig.DebugMode = host; RaceConfig.DisabledEffects = host ? "fortune_dice" : "ritual,exhaustion";
+            var agreed = await LobbyRules.Agree(lobby);
+            Check(agreed.Enabled && agreed.Debug && !agreed.Effects.Contains("fortune_dice") && agreed.Effects.Contains("exhaustion") && agreed.Effects.Contains("ritual"), "host config overrides different client mode and effect selections");
+            var runTask = RaceRuntime.Start(game, lobby, ActModel.GetDefaultList(), [], "FDZFNETVERIFY", 0, agreed);
             await Wait(() => RaceSession.Current != null, "session capture"); pump?.QueueFree();
             var run = await runTask; var session = RaceSession.Current!;
             Check(session.Engine.State.Racers.Count == 2, "two real ENet peers share one match");
             Check(run.Players.Count == 1 && run.Players[0].NetId == 1, "gameplay remains isolated singleplayer on each process");
+            await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
+            string otherId = host ? "2" : "1";
+            await Wait(() => session.Engine.State.Racers[otherId].PublicPacket.Length > 0 && PublicProfiles.Read(session.Engine.State.Racers[otherId])?.Relics.Any(relic => relic is MegaCrit.Sts2.Core.Models.Relics.LizardTail) == true, "peer public profile including late starting relic");
+            var peerView = PublicProfiles.Read(session.Engine.State.Racers[otherId]);
+            Check(peerView != null && peerView.Deck.Cards.Count > 0 && peerView.Relics.Any(relic => relic is MegaCrit.Sts2.Core.Models.Relics.LizardTail), "peer native deck and relic snapshot crosses real ENet transport");
+
             if (resume)
             {
                 await Wait(() => run.Players[0].PlayerCombatState?.Phase == PlayerTurnPhase.Play, "resumed combat ready");

@@ -18,10 +18,17 @@ public sealed class Holding
     public int Used { get; set; }
     public Dictionary<string, int> Counters { get; set; } = [];
 }
+public sealed record RouteStep(int Act, int Row, int Col);
+public sealed record PublicProfile(string Packet, int Health, int MaxHealth, int Act, int Floor, string Room, RouteStep? Position);
 public sealed class Racer
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
+    public string PublicPacket { get; set; } = "";
+    public long ProfileRevision { get; set; }
+    public RouteStep? Position { get; set; }
+    public List<RouteStep> Trail { get; set; } = [];
+    public HashSet<RouteStep> ClearedNodes { get; set; } = [];
     public int Act { get; set; }
     public int Floor { get; set; }
     public string Room { get; set; } = "";
@@ -73,6 +80,8 @@ public sealed class Match
     public string Id { get; set; } = "";
     public string Version { get; set; } = Catalog.RulesVersion;
     public string Seed { get; set; } = "";
+    public HashSet<string> EnabledEffects { get; set; } = Catalog.All.Select(effect => effect.Id).ToHashSet();
+    public bool DebugMode { get; set; }
     public long Revision { get; set; }
     public Dictionary<string, Racer> Racers { get; set; } = [];
     public Dictionary<string, Offer> Offers { get; set; } = [];

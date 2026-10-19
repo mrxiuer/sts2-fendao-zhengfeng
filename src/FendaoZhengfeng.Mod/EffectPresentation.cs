@@ -13,6 +13,7 @@ internal static class EffectHud
     private static HFlowContainer? strip;
     private static NRun? anchoredRun;
     private static NRelicInventory? inventory;
+    internal static float Bottom => strip?.Visible == true ? strip.Position.Y + strip.Size.Y : 170;
     internal static bool IsVisible => strip?.IsVisibleInTree() == true;
     internal static int IconCount => strip?.GetChildCount() ?? 0;
     public static void Install(CanvasLayer layer)

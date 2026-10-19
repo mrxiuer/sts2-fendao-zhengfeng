@@ -27,7 +27,7 @@ public static class Candidates
     {
         var rng = new StableRandom(m.Seed + ":" + p.Id + ":" + key + ":" + route);
         var candidates = new List<Effect>();
-        var available = Catalog.All.Where(e => route switch
+        var available = Catalog.All.Where(e => m.EnabledEffects.Contains(e.Id)).Where(e => route switch
         {
             Route.Mixed => e.Kind switch
             {

@@ -38,7 +38,7 @@ internal static class MockTesting
     public static async Task SelectEffect(EffectKind kind)
     {
         _ = Session;
-        var effects = Catalog.All.Where(e => e.Kind == kind).ToList();
+        var effects = Catalog.All.Where(e => e.Kind == kind && Session.Engine.State.EnabledEffects.Contains(e.Id)).ToList();
         int selected = await RaceUi.Choose(kind == EffectKind.Curse ? "模拟对手献祭 · 给自己施加诅咒" : "本地测试 · 取得自身效果", effects.Select(e => e.Name + " · " + RaceUi.TierName(e.Tier) + "\n" + e.Description).ToList(), effects.Select(e => EffectIcons.Get(e.Id)).ToList());
         if (selected >= 0) await GrantEffect(effects[selected].Id);
     }

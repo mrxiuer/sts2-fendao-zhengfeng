@@ -30,6 +30,7 @@ public sealed class RaceSession : IDisposable
     private bool disposed;
     private bool sendingTelemetry;
     private long lastTelemetry;
+    private string lastPublicProfile = "";
     public bool PauseRequested { get; private set; }
     public bool Paused { get; private set; }
     public bool WaitingAtCheckpoint => checkpointGate != null;
@@ -49,18 +50,20 @@ public sealed class RaceSession : IDisposable
         IsMock = mock;
         Current?.Dispose(); localVerification = true; Transport = new MegaCrit.Sts2.Core.Multiplayer.NetSingleplayerGameService(); HostId = 1;
         Engine = new(new Match { Id = mock ? "mock-" + Guid.NewGuid().ToString("N")[..8] : "native-verification", Seed = seed, Racers = new() { ["1"] = new() { Id = "1", Name = mock ? "本地玩家" : "验证玩家" }, ["2"] = new() { Id = "2", Name = mock ? "模拟对手" : "验证对手", Health = 80, MaxHealth = 80 } } });
-        Current = this;
+        Engine.State.EnabledEffects = RaceConfig.EnabledIds(); Engine.State.DebugMode = RaceConfig.DebugMode;
+        PublicProfiles.Reset(); Current = this;
     }
     internal static RaceSession CreateVerification(string seed) => new(seed);
     internal static RaceSession CreateMock(string seed) => new(seed, true);
-    public RaceSession(StartRunLobby lobby, string seed)
+    internal RaceSession(StartRunLobby lobby, string seed, LobbyRules rules)
     {
         Current?.Dispose(); Current = this; Transport = lobby.NetService;
         HostId = IsHost ? Transport.NetId : ((INetClientGameService)Transport).NetClient?.HostNetId ?? throw new InvalidOperationException("找不到房主。");
         var m = new Match { Id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((Transport.GetRawLobbyIdentifier() ?? "local") + seed)))[..24], Seed = seed };
         int slot = 0;
         foreach (var p in lobby.Players) m.Racers[p.id.ToString(System.Globalization.CultureInfo.InvariantCulture)] = new Racer { Id = p.id.ToString(System.Globalization.CultureInfo.InvariantCulture), Name = $"{++slot}号 · {p.character.Title.GetFormattedText()}" };
-        Engine = new(m); hello.Add(Transport.NetId);
+        m.EnabledEffects = rules.Effects.ToHashSet(); m.DebugMode = rules.Debug;
+        Engine = new(m); PublicProfiles.Reset(); hello.Add(Transport.NetId);
         if (RaceRuntime.ResumeRequested)
         {
             if (!File.Exists(ResumePath)) throw new InvalidOperationException("没有完整的共同检查点，请所有玩家选择新开局或先完成共同存档。");
@@ -79,7 +82,7 @@ public sealed class RaceSession : IDisposable
         long started = Environment.TickCount64;
         while ((IsHost ? hello.Count < Engine.State.Racers.Count : !hello.Contains(HostId)))
         {
-            if (Environment.TickCount64 - started > 20000) throw new InvalidOperationException("分道争锋握手超时，请确认所有玩家启用了同版本 MOD 和模式。");
+            if (Environment.TickCount64 - started > 20000) throw new InvalidOperationException("分道争锋握手超时，请确认所有玩家启用了同版本 MOD，并采用房主的本局配置。");
             Transport.SendMessage(new RaceMessage { Kind = "hello", Content = Handshake });
             await Task.Delay(200);
         }
@@ -90,11 +93,12 @@ public sealed class RaceSession : IDisposable
         if (disposed) return; Transport.Update();
         if ((!localVerification || IsMock) && !sendingTelemetry && !WaitingAtCheckpoint && Environment.TickCount64 - lastTelemetry >= 1000 && RaceRuntime.Live && RaceRuntime.State is { } state)
         {
-            var p = state.Players.Single();
-            if (Me.Health != p.Creature.CurrentHp || Me.MaxHealth != p.Creature.MaxHp)
+            lastTelemetry = Environment.TickCount64;
+            var profile = StateJson.Serialize(PublicProfiles.Capture(state));
+            if (profile != lastPublicProfile && !Me.Eliminated)
             {
-                sendingTelemetry = true; lastTelemetry = Environment.TickCount64;
-                RaceUi.Run(async () => { try { await Submit(New("progress", amount: p.Creature.CurrentHp, value: state.CurrentRoom?.RoomType.ToString() ?? "")); } finally { sendingTelemetry = false; } });
+                sendingTelemetry = true;
+                RaceUi.Run(async () => { try { await Submit(New("profile") with { Profile = profile }); lastPublicProfile = profile; } finally { sendingTelemetry = false; } });
             }
         }
     }
@@ -193,7 +197,7 @@ public sealed class RaceSession : IDisposable
     private void CommitPause()
     {
         if (checkpointPacket == null || checkpointGate == null) throw new RuleException("个人检查点尚未就绪。");
-        var bundle = new NativeCheckpoint.Bundle("0.1.3", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket);
+        var bundle = new NativeCheckpoint.Bundle("0.1.4", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket);
         Directory.CreateDirectory(Path.GetDirectoryName(ResumePath)!); AtomicWrite(ResumePath, StateJson.Serialize(bundle)); Paused = true;
         RaceUi.Error("共同检查点已保存。可等待房主继续，或全员退出后重建房间并勾选恢复共同检查点。"); RaceUi.Refresh();
     }

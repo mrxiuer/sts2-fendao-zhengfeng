@@ -18,7 +18,7 @@ namespace FendaoZhengfeng.Mod;
 
 public static class RaceRuntime
 {
-    public static bool Enabled { get; set; } = true;
+    public static bool Enabled { get => RaceConfig.ModeEnabled; set => RaceConfig.ModeEnabled = value; }
     public static bool ResumeRequested { get; set; }
     public static CombatRoom? RewardRoom { get; set; }
     internal static RewardsSet? CombatRewards { get; set; }
@@ -28,10 +28,10 @@ public static class RaceRuntime
     public static bool Live => RaceSession.Current != null && State?.Modifiers.Any(m => m is RaceModifier) == true;
     private static readonly Dictionary<Reward, string> rewardIds = [];
     private static string lastNode = "";
-    public static async Task<RunState> Start(NGame game, StartRunLobby lobby, IReadOnlyList<ActModel> acts, IReadOnlyList<ModifierModel> modifiers, string seed, int ascension)
+    internal static async Task<RunState> Start(NGame game, StartRunLobby lobby, IReadOnlyList<ActModel> acts, IReadOnlyList<ModifierModel> modifiers, string seed, int ascension, LobbyRules? rules = null)
     {
         rewardIds.Clear(); RewardRoom = null; CombatRewards = null; CurrentCardPlay = null; lastNode = "";
-        var session = new RaceSession(lobby, seed);
+        var session = new RaceSession(lobby, seed, rules ?? LobbyRules.Local());
         try
         {
             await session.WaitForHandshake();
@@ -49,6 +49,17 @@ public static class RaceRuntime
         }
         catch { session.Dispose(); throw; }
     }
+    internal static async Task<RunState> StartConfigured(NGame game, StartRunLobby lobby, IReadOnlyList<ActModel> acts, IReadOnlyList<ModifierModel> modifiers, string seed, int ascension, bool shouldSave = true, DateTimeOffset? dailyTime = null)
+    {
+        var rules = await LobbyRules.Agree(lobby);
+        ResumeRequested = rules.Resume;
+        if (rules.Enabled) return await Start(game, lobby, acts, modifiers, seed, ascension, rules);
+        StartRacePatch.NativeCall = true;
+        Task<RunState> original;
+        try { original = game.StartNewMultiplayerRun(lobby, shouldSave, acts, modifiers, seed, ascension, dailyTime); }
+        finally { StartRacePatch.NativeCall = false; }
+        return await original;
+    }
     public static string RewardKey(Reward reward)
     { if (!rewardIds.TryGetValue(reward, out var key)) { key = (RaceSession.Current?.Me.BattleKey ?? RoomKey) + "|" + rewardIds.Count; rewardIds[reward] = key; } return key; }
     public static async Task NodeChanged()
@@ -65,7 +76,7 @@ public static class RaceRuntime
         {
             var s = RaceSession.Current!; var save = RunManager.Instance.ToSave(State?.CurrentRoom is CombatRoom room && room.IsPreFinished ? room : null);
             var writer = new PacketWriter(); save.Serialize(writer);
-            var bundle = new NativeCheckpoint.Bundle("0.1.3", s.Engine.State.Version, s.Engine.State.Revision, StateJson.Serialize(s.Engine.State), Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
+            var bundle = new NativeCheckpoint.Bundle("0.1.4", s.Engine.State.Version, s.Engine.State.Revision, StateJson.Serialize(s.Engine.State), Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
             Directory.CreateDirectory(s.SaveDirectory); RaceSession.AtomicWrite(Path.Combine(s.SaveDirectory, "checkpoint.json"), StateJson.Serialize(bundle));
         }
         catch (Exception e) { RaceUi.Error("个人检查点保存失败：" + e.Message); }
@@ -118,8 +129,9 @@ internal static class DisposeRacePatch
 [HarmonyPatch(typeof(NGame), nameof(NGame.StartNewMultiplayerRun))]
 internal static class StartRacePatch
 {
-    static bool Prefix(NGame __instance, StartRunLobby lobby, IReadOnlyList<ActModel> acts, IReadOnlyList<ModifierModel> modifiers, string seed, int ascensionLevel, ref Task<RunState> __result)
-    { if (!RaceRuntime.Enabled) return true; __result = RaceRuntime.Start(__instance, lobby, acts, modifiers, seed, ascensionLevel); return false; }
+    internal static bool NativeCall;
+    static bool Prefix(NGame __instance, StartRunLobby lobby, IReadOnlyList<ActModel> acts, IReadOnlyList<ModifierModel> modifiers, string seed, int ascensionLevel, bool shouldSave, DateTimeOffset? dailyTime, ref Task<RunState> __result)
+    { if (NativeCall) return true; __result = RaceRuntime.StartConfigured(__instance, lobby, acts, modifiers, seed, ascensionLevel, shouldSave, dailyTime); return false; }
 }
 
 [HarmonyPatch(typeof(RunManager), nameof(RunManager.FinalizeStartingRelics))]

@@ -10,6 +10,7 @@ public static class RaceUi
     private static PanelContainer? panel;
     private static VBoxContainer? list;
     private static Label? notice;
+    private static Button? debugToggle;
     private static Godot.Timer? timer;
     private static bool refreshing;
     private static int busy;
@@ -21,21 +22,22 @@ public static class RaceUi
     {
         if (layer != null && GodotObject.IsInstanceValid(layer)) return;
         layer = new CanvasLayer { Layer = 90 }; game.AddChild(layer);
-        var toggle = new Button { Text = "分道争锋", Position = new Vector2(1040, 12), Theme = uiTheme }; layer.AddChild(toggle);
-        EffectHud.Install(layer);
+        var toggle = new Button { Text = "分道争锋", Position = new Vector2(1040, 12), Theme = uiTheme }; layer.AddChild(toggle); debugToggle = toggle; toggle.Visible = RaceConfig.DebugVisible;
+        EffectHud.Install(layer); RaceRoster.Install(layer);
         panel = new PanelContainer { Position = new Vector2(16, 76), CustomMinimumSize = new Vector2(740, 620), Visible = false, Theme = uiTheme }; layer.AddChild(panel);
         panel.AddThemeStyleboxOverride("panel", PanelStyle());
         var scroll = new ScrollContainer { CustomMinimumSize = new Vector2(700, 580), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled }; panel.AddChild(scroll);
         list = new VBoxContainer { CustomMinimumSize = new Vector2(675, 0) }; list.AddThemeConstantOverride("separation", 16); scroll.AddChild(list);
         notice = new Label { Text = "", Position = new Vector2(800, 100), AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(1000, 0), Theme = uiTheme }; layer.AddChild(notice);
-        toggle.Pressed += () => { panel.Visible = !panel.Visible; Refresh(); };
+        toggle.Pressed += TogglePanel;
         timer = new Godot.Timer { WaitTime = 0.05, Autostart = true, ProcessMode = Node.ProcessModeEnum.Always };
         timer.Timeout += () =>
         {
             try
             {
                 RaceSession.Current?.Tick();
-                EffectHud.AlignWithRelics();
+                EffectHud.AlignWithRelics(); RaceRoster.Tick();
+                if (debugToggle != null) debugToggle.Visible = RaceConfig.DebugVisible;
                 if (notice != null && System.Environment.TickCount64 > noticeUntil) notice.Text = "";
                 if ((RaceSession.Current?.Engine.State.Revision ?? -1) != renderedRevision || RaceRuntime.Live != renderedLive) Refresh();
             }
@@ -43,6 +45,8 @@ public static class RaceUi
         }; layer.AddChild(timer);
         Refresh();
     }
+    internal static bool DebugButtonVisible => debugToggle?.Visible == true;
+    internal static void TogglePanel() { if (panel != null) { panel.Visible = !panel.Visible; Refresh(); } }
     public static void Error(string message) { Godot.GD.PushWarning("[分道争锋] " + message); noticeUntil = System.Environment.TickCount64 + 8000; if (notice != null) notice.Text = message; }
     public static void Run(Func<Task> action) => _ = Safe(action);
     private static async Task Safe(Func<Task> action) { busy++; try { await action(); } catch (Exception e) { Error(e.Message); } finally { busy--; } }
@@ -54,20 +58,22 @@ public static class RaceUi
         {
             renderedRevision = RaceSession.Current?.Engine.State.Revision ?? -1;
             renderedLive = RaceRuntime.Live;
-            EffectHud.Refresh();
+            EffectHud.Refresh(); RaceRoster.Refresh();
             foreach (var node in list.GetChildren()) { list.RemoveChild(node); node.QueueFree(); }
             if (RaceSession.Current is not { } s)
             {
-                Text("杀戮尖塔2：分道争锋 · 开发预览");
-                var enabled = new CheckButton { Text = "下次多人开局使用分道争锋", ButtonPressed = RaceRuntime.Enabled }; enabled.Toggled += value => RaceRuntime.Enabled = value; list.AddChild(enabled);
-                var resume = new CheckButton { Text = "恢复上次共同检查点（原玩家与角色）", ButtonPressed = RaceRuntime.ResumeRequested }; resume.Toggled += value => RaceRuntime.ResumeRequested = value; list.AddChild(resume);
-                Text("所有玩家须启用同版本 MOD。本模式不影响普通单人开局。");
-                Button("本地模拟测试（无需好友）", MockTesting.Start);
+                Text("分道争锋 · 调试");
+                Text("模式开关、效果列表和调试开关位于模组配置 → 分道争锋。本局玩法配置以房主为准。");
+                if (RaceConfig.DebugVisible)
+                {
+                    var resume = new CheckButton { Text = "恢复上次共同检查点（原玩家与角色）", ButtonPressed = RaceRuntime.ResumeRequested }; resume.Toggled += value => RaceRuntime.ResumeRequested = value; list.AddChild(resume);
+                    Button("本地模拟测试（无需好友）", MockTesting.Start);
+                }
                 return;
             }
-            Text("比赛进度 · " + s.Engine.State.Id);
+            Text(RaceConfig.DebugVisible ? "比赛进度 · " + s.Engine.State.Id : "比赛进度");
             if (s.IsHost && !s.IsMock) Button(s.PauseRequested ? "继续比赛 / 取消共同暂停" : "保存并暂停比赛", () => { if (s.PauseRequested) s.ContinueRace(); else s.RequestPause(); return Task.CompletedTask; });
-            if (s.IsMock)
+            if (s.IsMock && RaceConfig.DebugVisible)
             {
                 Text("本地模拟 · 对手为测试数据，不连接其他玩家，不写入原版进度，也不替代 Steam 网络验证。");
                 Button("测试：模拟对手施加诅咒", () => MockTesting.SelectEffect(EffectKind.Curse));
@@ -88,7 +94,7 @@ public static class RaceUi
                 Text($"{p.Name}{(p.Id == s.LocalId ? "（你）" : "")}  第{p.Act + 1}幕 / {p.Floor}层  {RoomName(p.Room)}  生命{p.Health}/{p.MaxHealth}  " + (p.Eliminated ? "已淘汰" : rank >= 0 ? $"第{rank + 1}名" : "进行中"));
             }
             Text($"诅咒护盾 {s.Me.Shields}  替死鬼 {s.Me.Ghosts}  激活负担 {s.Me.Burden}");
-            if (RaceModifier.Active is { } modifier) Text($"本回合伤害倍率 {modifier.Dice}%");
+            if (RaceConfig.DebugVisible && RaceModifier.Active is { } modifier) Text($"本回合伤害倍率 {modifier.Dice}%");
             foreach (var h in s.Me.Effects.Values)
             {
                 var e = Catalog.Get(h.Id); int active = s.Me.Count(h.Id); int queued = h.Grants.Count - active;
@@ -98,7 +104,11 @@ public static class RaceUi
             foreach (var prize in s.Me.BossPrizes.ToList())
             {
                 var captured = prize;
-                if (prize.EndsWith(":first", StringComparison.Ordinal)) Button("领取本幕首杀增益", async () => { await ChooseEffect(captured, Route.FirstKill, true); Refresh(); });
+                if (prize.EndsWith(":first", StringComparison.Ordinal))
+                {
+                    if (Catalog.All.Any(e => e.FirstKillPool && s.Engine.State.EnabledEffects.Contains(e.Id)))
+                        Button("领取本幕首杀增益", async () => { await ChooseEffect(captured, Route.FirstKill, true); Refresh(); });
+                }
                 else Button("领取本幕净化奖励", async () => { var id = await ChooseCleanse(CleanseAt.Boss); if (id != null) await s.Submit(s.New("boss_cleanse", captured, id)); await Apply(); Refresh(); });
                 Button("领取一层诅咒护盾", async () => { await s.Submit(s.New("boss_shield", captured)); Refresh(); });
             }

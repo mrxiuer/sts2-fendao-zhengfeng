@@ -179,6 +179,7 @@ public sealed class RaceModifier : ModifierModel
     public override async Task AfterRoomEntered(AbstractRoom room)
     {
         await RaceRuntime.NodeChanged();
+        await S.Submit(S.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(RunState)) });
         await S.Submit(S.New("progress", amount: Player.Creature.CurrentHp, value: room.RoomType.ToString()));
         await ApplyReceipts(Context(), false); RaceRuntime.Checkpoint(); RaceUi.Refresh();
     }

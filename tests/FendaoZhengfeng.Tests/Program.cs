@@ -77,4 +77,45 @@ Test("mixed candidates survive cancel and restore without reroll", () => {
     Check(first.SequenceEqual(e.State.Offers.Values.Single().Candidates));
     Check(!e.State.ConsumedRewards.Contains("a:battle|0"));
 });
+Test("disabled effects stay out of every candidate route", () => {
+    var e = New(); var p = e.State.Racers["a"];
+    e.State.EnabledEffects.Remove("exhaustion"); e.State.EnabledEffects.Remove("hard_shell"); e.State.EnabledEffects.Remove("battle_hardened");
+    foreach (var route in Enum.GetValues<Route>()) foreach (bool boss in new[] {false,true})
+        for (int i=0;i<20;i++) Check(Candidates.Generate(e.State,p,"filter"+i,route,boss).All(e.State.EnabledEffects.Contains));
+});
+Test("disabled boss guarantee yields to allowed pool", () => {
+    var e=New(); e.State.EnabledEffects = ["shared_misery", "borrowed_time", "retaliation"];
+    var choices=Candidates.Generate(e.State,e.State.Racers["a"],"boss",Route.Mixed,true);
+    Check(choices.Count==3 && choices.All(e.State.EnabledEffects.Contains));
+});
+Test("empty pool preserves reward and rejected disabled offer is atomic", () => {
+    var e=New(); ReadyReward(e); e.State.EnabledEffects.Clear(); var before=StateJson.Serialize(e.State);
+    try {e.Execute(new("offer","a","offer","battle|0",Route:Route.Mixed));}catch(RuleException){}
+    Check(StateJson.Serialize(e.State)==before);
+    OfferEffect(e,"old","exhaustion",Route.Mixed); before=StateJson.Serialize(e.State);
+    try {e.Execute(new("pick","a","choose","old","exhaustion"));}catch(RuleException){}
+    Check(StateJson.Serialize(e.State)==before);
+});
+Test("public profiles preserve exact route and do not duplicate stationary nodes", () => {
+    var e=New();
+    void Send(string id,int row,int col,int act=0) => e.Execute(new(id,"b","profile", Profile:StateJson.Serialize(new PublicProfile("packet",53,80,act,row+1,"Elite",new(act,row,col)))));
+    Send("1",0,1);Send("2",0,1);Send("3",1,2);Send("4",0,3,1);
+    var p=e.State.Racers["b"]; Check(p.Health==53 && p.MaxHealth==80 && p.ProfileRevision==4);
+    Check(p.Trail.SequenceEqual(new[]{new RouteStep(0,0,1),new RouteStep(0,1,2),new RouteStep(1,0,3)}));
+    Check(StateJson.Deserialize<Match>(StateJson.Serialize(e.State)).Racers["b"].Trail.SequenceEqual(p.Trail));
+});
+Test("invalid public profile leaves state untouched", () => {
+    var e=New();var before=StateJson.Serialize(e.State);
+    try { e.Execute(new("bad","b","profile",Profile:StateJson.Serialize(new PublicProfile("x",200,80,0,1,"Elite",new(0,500,1)))));}catch(RuleException){}
+    Check(StateJson.Serialize(e.State)==before);
+});
+Test("completion marks require victory and are independent per player", () => {
+    var e=New(); var node=new RouteStep(0,1,2);
+    foreach (var id in new[]{"a","b"}) e.Execute(new("p"+id,id,"profile",Profile:StateJson.Serialize(new PublicProfile("x",80,80,0,2,"Monster",node))));
+    Check(e.State.Racers.Values.All(p=>p.ClearedNodes.Count==0));
+    ReadyReward(e,"a","one"); Check(e.State.Racers["a"].ClearedNodes.SetEquals([node])); Check(e.State.Racers["b"].ClearedNodes.Count==0);
+    e.Execute(new("lose-start","b","battle_start","lost")); e.Execute(new("lose","b","defeat")); Check(e.State.Racers["b"].ClearedNodes.Count==0);
+    ReadyReward(e,"a","two"); Check(e.State.Racers["a"].ClearedNodes.Count==1);
+    Check(StateJson.Deserialize<Match>(StateJson.Serialize(e.State)).Racers["a"].ClearedNodes.SetEquals([node]));
+});
 Console.WriteLine($"{passed} checks passed");

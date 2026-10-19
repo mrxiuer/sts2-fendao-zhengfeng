@@ -1,7 +1,7 @@
 namespace FendaoZhengfeng.Core;
 
 public sealed record Command(string Id, string Actor, string Kind, string Key = "", string Effect = "", int Amount = 0,
-    int Act = 0, int Floor = 0, string Value = "", bool Boss = false, Route Route = Route.Disrupt, int MaxHealth = 0);
+    int Act = 0, int Floor = 0, string Value = "", bool Boss = false, Route Route = Route.Disrupt, int MaxHealth = 0, string Profile = "");
 
 /// <summary>Host-ordered rules reducer. Failed commands never partially consume a reward or mutate the live state.</summary>
 public sealed class Engine(Match state)
@@ -9,6 +9,7 @@ public sealed class Engine(Match state)
     public Match State { get; private set; } = state;
     public bool Execute(Command c)
     {
+        if (c.Profile.Length > 350000) throw new RuleException("公开资料超出限制。");
         if (c.Id.Length is < 1 or > 128 || c.Key.Length > 256 || c.Value.Length > 1024) throw new RuleException("消息超出限制。");
         if (State.ProcessedCommands.Contains(c.Id)) return false;
         if (!State.Racers.ContainsKey(c.Actor)) throw new RuleException("玩家不属于本局。");
@@ -22,6 +23,23 @@ public sealed class Engine(Match state)
         if (p.Eliminated && c.Kind is not ("ack" or "progress")) throw new RuleException("已淘汰玩家不能执行此操作。");
         switch (c.Kind)
         {
+            case "profile":
+                var profile = StateJson.Deserialize<PublicProfile>(c.Profile);
+                if (profile.Packet.Length > 300000 || profile.Act < p.Act || profile.Act > p.Act + 1
+                    || profile.Health < 0 || profile.MaxHealth < 1 || profile.Health > profile.MaxHealth
+                    || profile.Floor < 0 || profile.Floor > 200 || profile.Room.Length > 64)
+                    throw new RuleException("公开资料无效。");
+                if (profile.Position is { } point && (point.Act != profile.Act || point.Row < -1 || point.Row > 200 || point.Col < 0 || point.Col > 100))
+                    throw new RuleException("地图坐标无效。");
+                p.PublicPacket = profile.Packet; p.ProfileRevision++;
+                p.Health = profile.Health; p.MaxHealth = profile.MaxHealth; p.Act = profile.Act; p.Floor = profile.Floor; p.Room = profile.Room;
+                p.Position = profile.Position;
+                if (profile.Position is { } location && (p.Trail.Count == 0 || p.Trail[^1] != location))
+                {
+                    if (p.Trail.Count >= 600) throw new RuleException("路线记录过长。");
+                    p.Trail.Add(location);
+                }
+                break;
             case "progress":
                 if (c.Act < p.Act || c.Act > p.Act + 1 || c.Floor < 0 || c.Floor > 200) throw new RuleException("无效的进度。");
                 p.Act = c.Act; p.Floor = c.Floor; p.Room = c.Value; p.Health = Math.Max(0, c.Amount); p.MaxHealth = Math.Max(0, c.MaxHealth); break;
@@ -33,6 +51,7 @@ public sealed class Engine(Match state)
                 p.InBattle = false;
                 if (!p.WonBattles.Add(c.Key)) break;
                 p.VictoryCount++;
+                if (p.Position is { } cleared && p.Room is "Monster" or "Elite" or "Boss") p.ClearedNodes.Add(cleared);
                 if (p.Has("scapegoat")) { var g = p.Effects["scapegoat"]; g.Used++; if (g.Used % 5 == 0) p.Ghosts = Math.Min(2, p.Ghosts + 1); }
                 if (p.Has("catch_up")) { var h = p.Effects["catch_up"]; if (--h.Used <= 0) p.Effects.Remove("catch_up"); }
                 if (c.Boss && p.KilledBossActs.Add(p.Act))
@@ -68,6 +87,7 @@ public sealed class Engine(Match state)
                 var token = p.Id + ":" + offer.RewardKey;
                 if (m.ConsumedRewards.Contains(token)) throw new RuleException("同一奖励已领取或献祭。");
                 var effect = Catalog.Get(c.Effect);
+                if (!m.EnabledEffects.Contains(effect.Id)) throw new RuleException("房主已禁用该效果。");
                 if (offer.Route == Route.FirstKill && !p.BossPrizes.Contains(offer.RewardKey)) throw new RuleException("首杀奖励已经领取。");
                 if (effect.Kind == EffectKind.Curse)
                 {
