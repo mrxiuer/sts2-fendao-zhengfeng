@@ -1,4 +1,4 @@
-param([string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[string]$OutputDirectory)
+param([string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[string]$OutputDirectory,[switch]$Advanced)
 $ErrorActionPreference='Stop'
 $repoRoot=Split-Path -Parent $PSScriptRoot
 if(!$OutputDirectory){$OutputDirectory=Join-Path $repoRoot 'artifacts\visual'}
@@ -16,13 +16,15 @@ $launch.Environment['SteamAppId']='2868840'
 $launch.Environment['SteamGameId']='2868840'
 $launch.Environment['FDZF_NATIVE_VERIFY']='1'
 $launch.Environment['FDZF_SCREENSHOT_DIR']=$OutputDirectory
+if($Advanced){$launch.Environment['FDZF_VERIFY_ROLE']='advanced'}
 $process=[Diagnostics.Process]::Start($launch)
 try{
-    $deadline=[DateTime]::UtcNow.AddSeconds(115)
+    $deadline=[DateTime]::UtcNow.AddSeconds(300)
     while(!$process.HasExited){if([DateTime]::UtcNow -gt $deadline){throw 'Visual verification timed out.'};Start-Sleep -Milliseconds 500}
     $logText=Get-Content -LiteralPath $logPath -Raw
-    if($process.ExitCode -ne 0 -or !$logText.Contains('[FDZF VERIFY COMPLETE]') -or $logText -match 'LocException|turn loop died|\[FDZF VERIFY FAILED\]'){throw "Visual verification failed: $logPath"}
-    foreach($name in @('mock-01-clean-opening.png','mock-02-persistent-effect-icons.png','mock-03-effect-test-menu.png')){
+    if($process.ExitCode -ne 0 -or !$logText.Contains($(if($Advanced){'[FDZF ADVANCED COMPLETE]'}else{'[FDZF VERIFY COMPLETE]'})) -or $logText -match 'LocException|turn loop died|\[FDZF (?:VERIFY|ADVANCED) FAILED\]'){throw "Visual verification failed: $logPath"}
+    $expected=if($Advanced){@('advanced-01-card-durability.png','advanced-02-combat-status.png','advanced-03-native-cleanse-tooltip.png','advanced-04-reset-map.png')}else{@('mock-01-clean-opening.png','mock-02-persistent-effect-icons.png','mock-03-effect-test-menu.png')}
+    foreach($name in $expected){
         if(!(Test-Path -LiteralPath (Join-Path $OutputDirectory $name))){throw "Missing native screenshot: $name"}
     }
     Write-Output "PASS native visual verification: $OutputDirectory"

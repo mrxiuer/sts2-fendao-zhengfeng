@@ -5,7 +5,21 @@ void Test(string name, Action test) { try { test(); passed++; Console.WriteLine(
 void Check(bool value, string message = "Assertion failed") { if (!value) throw new Exception(message); }
 Engine New() => new(new Match { Id = "test", Seed = "seed", Racers = new() { ["a"] = new() { Id = "a" }, ["b"] = new() { Id = "b" }, ["c"] = new() { Id = "c" } } });
 void Grant(Engine engine, string player, string id, int count = 1) { engine.State.Racers[player].Effects[id] = new() { Id = id, Grants = Enumerable.Range(0, count).Select(i => new Grant { EventId = i.ToString(), Source = "a", ActiveBattle = 1 }).ToList() }; }
-Test("catalog has 29 unique effects", () => { Check(Catalog.All.Count == 29); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 29); });
+Test("owned permanent actives leave every pool and stale grants are atomic", () => {
+    var e = New(); Grant(e, "a", "small_light"); Grant(e, "a", "good_connections");
+    foreach (var route in new[] { Route.Mixed, Route.Grow, Route.FirstKill })
+        for (int i = 0; i < 40; i++) {
+            var picks = Candidates.Generate(e.State, e.State.Racers["a"], "owned" + i, route, true);
+            Check(!picks.Contains("small_light") && !picks.Contains("good_connections"));
+        }
+    foreach (var id in new[] { "small_light", "good_connections" }) {
+        e.State.Offers[id] = new() { Id = id, Player = "a", RewardKey = "stale:" + id, Route = Route.Grow, Candidates = [id] };
+        var before = StateJson.Serialize(e.State); bool rejected = false;
+        try { e.Execute(new("duplicate:" + id, "a", "choose", id, id)); } catch (RuleException) { rejected = true; }
+        Check(rejected && StateJson.Serialize(e.State) == before);
+    }
+});
+Test("catalog has 34 unique effects", () => { Check(Catalog.All.Count == 34); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 34); });
 Test("cleanse prices", () => { Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 1) == 60); Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 3) == 80); Check(Balance.CleansePrice(Catalog.Get("carapace"), 3) == 195); Check(Balance.CleansePrice(Catalog.Get("hard_shell"), 1) == null); });
 Test("repeat weight floor", () => { Check(Balance.RepeatWeight(0) == 1); Check(Balance.RepeatWeight(1) == 0.4); Check(Math.Abs(Balance.RepeatWeight(2) - 0.16) < 1e-10); Check(Balance.RepeatWeight(10) == 0.1); });
 Test("burden saturates monotonically", () => { Check(Balance.RareMultiplier(0, false) == 1); Check(Balance.RareMultiplier(8, false) == 2); Check(Balance.RareMultiplier(100000, false) < 3); Check(Balance.RareMultiplier(32, false) > Balance.RareMultiplier(8, false)); });
@@ -117,5 +131,46 @@ Test("completion marks require victory and are independent per player", () => {
     e.Execute(new("lose-start","b","battle_start","lost")); e.Execute(new("lose","b","defeat")); Check(e.State.Racers["b"].ClearedNodes.Count==0);
     ReadyReward(e,"a","two"); Check(e.State.Racers["a"].ClearedNodes.Count==1);
     Check(StateJson.Deserialize<Match>(StateJson.Serialize(e.State)).Racers["a"].ClearedNodes.SetEquals([node]));
+});
+
+Test("global upgrade curse includes caster and remains next-battle activated", () => {
+    var e=New(); OfferEffect(e,"global","farewell_upgrades"); e.Execute(new("cast","a","choose","global","farewell_upgrades"));
+    Check(e.State.Racers.Values.All(p=>p.Effects.ContainsKey("farewell_upgrades") && !p.Has("farewell_upgrades")));
+    e.Execute(new("start-global","b","battle_start","global-next")); Check(e.State.Racers["b"].Has("farewell_upgrades")); Check(!e.State.Racers["a"].Has("farewell_upgrades"));
+});
+Test("market reserves unique cards and sends real gold receipts", () => {
+    var e=New();Grant(e,"a","good_connections");e.State.Racers["a"].Gold=500;
+    e.State.Racers["b"].MarketCards=[new("card1","packet","Strike"),new("card2","packet2","Defend")];
+    e.Execute(new("buy1","a","market_buy","b","card1",500));
+    Check(e.State.Trades.Single().Price==100 && e.State.Trades.Single().BuyerBattle==1 && e.State.Trades.Single().SellerBattle==1);
+    Check(e.State.Racers["a"].Purchases==1 && e.State.Racers["a"].Receipts.Single().Amount==100 && e.State.Racers["b"].Receipts.Single().Amount==100);
+    var before=StateJson.Serialize(e.State);try{e.Execute(new("duplicate-sale","a","market_buy","b","card1",400));}catch(RuleException){} Check(StateJson.Serialize(e.State)==before);
+    e.Execute(new("buy2","a","market_buy","b","card2",500));Check(e.State.Trades.Last().Price==150);
+});
+Test("market failure is atomic and transfer sides have separate battle gates", () => {
+    var e=New();Grant(e,"a","good_connections");e.State.Racers["a"].Gold=99;e.State.Racers["b"].MarketCards=[new("card","packet","Strike")];
+    var before=StateJson.Serialize(e.State);try{e.Execute(new("poor","a","market_buy","b","card",99));}catch(RuleException){} Check(StateJson.Serialize(e.State)==before);
+    e.State.Racers["a"].Gold=500;e.Execute(new("buy","a","market_buy","b","card",500));
+    before=StateJson.Serialize(e.State);try{e.Execute(new("early","b","trade_removed","buy"));}catch(RuleException){}Check(StateJson.Serialize(e.State)==before);
+    e.Execute(new("a-start","a","battle_start","a-next"));e.Execute(new("deliver","a","trade_delivered","buy"));Check(e.State.Trades.Single().Delivered && !e.State.Trades.Single().Removed);
+    e.Execute(new("b-start","b","battle_start","b-next"));e.Execute(new("remove","b","trade_removed","buy"));Check(e.State.Trades.Single().Removed);
+    Check(StateJson.Deserialize<Match>(StateJson.Serialize(e.State)).Trades.Single().Delivered);
+});
+Test("R grants a charge per acquisition and preserves resources with distinct boss rewards", () => {
+    var e=New();OfferEffect(e,"r-grant","r_key");e.Execute(new("take-r","a","choose","r-grant","r_key"));var p=e.State.Racers["a"];
+    p.Act=2;p.Gold=123;p.Shields=3;p.RevivalCount=1;p.Ghosts=2; p.KilledBossActs.Add(0);p.BossPrizes.Add("0:first");
+    e.Execute(new("reset","a","reset_use"));p=e.State.Racers["a"];
+    Check(p.Act==0 && p.ResetCount==1 && p.ResetCharges==0 && p.Gold==123 && p.Shields==3 && p.RevivalCount==1 && p.Ghosts==2 && p.KilledBossActs.Count==0);
+    e.Execute(new("ready-reset","a","reset_ready"));e.State.BossFirstKills[0]="b";
+    e.Execute(new("reset-battle","a","battle_start","lap1:boss"));e.Execute(new("reset-win","a","victory","lap1:boss",Boss:true));
+    Check(e.State.Racers["a"].BossPrizes.Contains("lap1:0:first") && e.State.BossFirstKills[0]=="b");
+    var before=StateJson.Serialize(e.State);try{e.Execute(new("again-reset","a","reset_use"));}catch(RuleException){}Check(StateJson.Serialize(e.State)==before);
+});
+Test("R cannot reset an active fight", () => {
+    var e=New();Grant(e,"a","r_key");e.State.Racers["a"].ResetCharges=1;e.Execute(new("active-r","a","battle_start","fight"));
+    var before=StateJson.Serialize(e.State);try{e.Execute(new("invalid-r","a","reset_use"));}catch(RuleException){}Check(StateJson.Serialize(e.State)==before);
+});
+Test("cleansing no plan schedules recovery rather than deleting stored skills", () => {
+    var e=New();Grant(e,"a","no_plan");e.Execute(new("plan-clean","a","shop_cleanse","shop","no_plan",1000)); Check(e.State.Racers["a"].Receipts.Any(r=>r.Kind=="restore_skills"));
 });
 Console.WriteLine($"{passed} checks passed");

@@ -16,7 +16,7 @@ internal static class PublicProfiles
         var writer = new PacketWriter(); player.ToSerializable().Serialize(writer);
         string packet = Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition);
         RouteStep? location = run.CurrentMapCoord is { } coord ? new(run.CurrentActIndex, coord.row, coord.col) : null;
-        return new(packet, player.Creature.CurrentHp, player.Creature.MaxHp, run.CurrentActIndex, run.ActFloor, run.CurrentRoom?.RoomType.ToString() ?? "", location);
+        return new(packet, player.Creature.CurrentHp, player.Creature.MaxHp, run.CurrentActIndex, run.ActFloor, run.CurrentRoom?.RoomType.ToString() ?? "", location, player.Gold, RaceModifier.Active?.CaptureMarket());
     }
     internal static Player? Read(Racer racer)
     {

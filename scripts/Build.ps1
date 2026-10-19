@@ -1,4 +1,4 @@
-param([string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[switch]$Deploy)
+param([string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[switch]$Deploy,[string]$BaseLibPath)
 $ErrorActionPreference='Stop'
 $repoRoot=Split-Path -Parent $PSScriptRoot
 $dotnetPath=Join-Path $repoRoot '.tools\dotnet\dotnet.exe'
@@ -8,7 +8,9 @@ $env:DOTNET_NOLOGO='1'
 $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE='1'
 $env:DOTNET_CLI_HOME=Join-Path $repoRoot '.tools\cli-home'
 $env:NUGET_PACKAGES=Join-Path $repoRoot '.tools\packages'
-& $dotnetPath build (Join-Path $repoRoot 'src\FendaoZhengfeng.Mod\FendaoZhengfeng.Mod.csproj') -c Release "-p:GameRoot=$GameRoot"
+$referenceArguments=@()
+if($BaseLibPath) {$referenceArguments+="-p:BaseLibPath=$BaseLibPath"}
+& $dotnetPath build (Join-Path $repoRoot 'src\FendaoZhengfeng.Mod\FendaoZhengfeng.Mod.csproj') -c Release "-p:GameRoot=$GameRoot" @referenceArguments
 if($LASTEXITCODE -ne 0) {throw 'MOD compilation failed.'}
 & $dotnetPath run --project (Join-Path $repoRoot 'tests\FendaoZhengfeng.Tests') -c Release
 if($LASTEXITCODE -ne 0) {throw 'Rules verification failed.'}

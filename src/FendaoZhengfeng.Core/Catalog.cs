@@ -15,7 +15,7 @@ public sealed record Effect(string Id, string Name, EffectKind Kind, Tier Tier, 
 
 public static class Catalog
 {
-    public const string RulesVersion = "1.0.0-design.3";
+    public const string RulesVersion = "1.0.0-design.4";
     public static readonly IReadOnlyList<Effect> All = [
         C("exhaustion", "力竭", Tier.Ordinary, Rarity.Common, "每场战斗开始失去1点力量。每次强化再失去1点。"),
         C("imbalance", "失衡", Tier.Ordinary, Rarity.Common, "每场战斗开始失去1点敏捷。每次强化再失去1点。"),
@@ -45,7 +45,12 @@ public static class Catalog
         B("siphon", "汲取", Rarity.Uncommon, "每场放弃一次卡牌奖励，获得10金与下场首回合2能量。", true, true, false, true),
         B("battle_hardened", "愈战愈勇", Rarity.Rare, "每次个人战斗胜利提高攻击伤害与格挡1%，追溯历史。", true, false, true, true),
         B("death_defiance", "死不足惜", Rarity.Rare, "每次真实复活提高最大生命、攻击伤害和格挡10%，追溯历史。", true, false, true, true),
-        B("scapegoat", "替死鬼", Rarity.Rare, "取得后每5胜获得1次免死，最多两次；不保护灾厄或吞噬。", true, false, true, true)
+        D("no_plan", "无计可施", Tier.Elite, Rarity.Rare, "下场战斗前移出牌组全部技能牌；此后每胜可从移出的牌中任选1张取回，直到取完。净化返还剩余牌。"),
+        B("small_light", "小而轻", Rarity.Rare, "非战斗时点击图标，任选1张永久牌移除并失去1最大生命；可反复使用，最大生命不得低于1；持有后不再进入候选池。", true, false, true, true),
+        C("farewell_upgrades", "和你的升级说再见吧", Tier.Boss, Rarity.Rare, "包括施加者在内的所有玩家，从各自下场战斗起不能再升级卡牌；保留已有升级，诅咒护盾正常抵挡。"),
+        B("good_connections", "广结善缘", Rarity.Rare, "点击图标购买对手永久牌，100金币起，每成功购买一次加50；金币支付原主人，双方各自在下场开战时交接；持有后不再进入候选池。", true, false, true, true),
+        B("r_key", "R键", Rarity.Rare, "非战斗时点击重回第一幕起点，保留生命、牌组、遗物、金币、药水与模式状态；每次取得可用1次，每次重置使怪物生命、伤害和格挡再加20%，此后每幕按首杀发奖。", true, false, true, false),
+        B("scapegoat", "替死鬼", Rarity.Rare, "每5胜储存1次抵挡致命伤害，最多2次，重复取得补1次。触发后剩1生命；不保护直接处决、强制死亡或主动支付生命。", true, false, true, true)
     ];
     public static Effect Get(string id) => All.FirstOrDefault(e => e.Id == id) ?? throw new RuleException("未知效果：" + id);
     private static Effect C(string id, string n, Tier t, Rarity r, string d) => new(id, n, EffectKind.Curse, t, r, d);

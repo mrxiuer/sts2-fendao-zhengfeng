@@ -17,17 +17,27 @@ using MegaCrit.Sts2.Core.ValueProps;
 
 namespace FendaoZhengfeng.Mod;
 
-public sealed class RaceModifier : ModifierModel
+public sealed partial class RaceModifier : ModifierModel
 {
     private RaceSession S => RaceSession.Current ?? throw new InvalidOperationException("分道争锋会话未初始化。");
     private Racer Me => S.Me;
     private Player Player => RunState.Players.Single();
-    public static RaceModifier? Active { get; private set; }
+    public static RaceModifier? Active => RaceRuntime.State?.Modifiers.OfType<RaceModifier>().FirstOrDefault();
     public override MegaCrit.Sts2.Core.Localization.LocString Title => new(ModEntry.Id, "mode.title");
     public override MegaCrit.Sts2.Core.Localization.LocString Description => new(ModEntry.Id, "mode.description");
     public int Turn { get; private set; }
     public int ManualCards { get; private set; }
     public int Dice { get; private set; } = 100;
+    internal bool IsOpeningEnemy(Creature creature) => initialEnemies.Contains(creature);
+    internal int RemainingEnemyBudget(Creature creature) => Math.Max(0, (int)Math.Ceiling(openingMaxHp.GetValueOrDefault(creature, creature.MaxHp) * Math.Max(0.2, 0.4 - 0.05 * (N("hard_shell") - 1))) - hpLost.GetValueOrDefault(creature));
+    private readonly HashSet<Creature> resetScaled = [];
+    private readonly Dictionary<Creature, int> resetBaseHp = [];
+    internal int ResetBaseHp(Creature creature) => resetBaseHp.GetValueOrDefault(creature, creature.MaxHp);
+    public override async Task AfterCreatureAddedToCombat(Creature creature)
+    {
+        if (creature.IsMonster && Me.ResetCount > 0 && resetScaled.Add(creature))
+        { resetBaseHp[creature] = creature.MaxHp; await CreatureCmd.SetMaxAndCurrentHp(creature, Math.Ceiling(creature.MaxHp * (1 + 0.2m * Me.ResetCount))); }
+    }
     private bool firstDraw;
     private bool suppressPropagation;
     private bool reflecting;
@@ -45,8 +55,7 @@ public sealed class RaceModifier : ModifierModel
         get => IsCanonical ? "[]" : StateJson.Serialize(Player.Deck.Cards.Select(c => wear.GetValueOrDefault(c, 8)).ToList());
         set => deferredWear = value;
     }
-    protected override void AfterRunCreated(RunState runState) { Active = this; }
-    protected override void AfterRunLoaded(RunState runState) { Active = this; wear.Clear(); var values = StateJson.Deserialize<List<int>>(deferredWear); for (int i = 0; i < Math.Min(values.Count, Player.Deck.Cards.Count); i++) wear[Player.Deck.Cards[i]] = values[i]; }
+    protected override void AfterRunLoaded(RunState runState) { wear.Clear(); var values = StateJson.Deserialize<List<int>>(deferredWear); for (int i = 0; i < Math.Min(values.Count, Player.Deck.Cards.Count); i++) wear[Player.Deck.Cards[i]] = values[i]; LoadExtraState(); }
     private int N(string id) => Me.Count(id);
     private PlayerChoiceContext Context() => new ThrowingPlayerChoiceContext();
     public override async Task BeforeCombatStart()
@@ -54,6 +63,7 @@ public sealed class RaceModifier : ModifierModel
         Turn = 0; ManualCards = 0; firstDraw = false; barbsHits.Clear(); hpLost.Clear(); initialEnemies.Clear(); openingMaxHp.Clear();
         string key = RaceRuntime.RoomKey;
         await S.Submit(S.New("battle_start", key));
+        await BeforeAdvancedCombat();
         var state = Player.Creature.CombatState ?? throw new InvalidOperationException("战斗未创建。");
         foreach (var enemy in state.Enemies) initialEnemies.Add(enemy);
         await Power<StrengthPower>(Player.Creature, -N("exhaustion"));
@@ -61,6 +71,7 @@ public sealed class RaceModifier : ModifierModel
         await Power<WeakPower>(Player.Creature, N("timidity"));
         foreach (var enemy in initialEnemies)
         {
+            await AfterCreatureAddedToCombat(enemy);
             await Power<StrengthPower>(enemy, N("abet"));
             if (N("overgrowth") > 0) await CreatureCmd.SetMaxAndCurrentHp(enemy, Math.Ceiling(enemy.MaxHp * (1 + 0.1m * N("overgrowth"))));
             openingMaxHp[enemy] = enemy.MaxHp;
@@ -113,14 +124,17 @@ public sealed class RaceModifier : ModifierModel
         await ApplyReceipts(ctx, true);
     }
     public override decimal ModifyDamageMultiplicative(Creature? target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource, CardPlay? cardPlay)
-        => dealer == Player.Creature && cardSource?.Type == CardType.Attack ? (decimal)(1 + Me.Growth) * Dice / 100m : 1m;
+        => dealer == Player.Creature && cardSource?.Type == CardType.Attack ? (decimal)(1 + Me.Growth) * Dice / 100m : dealer?.IsMonster == true ? 1 + 0.2m * Me.ResetCount : 1m;
     public override decimal ModifyBlockMultiplicative(Creature target, decimal block, ValueProp props, CardModel? cardSource, CardPlay? cardPlay)
-        => target == Player.Creature ? (Me.Has("all_in") && Turn == 1 ? 0 : (decimal)(1 + Me.Growth)) : 1;
+        => target == Player.Creature ? (Me.Has("all_in") && Turn == 1 ? 0 : (decimal)(1 + Me.Growth)) : target.IsMonster ? 1 + 0.2m * Me.ResetCount : 1;
     public override decimal ModifyHpLostAfterOstyLate(Creature target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource)
     {
         if (initialEnemies.Contains(target) && N("hard_shell") > 0 && Turn <= 3)
         { int cap = (int)Math.Ceiling(openingMaxHp[target] * Math.Max(0.2, 0.4 - 0.05 * (N("hard_shell") - 1))); amount = Math.Min(amount, Math.Max(0, cap - hpLost.GetValueOrDefault(target))); }
-        if (target == Player.Creature && target.CurrentHp > 0 && amount >= target.CurrentHp && cardSource?.Owner != Player && S.TryReserveGhost())
+        // Only intercept combat damage. Direct Kill/force death never passes this hook.
+        if (CombatManager.Instance.IsInProgress && !CombatManager.Instance.IsEnding
+            && target == Player.Creature && target.CurrentHp > 0 && amount >= target.CurrentHp
+            && cardSource?.Owner != Player && S.TryReserveGhost())
             return Math.Max(0, target.CurrentHp - 1);
         return amount;
     }
@@ -167,6 +181,7 @@ public sealed class RaceModifier : ModifierModel
     public override async Task AfterCombatVictory(CombatRoom room)
     {
         await S.Submit(S.New("victory", Me.BattleKey, boss: room.RoomType.ToString() == "Boss"));
+        resetScaled.Clear();
         if (room.RoomType.ToString() == "Boss" && RunState.CurrentActIndex == RunState.Acts.Count - 1)
         {
             var finalPoint = RunState.Map.SecondBossMapPoint ?? RunState.Map.BossMapPoint;
@@ -175,7 +190,12 @@ public sealed class RaceModifier : ModifierModel
         await ApplyReceipts(Context(), false); RaceRuntime.Checkpoint();
     }
     public override async Task BeforeCombatRewardOffered(RewardsSet rewards, CombatRoom room)
-    { RaceRuntime.RewardRoom = room; RaceRuntime.CombatRewards = rewards; await Task.CompletedTask; }
+    {
+        RaceRuntime.RewardRoom = room; RaceRuntime.CombatRewards = rewards;
+        if (CanRecoverSkill) rewards.Rewards.Add(new RaceActionReward(Player, 1));
+        if (room.RoomType == RoomType.Boss && Me.BossPrizes.Count > 0) rewards.Rewards.Add(new RaceActionReward(Player, 2));
+        await Task.CompletedTask;
+    }
     public override async Task AfterRoomEntered(AbstractRoom room)
     {
         await RaceRuntime.NodeChanged();
@@ -194,16 +214,23 @@ public sealed class RaceModifier : ModifierModel
     { if (creature == Player.Creature) { await S.Submit(S.New("revive")); await UpdateMaxHp(); } }
     public async Task UpdateMaxHp()
     {
-        decimal basis = Player.Creature.MaxHp - AppliedMaxHpBonus;
-        int target = (int)Math.Floor(basis * (1 + (Me.Has("death_defiance") ? Me.RevivalCount * (0.1m + 0.01m * Me.Effects["death_defiance"].Rank) : 0)));
-        AppliedMaxHpBonus = Math.Max(0, target - (int)basis);
+        decimal basis = Player.Creature.MaxHp - AppliedMaxHpBonus + SmallLightLoss;
+        int target = (int)Math.Floor(basis * (1 + (Me.Has("death_defiance") ? Me.RevivalCount * (0.1m + 0.01m * Me.Effects["death_defiance"].Rank) : 0))) - SmallLightLoss;
+        target = Math.Max(1, target);
+        AppliedMaxHpBonus = Math.Max(0, target + SmallLightLoss - (int)basis);
         if (target != Player.Creature.MaxHp) await CreatureCmd.SetMaxHp(Player.Creature, target);
     }
-    public async Task ApplyReceipts(PlayerChoiceContext ctx, bool inCombat)
+    private readonly SemaphoreSlim receiptGate = new(1);
+    public async Task ApplyReceipts(PlayerChoiceContext ctx, bool inCombat, bool monetaryOnly = false)
+    {
+        await receiptGate.WaitAsync();
+        try { await ApplyReceiptCore(ctx, inCombat, monetaryOnly); } finally { receiptGate.Release(); }
+    }
+    private async Task ApplyReceiptCore(PlayerChoiceContext ctx, bool inCombat, bool monetaryOnly)
     {
         foreach (var r in Me.Receipts.ToList())
         {
-            if (S.ReceiptApplied(r.Id)) continue;
+            if (S.ReceiptApplied(r.Id) || monetaryOnly && r.Kind is not ("gold" or "spend_gold")) continue;
             if ((r.Kind is "energy" or "status") && !inCombat) continue;
             suppressPropagation = true;
             try
@@ -221,6 +248,7 @@ public sealed class RaceModifier : ModifierModel
                         var pool = ModelDb.AllCards.Where(c => c.Type == CardType.Curse && c.IsRemovable).OrderBy(c => c.Id.ToString(), StringComparer.Ordinal).ToList();
                         if (pool.Count > 0) { var rng = new StableRandom(r.Id); await CardPileCmd.AddCursesToDeck([pool[(int)(rng.Next() * pool.Count)]], Player); }
                         break;
+                    case "restore_skills": await RestoreSkills(); break;
                     case "repair": case "restore_deck": await Repair(); break;
                 }
                 S.MarkReceiptApplied(r.Id); await S.Submit(S.New("ack", r.Id));
@@ -263,7 +291,7 @@ public sealed class RaceModifier : ModifierModel
         suppressPropagation = true;
         try
         {
-            foreach (var card in Player.Deck.Cards.Where(c => wear.GetValueOrDefault(c, 8) <= 0).ToList())
+            foreach (var card in Player.Deck.Cards.Where(c => wear.GetValueOrDefault(c, 8) <= 0 && !IsReserved(c)).ToList())
             { var replacement = RunState.CreateCard<WitheredCard>(Player); replacement.OriginalPacket = NativeCheckpoint.EncodeCard(card); var result = await CardCmd.Transform(card, replacement); if (result?.success == true) wear.Remove(card); }
         }
         finally { suppressPropagation = false; }

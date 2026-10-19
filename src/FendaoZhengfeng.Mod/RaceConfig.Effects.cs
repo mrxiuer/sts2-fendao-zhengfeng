@@ -31,4 +31,9 @@ public sealed partial class RaceConfig
     [ConfigIgnore] public static bool Effect_battle_hardened { get => EnabledIds().Contains("battle_hardened"); set => SetEffect("battle_hardened", value); }
     [ConfigIgnore] public static bool Effect_death_defiance { get => EnabledIds().Contains("death_defiance"); set => SetEffect("death_defiance", value); }
     [ConfigIgnore] public static bool Effect_scapegoat { get => EnabledIds().Contains("scapegoat"); set => SetEffect("scapegoat", value); }
+    [ConfigIgnore] public static bool Effect_no_plan { get => EnabledIds().Contains("no_plan"); set => SetEffect("no_plan", value); }
+    [ConfigIgnore] public static bool Effect_small_light { get => EnabledIds().Contains("small_light"); set => SetEffect("small_light", value); }
+    [ConfigIgnore] public static bool Effect_farewell_upgrades { get => EnabledIds().Contains("farewell_upgrades"); set => SetEffect("farewell_upgrades", value); }
+    [ConfigIgnore] public static bool Effect_good_connections { get => EnabledIds().Contains("good_connections"); set => SetEffect("good_connections", value); }
+    [ConfigIgnore] public static bool Effect_r_key { get => EnabledIds().Contains("r_key"); set => SetEffect("r_key", value); }
 }

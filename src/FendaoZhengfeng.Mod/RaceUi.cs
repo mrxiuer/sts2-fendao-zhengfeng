@@ -36,7 +36,7 @@ public static class RaceUi
             try
             {
                 RaceSession.Current?.Tick();
-                EffectHud.AlignWithRelics(); RaceRoster.Tick();
+                EffectHud.AlignWithRelics(); RaceRoster.Tick(); CardDurabilityUi.Tick(); CombatEffectDisplay.Tick(); AdvancedEffects.Tick();
                 if (debugToggle != null) debugToggle.Visible = RaceConfig.DebugVisible;
                 if (notice != null && System.Environment.TickCount64 > noticeUntil) notice.Text = "";
                 if ((RaceSession.Current?.Engine.State.Revision ?? -1) != renderedRevision || RaceRuntime.Live != renderedLive) Refresh();
@@ -45,6 +45,7 @@ public static class RaceUi
         }; layer.AddChild(timer);
         Refresh();
     }
+    internal static void ConcealPanel() { if (panel != null) panel.Visible = false; }
     internal static bool DebugButtonVisible => debugToggle?.Visible == true;
     internal static void TogglePanel() { if (panel != null) { panel.Visible = !panel.Visible; Refresh(); } }
     public static void Error(string message) { Godot.GD.PushWarning("[分道争锋] " + message); noticeUntil = System.Environment.TickCount64 + 8000; if (notice != null) notice.Text = message; }
@@ -132,6 +133,7 @@ public static class RaceUi
     public static Task<int> Choose(string title, IReadOnlyList<string> choices, IReadOnlyList<Texture2D>? icons = null)
     {
         if (layer == null) throw new InvalidOperationException("界面尚未初始化。");
+        if (RaceRuntime.Live) return NativeChoiceUi.Choose(layer, title, choices, icons);
         var done = new TaskCompletionSource<int>();
         var veil = new ColorRect { Color = new Color(0, 0, 0, 0.8f) }; veil.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect); layer.AddChild(veil);
         var box = new PanelContainer { Position = new Vector2(360, 180), CustomMinimumSize = new Vector2(1000, 0), Theme = uiTheme }; box.AddThemeStyleboxOverride("panel", PanelStyle()); veil.AddChild(box);
@@ -155,7 +157,7 @@ public static class RaceUi
         var s = RaceSession.Current ?? throw new InvalidOperationException("会话已结束。");
         await s.Submit(s.New("offer", reward, boss: boss, route: route));
         var offer = s.Engine.State.Offers[s.LocalId + ":" + reward + ":" + route];
-        int index = await Choose("选择效果 · " + (route == Route.Mixed ? "混合三选一" : route == Route.Disrupt ? "施加给所有对手" : "施加给自己"), offer.Candidates.Select(id => { var e = Catalog.Get(id); return e.Name + " · " + TierName(e.Tier) + " · " + (e.Kind == EffectKind.Curse ? "诅咒 · 所有对手" : e.Kind == EffectKind.Contract ? "双刃契约 · 自己" : "增益 · 自己") + "\n" + e.Description; }).ToList(), offer.Candidates.Select(EffectIcons.Get).ToList());
+        int index = await Choose("选择效果 · " + (route == Route.Mixed ? "混合三选一" : route == Route.Disrupt ? "施加给所有对手" : "施加给自己"), offer.Candidates.Select(id => { var e = Catalog.Get(id); return e.Name + "\n" + TierName(e.Tier) + " · " + (e.Kind == EffectKind.Curse ? "诅咒 · 所有对手" : e.Kind == EffectKind.Contract ? "双刃契约 · 自己" : "增益 · 自己") + "\n" + e.Description; }).ToList(), offer.Candidates.Select(EffectIcons.Get).ToList());
         if (index < 0) return false;
         await s.Submit(s.New("choose", offer.Id, offer.Candidates[index])); await Apply(); RaceRuntime.Checkpoint(); Refresh(); return true;
     }
@@ -165,7 +167,7 @@ public static class RaceUi
         var effects = s.Me.Effects.Values.Where(h => Catalog.Get(h.Id).Kind != EffectKind.Boon)
             .Where(h => place == CleanseAt.Boss || place == CleanseAt.Camp && Catalog.Get(h.Id).Tier == Tier.Ordinary || place == CleanseAt.Shop && Catalog.Get(h.Id).Tier != Tier.Boss).ToList();
         if (effects.Count == 0) { Error("当前没有可通过此渠道净化的效果。"); return null; }
-        int index = await Choose("选择净化效果（包括全部强化）", effects.Select(h => Catalog.Get(h.Id).Name + (h.Grants.Count > 1 ? "+" + (h.Grants.Count - 1) : "") + (place == CleanseAt.Shop ? $" · {Balance.CleansePrice(Catalog.Get(h.Id), h.Grants.Count)} 金币" : "")).ToList());
+        int index = await Choose("选择净化效果（包括全部强化）", effects.Select(h => Catalog.Get(h.Id).Name + (h.Grants.Count > 1 ? "+" + (h.Grants.Count - 1) : "") + (place == CleanseAt.Shop ? $" · {Balance.CleansePrice(Catalog.Get(h.Id), h.Grants.Count)} 金币" : "") + "\n" + EffectDetails.Describe(h.Id)).ToList(), effects.Select(h => EffectIcons.Get(h.Id)).ToList());
         return index < 0 ? null : effects[index].Id;
     }
 }

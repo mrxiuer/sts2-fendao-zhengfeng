@@ -1,6 +1,10 @@
 # 原生加载与 Steam 创意工坊发布
 
-当前版本：0.1.4 开发构建。已完成本机原生加载与独立目录部署，尚未上传工坊。
+当前版本：0.2.0 开发预览。通过 GitHub Releases 分发，尚未上传工坊。
+
+0.2.0 清单使用对象式依赖 `{ "id": "BaseLib", "min_version": "3.4.7" }`，修复旧字符串依赖触发的原生清单迁移错误。`scripts/Package.ps1` 从已构建的 DLL/JSON 生成安装 ZIP 和 SHA256SUMS.txt，不包括第三方程序集或个人配置。
+
+下载与通用安装步骤以仓库根 README 为准；下列绝对路径仅记录开发机布局。
 
 ## 本地目录与安装
 
@@ -9,7 +13,7 @@
 - 本 MOD 运行目录：`mods\FendaoZhengfeng`。
 - 运行文件：`FendaoZhengfeng.dll`、`FendaoZhengfeng.json`。
 
-项目使用单 DLL，包含规则引擎、原生接入及 30 张透明 PNG 图标，不要求附属 Core DLL。界面使用 Godot 原生控件，目前无需 PCK。清单声明 has_dll、affects_gameplay，不声明不存在的资源包；0.1.4 起声明 BaseLib 依赖，用于独立模组配置条目。每位玩家须自行安装并启用 BaseLib，本包不重分发其 DLL/PCK。基于本机 v0.111.0 编译，其他版本兼容性需另行验证。
+项目使用单 DLL，包含规则引擎、原生接入及 36 张透明 PNG 图标，不要求附属 Core DLL。界面使用 Godot 原生控件，目前无需 PCK。清单声明 has_dll、affects_gameplay，不声明不存在的资源包；0.1.4 起声明 BaseLib 依赖，用于独立模组配置条目。每位玩家须自行安装并启用 BaseLib，本包不重分发其 DLL/PCK。基于本机 v0.111.0 编译，其他版本兼容性需另行验证。
 
 构建、研究、日志、缓存和第三方游戏程序集不会进入运行包。部署脚本仅复制本 MOD 的两份产物，不覆盖游戏 EXE、原版 DLL、原版 PCK 或其他 MOD。
 
@@ -25,4 +29,4 @@
 
 ## 验证范围
 
-见 [VERIFICATION.md](VERIFICATION.md)。尚未创建远程 Git 仓库、Steam 工坊条目，也未执行公开发布。
+见 [VERIFICATION.md](VERIFICATION.md)。GitHub 地址为 https://github.com/mrxiuer/sts2-fendao-zhengfeng ，安装包通过 Releases 分发；尚未发布 Steam 工坊。

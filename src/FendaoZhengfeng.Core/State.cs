@@ -19,7 +19,21 @@ public sealed class Holding
     public Dictionary<string, int> Counters { get; set; } = [];
 }
 public sealed record RouteStep(int Act, int Row, int Col);
-public sealed record PublicProfile(string Packet, int Health, int MaxHealth, int Act, int Floor, string Room, RouteStep? Position);
+public sealed record MarketCard(string Id, string Packet, string Name, int Wear = -1);
+public sealed record PublicProfile(string Packet, int Health, int MaxHealth, int Act, int Floor, string Room, RouteStep? Position,
+    int Gold = 0, List<MarketCard>? Cards = null);
+public sealed class CardTrade
+{
+    public string Id { get; set; } = "";
+    public string Seller { get; set; } = "";
+    public string Buyer { get; set; } = "";
+    public MarketCard Card { get; set; } = new("", "", "");
+    public int Price { get; set; }
+    public long SellerBattle { get; set; }
+    public long BuyerBattle { get; set; }
+    public bool Removed { get; set; }
+    public bool Delivered { get; set; }
+}
 public sealed class Racer
 {
     public string Id { get; set; } = "";
@@ -29,6 +43,12 @@ public sealed class Racer
     public RouteStep? Position { get; set; }
     public List<RouteStep> Trail { get; set; } = [];
     public HashSet<RouteStep> ClearedNodes { get; set; } = [];
+    public List<MarketCard> MarketCards { get; set; } = [];
+    public int Gold { get; set; }
+    public int Purchases { get; set; }
+    public int ResetCount { get; set; }
+    public int ResetCharges { get; set; }
+    public bool ResetPending { get; set; }
     public int Act { get; set; }
     public int Floor { get; set; }
     public string Room { get; set; } = "";
@@ -88,6 +108,7 @@ public sealed class Match
     public HashSet<string> ConsumedRewards { get; set; } = [];
     public Dictionary<int, string> BossFirstKills { get; set; } = [];
     public List<string> FinishOrder { get; set; } = [];
+    public List<CardTrade> Trades { get; set; } = [];
     public HashSet<string> ProcessedCommands { get; set; } = [];
 }
 

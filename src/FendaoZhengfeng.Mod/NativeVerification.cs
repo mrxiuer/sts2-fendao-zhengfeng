@@ -26,7 +26,8 @@ internal static class NativeVerification
     {
         if (started || System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") return;
         started = true;
-        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "host" or "client") _ = NativeNetworkVerification.Run(game);
+        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "advanced") _ = NativeAdvancedVerification.Run(game);
+        else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "host" or "client") _ = NativeNetworkVerification.Run(game);
         else _ = Verify(game);
     }
     private static void Check(bool condition, string name)
@@ -57,13 +58,19 @@ internal static class NativeVerification
             var configPage = mainMenu.SubmenuStack.PushSubmenuType<BaseLib.Config.UI.NModConfigSubmenu>();
             HarmonyLib.AccessTools.Method(typeof(BaseLib.Config.UI.NModConfigSubmenu), "LoadModConfig").Invoke(configPage, [RaceConfig.Instance]);
             await Task.Delay(200);
-            Check(configPage.FindChildren("*", "", true, false).OfType<BaseLib.Config.UI.NConfigTickbox>().Count() == 31, "config renders mode and debug toggles plus 29 effect checkboxes");
+            Check(configPage.FindChildren("*", "", true, false).OfType<BaseLib.Config.UI.NConfigTickbox>().Count() == Catalog.All.Count + 2, "config renders mode and debug toggles plus 34 effect checkboxes");
             RaceConfig.Effect_exhaustion = false;
             Check(!RaceConfig.EnabledIds().Contains("exhaustion"), "effect checkbox updates next-match whitelist");
             RaceConfig.Effect_exhaustion = true;
             await CaptureVisual(game, "mock-04-independent-mod-config");
             mainMenu.SubmenuStack.Pop();
             await Task.Delay(500);
+            var loadingProblems = MegaCrit.Sts2.Core.Modding.ModManager.Mods
+                .Where(mod => mod.state.ToString() == "Failed" || mod.errors?.Count > 0).ToList();
+            foreach (var mod in loadingProblems)
+                GD.Print($"[FDZF LOAD PROBLEM] {mod.manifest?.id}: {mod.state}: " + string.Join("; ", mod.errors?.Select(error => error.GetFormattedText()) ?? []));
+            Check(loadingProblems.Count == 0, "native loader has no failed mods or recorded loading errors");
+            await CaptureVisual(game, "mock-07-clean-mod-loading");
             const string seed = "FDZFVERIFY";
             var run = await MockTesting.StartWithCharacter(ModelDb.Character<Ironclad>(), seed);
             var session = RaceSession.Current!;
@@ -96,6 +103,10 @@ internal static class NativeVerification
                 await Task.Delay(4000);
                 MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen.Instance?.Close(false);
             }
+            session.Me.Ghosts = 1;
+            Check(RaceModifier.Active!.ModifyHpLostAfterOstyLate(run.Players.Single().Creature, 9999, ValueProp.Unpowered, null, null) == 9999
+                && session.Me.Ghosts == 1, "scapegoat excludes event life loss outside combat without consuming charges");
+            session.Me.Ghosts = 0;
             await CaptureVisual(game, "mock-00-opening-relics");
             if (!string.IsNullOrWhiteSpace(System.Environment.GetEnvironmentVariable("FDZF_SCREENSHOT_DIR")))
             {
@@ -118,7 +129,7 @@ internal static class NativeVerification
             await CaptureVisual(game, "mock-01-clean-opening");
             await MockTesting.WinBattle();
             while (session.Me.InBattle) await Task.Delay(30);
-            foreach (var e in Catalog.All.Where(e => e.Kind == EffectKind.Curse || e.Kind == EffectKind.Contract))
+            foreach (var e in Catalog.All.Where(e => (e.Kind == EffectKind.Curse || e.Kind == EffectKind.Contract) && e.Id is not ("no_plan" or "farewell_upgrades")))
                 session.Me.Effects[e.Id] = new() { Id = e.Id, Grants = [new() { EventId = e.Id, Source = "2", ActiveBattle = session.Me.Battle + 1 }] };
             session.Me.Effects["battle_hardened"] = new() { Id = "battle_hardened" }; session.Me.VictoryCount = 20;
             session.Me.Effects["death_defiance"] = new() { Id = "death_defiance" }; session.Me.RevivalCount = 2;
@@ -161,7 +172,12 @@ internal static class NativeVerification
             Check(player.Creature.CurrentHp == 1 && session.Me.Ghosts == 0, "scapegoat preserves one HP and consumes one charge");
             Check(session.Me.RevivalCount == 2, "scapegoat does not count as revival");
             Check(!player.Relics.OfType<LizardTail>().Single().WasUsed, "scapegoat precedes native resurrection");
-            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == EffectIcons.TextureSize), "all 29 hand-painted effect icons load from embedded PNG resources");
+            session.Me.Ghosts = 1;
+            Check(active.ModifyHpLostAfterOstyLate(player.Creature, 9999, ValueProp.Unpowered, player.Creature, attack) == 9999
+                && session.Me.Ghosts == 1, "scapegoat excludes player card life payments without consuming a charge");
+            session.Me.Ghosts = 0;
+
+            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == EffectIcons.TextureSize), "all 34 hand-painted effect icons load from embedded PNG resources");
             Check(ReferenceEquals(ModelDb.Modifier<RaceModifier>().Icon, EffectIcons.Mode), "native mode icon replaces missing NOPE placeholder");
             EffectHud.Refresh();
             Check(EffectHud.IsVisible && EffectHud.IconCount == session.Me.Effects.Count, "effect icons stay visible near relics with race panel closed");
@@ -246,6 +262,23 @@ internal static class NativeVerification
                     && session.Engine.State.ConsumedRewards.Contains(session.LocalId + ":" + key), "boss mixed sacrifice consumes relic and queues boss curse for opponent");
                 Check(session.Me.BossPrizes.Any(prize => prize.EndsWith(":first", StringComparison.Ordinal)), "boss sacrifice leaves first-kill extra prize available");
             }
+            // Actual native executions, independent of enemy/card names: Doom uses Kill, force bypasses preventers.
+            if (!session.Me.InBattle) await RunManager.Instance.EnterRoomDebug(RoomType.Monster);
+            long deathProbeDeadline = System.Environment.TickCount64 + 30000;
+            while (!CombatManager.Instance.IsInProgress || player.PlayerCombatState?.Phase != PlayerTurnPhase.Play)
+            {
+                if (System.Environment.TickCount64 > deathProbeDeadline) throw new TimeoutException("Death boundary probe did not reach a live player turn.");
+                await Task.Delay(30);
+            }
+            session.Me.Ghosts = 2;
+            var nativeTail = player.Relics.OfType<LizardTail>().Single();
+            Check(!nativeTail.WasUsed, "death boundary probe starts with unused native Lizard Tail");
+            await DoomPower.DoomKill([player.Creature]);
+            Check(session.Me.Ghosts == 2 && nativeTail.WasUsed && player.Creature.CurrentHp > 0,
+                "Doom bypasses scapegoat while native Lizard Tail retains its original revival behavior");
+            await CreatureCmd.Kill(player.Creature, true);
+            Check(session.Me.Ghosts == 2 && player.Creature.IsDead,
+                "forced native execution bypasses scapegoat without consuming charges");
             GD.Print("[FDZF VERIFY COMPLETE] Native checks passed; no player save backend was used.");
             game.GetTree().Quit(0);
         }

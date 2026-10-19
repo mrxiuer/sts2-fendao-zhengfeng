@@ -73,6 +73,7 @@ internal static class NativeNetworkVerification
             var runTask = RaceRuntime.Start(game, lobby, ActModel.GetDefaultList(), [], "FDZFNETVERIFY", 0, agreed);
             await Wait(() => RaceSession.Current != null, "session capture"); pump?.QueueFree();
             var run = await runTask; var session = RaceSession.Current!;
+            int startingNativeGold = run.Players.Single().Gold;
             Check(session.Engine.State.Racers.Count == 2, "two real ENet peers share one match");
             Check(run.Players.Count == 1 && run.Players[0].NetId == 1, "gameplay remains isolated singleplayer on each process");
             await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
@@ -83,6 +84,8 @@ internal static class NativeNetworkVerification
 
             if (resume)
             {
+                Check(session.Engine.State.Trades.Count == 1 && session.Engine.State.Trades.Single().Delivered && session.Engine.State.Trades.Single().Removed,
+                    "completed card trade survives both processes restarting without redelivery");
                 await Wait(() => run.Players[0].PlayerCombatState?.Phase == PlayerTurnPhase.Play, "resumed combat ready");
                 Check(session.Restored != null, "loaded matching shared checkpoint");
                 Check(run.CurrentMapCoord == session.Restored!.Value.Save.VisitedMapCoords.Last(), "resumed at committed next map node");
@@ -92,8 +95,30 @@ internal static class NativeNetworkVerification
                 else { transport.SendMessage(new RaceMessage { Kind = "verification_done" }); await Task.Delay(500); }
                 GD.Print("[FDZF NETWORK RESUME COMPLETE] " + (host ? "host" : "client") + " restored and entered live combat."); game.GetTree().Quit(0); return;
             }
+            int beforeMarketDeck = run.Players.Single().Deck.Cards.Count;
+            int beforeMarketGold = startingNativeGold;
+            string tradedCardId;
+            if (host)
+            {
+                session.Me.Effects["good_connections"] = new() { Id = "good_connections" };
+                await PlayerCmd.GainGold(500, run.Players.Single());
+                tradedCardId = session.Engine.State.Racers["2"].MarketCards.First().Id;
+                await AdvancedEffects.BuyCard("2", tradedCardId);
+                Check(run.Players.Single().Deck.Cards.Count == beforeMarketDeck, "real ENet purchase leaves current buyer deck unchanged until next combat");
+            }
+            else
+            {
+                await Wait(() => session.Engine.State.Trades.Count == 1, "host market purchase received");
+                tradedCardId = session.Engine.State.Trades.Single().Card.Id;
+                Check(run.Players.Single().Deck.Cards.Count == beforeMarketDeck, "real ENet sale keeps original card until seller next combat");
+            }
             await RunManager.Instance.EnterRoomDebug(host ? RoomType.Elite : RoomType.Monster);
             await Wait(() => RaceModifier.Active?.Turn == 1 && run.Players[0].PlayerCombatState?.Phase == PlayerTurnPhase.Play, "first combat ready");
+            await Wait(() => session.Engine.State.Trades.Single().Delivered && session.Engine.State.Trades.Single().Removed, "independent ENet card handoffs");
+            Check(run.Players.Single().Deck.Cards.Count == beforeMarketDeck + (host ? 1 : -1), "real ENet handoff changes each native deck exactly once");
+            GD.Print($"[FDZF NETWORK GOLD] initial={beforeMarketGold} actual={run.Players.Single().Gold} host={host}");
+            Check(run.Players.Single().Gold == beforeMarketGold + (host ? 400 : 100), "real ENet buyer pays and seller receives native gold exactly once");
+            if (!host) Check(!RaceModifier.Active!.CaptureMarket().Any(card => card.Id == tradedCardId), "real ENet seller stable card identity is removed");
             if (host)
             {
                 await Wait(() => session.Engine.State.Racers["2"].InBattle, "opponent in independent combat");
@@ -123,7 +148,9 @@ internal static class NativeNetworkVerification
             await Wait(() => session.Paused, "shared checkpoint commit");
             Check(session.WaitingAtCheckpoint, "personal progress frozen at common revision");
             var report = System.Environment.GetEnvironmentVariable("FDZF_REPORT_DIR")!;
+            var liveModifier = RaceModifier.Active;
             var saved = NativeCheckpoint.Read(Path.Combine(report, "resume", session.LocalId + ".json"));
+            Check(ReferenceEquals(RaceModifier.Active, liveModifier), "reading an isolated checkpoint preview never replaces the active gameplay modifier");
             Check(saved.Match.Revision == session.Engine.State.Revision, "checkpoint contains committed shared revision");
             Check(saved.Run.Players.Count == 1 && saved.Run.Players[0].Deck.Cards.Count == run.Players[0].Deck.Cards.Count, "native personal deck restored from packet");
             if (host) { await Wait(() => remoteSaved, "client persisted checkpoint receipt"); session.ContinueRace(); await barrier; await Wait(() => remoteDone, "client completion receipt"); }

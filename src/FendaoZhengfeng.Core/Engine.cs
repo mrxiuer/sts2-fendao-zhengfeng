@@ -27,11 +27,13 @@ public sealed class Engine(Match state)
                 var profile = StateJson.Deserialize<PublicProfile>(c.Profile);
                 if (profile.Packet.Length > 300000 || profile.Act < p.Act || profile.Act > p.Act + 1
                     || profile.Health < 0 || profile.MaxHealth < 1 || profile.Health > profile.MaxHealth
-                    || profile.Floor < 0 || profile.Floor > 200 || profile.Room.Length > 64)
+                    || profile.Floor < 0 || profile.Floor > 200 || profile.Room.Length > 64 || profile.Gold < 0 || profile.Gold > 10000000
+                    || profile.Cards?.Count > 1000 || profile.Cards?.Any(card => card.Id.Length > 64 || card.Packet.Length > 15000 || card.Name.Length > 256) == true
+                    || profile.Cards?.Select(card => card.Id).Distinct().Count() != profile.Cards?.Count)
                     throw new RuleException("公开资料无效。");
                 if (profile.Position is { } point && (point.Act != profile.Act || point.Row < -1 || point.Row > 200 || point.Col < 0 || point.Col > 100))
                     throw new RuleException("地图坐标无效。");
-                p.PublicPacket = profile.Packet; p.ProfileRevision++;
+                p.PublicPacket = profile.Packet; p.ProfileRevision++; p.Gold = profile.Gold; p.MarketCards = profile.Cards ?? [];
                 p.Health = profile.Health; p.MaxHealth = profile.MaxHealth; p.Act = profile.Act; p.Floor = profile.Floor; p.Room = profile.Room;
                 p.Position = profile.Position;
                 if (profile.Position is { } location && (p.Trail.Count == 0 || p.Trail[^1] != location))
@@ -57,8 +59,8 @@ public sealed class Engine(Match state)
                 if (c.Boss && p.KilledBossActs.Add(p.Act))
                 {
                     foreach (var id in p.Effects.Values.Where(h => h.ExpiresAfterAct >= 0 && h.ExpiresAfterAct <= p.Act).Select(h => h.Id).ToList()) p.Effects.Remove(id);
-                    bool first = m.BossFirstKills.TryAdd(p.Act, p.Id);
-                    p.BossPrizes.Add(p.Act + ":" + (first ? "first" : "later"));
+                    bool first = p.ResetCount > 0 || m.BossFirstKills.TryAdd(p.Act, p.Id);
+                    p.BossPrizes.Add((p.ResetCount > 0 ? "lap" + p.ResetCount + ":" : "") + p.Act + ":" + (first ? "first" : "later"));
                 }
                 break;
             case "defeat": p.Eliminated = true; p.InBattle = false; break;
@@ -91,7 +93,7 @@ public sealed class Engine(Match state)
                 if (offer.Route == Route.FirstKill && !p.BossPrizes.Contains(offer.RewardKey)) throw new RuleException("首杀奖励已经领取。");
                 if (effect.Kind == EffectKind.Curse)
                 {
-                    foreach (var other in m.Racers.Values.Where(r => r.Id != p.Id && !r.Eliminated && !r.Finished)) Attack(m, p, other, effect, c.Id);
+                    foreach (var other in m.Racers.Values.Where(r => (r.Id != p.Id || effect.Id == "farewell_upgrades") && !r.Eliminated && !r.Finished)) Attack(m, p, other, effect, c.Id);
                     if (p.Has("war_feeds_war")) { var w = p.Effects["war_feeds_war"]; if (w.Used < 3 + w.Rank) { w.Used++; p.Receipts.Add(new(c.Id + ":heal", "heal_percent", "", 5)); } }
                 }
                 else Give(m, p, effect, c.Id);
@@ -135,6 +137,32 @@ public sealed class Engine(Match state)
                     if (income > 0) p.Receipts.Add(new(c.Id + ":fortune", "gold", "", Math.Min(cap, income)));
                 }
                 p.FortuneIncome.Clear(); break;
+            case "market_buy":
+                if (!p.Has("good_connections") || p.Finished || p.ResetPending) throw new RuleException("当前不能购买卡牌。");
+                if (c.Key == p.Id || !m.Racers.TryGetValue(c.Key, out var seller) || seller.Eliminated || seller.Finished || seller.ResetPending) throw new RuleException("卖方不可用。");
+                var offeredCard = seller.MarketCards.SingleOrDefault(card => card.Id == c.Effect) ?? throw new RuleException("该牌已不在对手公开牌组中，请刷新。");
+                if (m.Trades.Any(trade => trade.Seller == seller.Id && trade.Card.Id == offeredCard.Id)) throw new RuleException("这张牌已被购买。");
+                int price = checked(100 + 50 * p.Purchases);
+                int pendingSpend = p.Receipts.Where(receipt => receipt.Kind == "spend_gold").Sum(receipt => receipt.Amount);
+                if (c.Amount - pendingSpend < price || p.Gold < price) throw new RuleException("金币不足。");
+                p.Purchases++; p.Gold -= price;
+                p.Receipts.Add(new(c.Id + ":market-cost", "spend_gold", "", price));
+                seller.Receipts.Add(new(c.Id + ":market-income", "gold", "", price));
+                m.Trades.Add(new CardTrade { Id = c.Id, Seller = seller.Id, Buyer = p.Id, Card = offeredCard, Price = price, SellerBattle = seller.Battle + 1, BuyerBattle = p.Battle + 1 });
+                break;
+            case "trade_removed":
+            case "trade_delivered":
+                var transfer = m.Trades.SingleOrDefault(trade => trade.Id == c.Key) ?? throw new RuleException("交易不存在。");
+                if (c.Kind == "trade_removed") { if (transfer.Seller != p.Id || !p.InBattle || p.Battle < transfer.SellerBattle) throw new RuleException("卖方交接尚未到期。"); transfer.Removed = true; }
+                else { if (transfer.Buyer != p.Id || !p.InBattle || p.Battle < transfer.BuyerBattle) throw new RuleException("买方交接尚未到期。"); transfer.Delivered = true; }
+                break;
+            case "reset_use":
+                if (!p.Has("r_key") || p.ResetCharges <= 0 || p.InBattle || p.Eliminated || p.Finished || p.ResetPending) throw new RuleException("当前不能使用R键。");
+                p.ResetCharges--; p.ResetCount++; p.ResetPending = true; p.Act = 0; p.Floor = 0; p.Position = null; p.Room = "Reset";
+                p.KilledBossActs.Clear(); p.Trail.Clear(); p.ClearedNodes.Clear(); p.BattleKey = "";
+                break;
+            case "reset_ready":
+                if (!p.ResetPending) throw new RuleException("没有待完成的重置。"); p.ResetPending = false; break;
             case "ghost":
                 if (p.Ghosts <= 0) throw new RuleException("没有替死鬼。"); p.Ghosts--; break;
             case "ack": p.Receipts.RemoveAll(r => r.Id == c.Key); break;
@@ -156,7 +184,9 @@ public sealed class Engine(Match state)
     }
     private static void Give(Match m, Racer p, Effect e, string eventId)
     {
+        if (e.Id is "small_light" or "good_connections" && p.Has(e.Id)) throw new RuleException("此常驻主动增益不能重复持有。");
         p.History[e.Id] = p.History.GetValueOrDefault(e.Id) + 1;
+        if (e.Id == "r_key") p.ResetCharges++;
         if (e.Kind == EffectKind.Contract)
         {
             if (p.Effects.ContainsKey(e.Id)) throw new RuleException("契约不能重复持有。");
@@ -183,6 +213,7 @@ public sealed class Engine(Match state)
         int cost = at == CleanseAt.Shop ? Balance.CleansePrice(e, h.Grants.Count) ?? throw new RuleException("不可净化。") : 0;
         int burden = e.Kind == EffectKind.Curse ? h.Grants.Count(g => g.ActiveBattle <= p.Battle) * e.Burden : 0;
         p.Effects.Remove(id);
+        if (id == "no_plan") p.Receipts.Add(new(commandId + ":restore-skills", "restore_skills"));
         if (id == "bloom_decay") p.Receipts.Add(new(commandId + ":restore", "restore_deck"));
         if (at != CleanseAt.Boss && burden > 0 && p.Has("adversity_profit"))
         { var b = p.Effects["adversity_profit"]; int gold = Math.Min(burden * 3, 45 + 15 * b.Rank - b.Used); if (gold > 0) { b.Used += gold; p.Receipts.Add(new(commandId + ":profit", "gold", "", gold)); } }

@@ -101,7 +101,7 @@ internal static class RewardChoicePatch
     private static readonly HashSet<Reward> selecting = [];
     static bool Prefix(Reward __instance, ref Task<bool> __result)
     {
-        if (!RaceRuntime.Live || originalCalls.Contains(__instance)) return true;
+        if (!RaceRuntime.Live || __instance is RaceActionReward || originalCalls.Contains(__instance)) return true;
         if (!selecting.Add(__instance)) { __result = Task.FromResult(false); return false; }
         __result = Choose(__instance); return false;
     }
@@ -110,9 +110,9 @@ internal static class RewardChoicePatch
         try
         {
             var s = RaceSession.Current!; var type = RaceRuntime.State!.CurrentRoom?.RoomType.ToString();
-            if (reward is RelicReward && type is "Elite" or "Boss")
+            if (reward is RelicReward relic && type is "Elite" or "Boss")
             {
-                int action = await RaceUi.Choose("遗物奖励", ["领取遗物", "献祭遗物：混合效果三选一"]);
+                int action = await RaceUi.Choose("遗物奖励 · 2选1", ["领取遗物 · " + relic.Relic!.Title.GetFormattedText() + "\n" + relic.Relic.DynamicDescription.GetFormattedText(), "献祭遗物 · 混合3选1\n放弃当前这份遗物奖励，从诅咒、双刃契约、增益的混合池中选择1项。卡牌、金币、药水等其他奖励保留。"], [relic.Relic.BigIcon, EffectIcons.Get("choice_reward")]);
                 if (action < 0) return false;
                 if (action > 0)
                 {
@@ -240,6 +240,10 @@ internal static class LocalizationPatch
     {
         if (__instance.LocTable == ModEntry.Id)
         {
+            if (NativeChoiceUi.Texts.TryGetValue(__instance.LocEntryKey, out var text)) { __result = text; return false; }
+            if (__instance.LocEntryKey.StartsWith("display.", StringComparison.Ordinal))
+            { var parts = __instance.LocEntryKey.Split('.'); __result = parts[^1] == "title" ? Catalog.Get(parts[1]).Name : EffectDetails.Describe(parts[1]); return false; }
+
             if (__instance.LocEntryKey.StartsWith("effect.", StringComparison.Ordinal) && __instance.LocEntryKey.EndsWith(".title", StringComparison.Ordinal))
             {
                 __result = Catalog.Get(__instance.LocEntryKey[7..^6]).Name;
@@ -247,6 +251,10 @@ internal static class LocalizationPatch
             }
             __result = __instance.LocEntryKey switch
             {
+                "action.recover.title" => "取回1张暂存技能牌",
+                "action.remove.title" => "删除1张牌，失去1点最大生命",
+                "action.buy.title" => "选择要购买的卡牌",
+                "reward.sacrifice" => "遗物奖励 · 领取或献祭",
                 "repair.title" => "恢复耐久",
                 "repair.description" => "恢复所有卡牌的耐久并解除枯萎。占用本次营地行动，不净化契约。",
                 "cleanse.title" => "净化诅咒",

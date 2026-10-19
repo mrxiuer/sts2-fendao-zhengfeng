@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyName>FendaoZhengfeng</AssemblyName>
-    <Version>0.1.4</Version>
-    <BaseLibPath Condition="'$(BaseLibPath)' == ''">D:/SteamLibrary/steamapps/workshop/content/2868840/3737335127/BaseLib/BaseLib.dll</BaseLibPath>
+    <Version>0.2.0</Version>
+    <BaseLibPath Condition="'$(BaseLibPath)' == ''">$(GameRoot)/../../workshop/content/2868840/3737335127/BaseLib/BaseLib.dll</BaseLibPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
@@ -15,6 +15,7 @@
     <None Include="../../packaging/FendaoZhengfeng.json" Link="FendaoZhengfeng.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="CheckGame" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(BaseLibPath)')" Text="未找到 BaseLib.dll，请指定 BaseLibPath。" />
     <Error Condition="!Exists('$(GameData)/sts2.dll')" Text="未找到游戏程序集，请指定 GameRoot。" />
   </Target>
 </Project>
