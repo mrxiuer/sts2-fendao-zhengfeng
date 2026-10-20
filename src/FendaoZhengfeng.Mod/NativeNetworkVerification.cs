@@ -58,7 +58,7 @@ internal static class NativeNetworkVerification
             var listener = new Listener(); var lobby = new StartRunLobby(GameMode.Standard, transport, listener, 2);
             lobby.Players.Add(new() { id = 1, character = ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
             lobby.Players.Add(new() { id = 2, character = ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
-            bool remoteDone = false, remoteSaved = false, remoteInteractiveReady = false; string? remoteCampaign = null; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "interactive_ready") remoteInteractiveReady = true; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; if (msg.Kind == "verification_campaign") remoteCampaign = msg.Content; });
+            bool remoteDone = false, remoteSaved = false, remoteInteractiveReady = false, remoteFortuneDone = false; string? remoteCampaign = null; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "fortune_done") remoteFortuneDone = true; if (msg.Kind == "interactive_ready") remoteInteractiveReady = true; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; if (msg.Kind == "verification_campaign") remoteCampaign = msg.Content; });
             bool resume = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESUME") == "1"; RaceRuntime.ResumeRequested = resume;
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_VANILLA") == "1")
             {
@@ -80,7 +80,6 @@ internal static class NativeNetworkVerification
             if (interactive) Check(run.ExtraFields.StartedWithNeow && run.CurrentRoom is EventRoom opening
                 && opening.LocalMutableEvent is MegaCrit.Sts2.Core.Models.Events.Neow && opening.LocalMutableEvent.CurrentOptions.Count == 3,
                 "interactive peers retain the native three-choice opening alongside Lizard Tail");
-            int startingNativeGold = run.Players.Single().Gold;
             Check(session.Engine.State.Racers.Count == 2, "two real ENet peers share one match");
             Check(run.Players.Count == 1 && run.Players[0].NetId == 1, "gameplay remains isolated singleplayer on each process");
             await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
@@ -135,8 +134,31 @@ internal static class NativeNetworkVerification
                 else { transport.SendMessage(new RaceMessage { Kind = "verification_done" }); await Task.Delay(500); }
                 GD.Print("[FDZF NETWORK RESUME COMPLETE] " + (host ? "host" : "client") + " restored and entered live combat."); game.GetTree().Quit(0); return;
             }
+            if (host)
+            {
+                foreach (var racer in session.Engine.State.Racers.Values)
+                    racer.Effects["shared_fortune"] = new() { Id = "shared_fortune" };
+                await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
+            }
+            await Wait(() => session.Me.Has("shared_fortune"), "shared fortune fixture synchronized");
+            int fortuneBaseline = run.Players.Single().Gold;
+            await PlayerCmd.GainGold(host ? 60 : 20, run.Players.Single());
+            await Wait(() => session.Me.FortuneIncome.GetValueOrDefault(otherId) == (host ? 20 : 60), "native opponent gold recorded across ENet");
+            Check(run.Players.Single().Gold == fortuneBaseline + (host ? 60 : 20), "shared fortune waits for owner's next node before paying");
+            await RunManager.Instance.EnterRoomDebug(RoomType.Shop);
+            await Wait(() => run.Players.Single().Gold == fortuneBaseline + (host ? 70 : 50), "shared fortune native node settlement payout");
+            Check(run.Players.Single().Gold == fortuneBaseline + (host ? 70 : 50), "shared fortune pays actual native gold on both ENet peers");
+            Check(session.Me.FortuneIncome.Count == 0, "shared fortune node settlement clears income window");
+            transport.SendMessage(new RaceMessage { Kind = "fortune_done" });
+            await Wait(() => remoteFortuneDone, "both fortune payouts finished");
+            if (host)
+            {
+                foreach (var racer in session.Engine.State.Racers.Values) racer.Effects.Remove("shared_fortune");
+                await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
+            }
+            await Wait(() => !session.Me.Has("shared_fortune"), "shared fortune fixture cleanup");
             int beforeMarketDeck = run.Players.Single().Deck.Cards.Count;
-            int beforeMarketGold = startingNativeGold;
+            int beforeMarketGold = fortuneBaseline + (host ? 70 : 50);
             string tradedCardId;
             if (host)
             {

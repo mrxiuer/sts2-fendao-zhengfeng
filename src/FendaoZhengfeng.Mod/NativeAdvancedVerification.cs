@@ -183,6 +183,23 @@ internal static class NativeAdvancedVerification
             await session.Submit(session.New("boss_cleanse", "advanced:later", "no_plan"));
             await modifier.ApplyReceipts(new ThrowingPlayerChoiceContext(), false);
             Check(modifier.VaultCount == 0 && player.Deck.Cards.Count(card => card.Type == CardType.Skill) >= initialSkills, "cleansing no plan restores every remaining saved skill without duplication");
+            await MockTesting.GrantEffect("burn_bridges");
+            var beforePendingBridge = player.Deck.Cards.ToHashSet();
+            var pendingNewCard = run.CreateCard(ModelDb.Card<MegaCrit.Sts2.Core.Models.Cards.StrikeIronclad>(), player);
+            await CardPileCmd.Add(pendingNewCard, PileType.Deck, skipVisuals: true);
+            Check(beforePendingBridge.All(card => player.Deck.Cards.Contains(card)), "pending burn bridges does not transform cards before next battle");
+            await Battle(); await Win();
+            await MockTesting.GrantEffect("burn_bridges");
+            await Battle(); await Win();
+            var oldBridgeCards = player.Deck.Cards.ToHashSet();
+            foreach (var card in oldBridgeCards.Where(card => card.IsUpgradable)) CardCmd.Upgrade(card);
+            var bridgeUpgrades = oldBridgeCards.ToDictionary(card => card, card => card.CurrentUpgradeLevel);
+            var bridgeNewCard = run.CreateCard(ModelDb.Card<MegaCrit.Sts2.Core.Models.Cards.StrikeIronclad>(), player);
+            await CardPileCmd.Add(bridgeNewCard, PileType.Deck, skipVisuals: true);
+            var bridgeRemoved = oldBridgeCards.Where(card => !player.Deck.Cards.Contains(card)).ToList();
+            var bridgeAdded = player.Deck.Cards.Where(card => !oldBridgeCards.Contains(card) && card != bridgeNewCard).ToList();
+            Check(bridgeRemoved.Count == 2 && bridgeAdded.Count == 2 && player.Deck.Cards.Contains(bridgeNewCard), "two active burn bridges stacks transform two distinct old cards without recursive additions");
+            Check(bridgeAdded.All(card => card.Pool != player.Character.CardPool && bridgeRemoved.Any(old => old.Rarity == card.Rarity && Math.Min(bridgeUpgrades[old], card.MaxUpgradeLevel) == card.CurrentUpgradeLevel)), "burn bridges native transformations retain compatible rarity and upgrades");
             GD.Print("[FDZF ADVANCED COMPLETE] Native advanced checks passed using memory saves."); game.GetTree().Quit(0);
         }
         catch (Exception error) { GD.PushError("[FDZF ADVANCED FAILED] " + error); game.GetTree().Quit(1); }

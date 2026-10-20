@@ -231,4 +231,28 @@ Test("scapegoat does not retroactively charge old victories", () => {
     Check(e.State.Racers["a"].Ghosts==0);
     ReadyReward(e,"a","after-ghost:4");Check(e.State.Racers["a"].Ghosts==1);
 });
+
+Test("burn bridges targets opponents and activates at their next battle with full-stack cleanse", () => {
+ var e=New(); ReadyReward(e); OfferEffect(e,"bridges","burn_bridges");
+ e.Execute(new("bridge-pick","a","choose","bridges","burn_bridges"));
+ Check(Catalog.Get("burn_bridges").Kind == EffectKind.Curse);
+ Check(!e.State.Racers["a"].Has("burn_bridges"));
+ foreach(var id in new[]{"b","c"}) {
+  Check(e.State.Racers[id].Count("burn_bridges")==0);
+  e.Execute(new("bridge-start-"+id,id,"battle_start","bridge-battle"));
+  Check(e.State.Racers[id].Count("burn_bridges")==1);
+ }
+ e.Execute(new("bridge-clean","b","shop_cleanse","shop","burn_bridges",1000));
+ Check(!e.State.Racers["b"].Effects.ContainsKey("burn_bridges"));
+});
+Test("shared fortune settles highest source once per own node with cap and carry boundaries", () => {
+ var e=New(); Grant(e,"a","shared_fortune");
+ e.Execute(new("f1","b","gold",Amount:40)); e.Execute(new("f2","b","gold",Amount:40));
+ e.Execute(new("f3","c","gold",Amount:30));
+ Check(!e.State.Racers["a"].Receipts.Any());
+ e.Execute(new("f4","a","node_end","one"));
+ Check(e.State.Racers["a"].Receipts.Sum(r=>r.Amount)==30 && e.State.Racers["a"].FortuneIncome.Count==0);
+ e.Execute(new("f5","a","node_end","two")); Check(e.State.Racers["a"].Receipts.Count==1);
+});
+
 Console.WriteLine($"{passed} checks passed");

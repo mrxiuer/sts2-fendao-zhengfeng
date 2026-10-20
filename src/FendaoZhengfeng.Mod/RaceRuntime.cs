@@ -67,7 +67,10 @@ public static class RaceRuntime
     {
         if (!Live || RaceSession.Current is not { } s) return;
         var key = RoomKey;
-        if (lastNode.Length > 0 && lastNode != key) await s.Submit(s.New("node_end", lastNode)); lastNode = key;
+        // Initial room hooks can run before local tracking is established; do not discard its income window.
+        if (lastNode != key && (lastNode.Length > 0 || s.Me.FortuneIncome.Count > 0))
+            await s.Submit(s.New("node_end", lastNode.Length > 0 ? lastNode : "initial:" + key));
+        lastNode = key;
     }
     internal static void ResetLocalTracking() { rewardIds.Clear(); RewardRoom = null; CombatRewards = null; lastNode = ""; }
     public static void Checkpoint()
@@ -78,7 +81,7 @@ public static class RaceRuntime
         {
             var s = RaceSession.Current!; var save = RunManager.Instance.ToSave(State?.CurrentRoom is CombatRoom room && room.IsPreFinished ? room : null);
             var writer = new PacketWriter(); save.Serialize(writer);
-            var bundle = new NativeCheckpoint.Bundle("0.3.5", s.Engine.State.Version, s.Engine.State.Revision, StateJson.Serialize(s.Engine.State), Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
+            var bundle = new NativeCheckpoint.Bundle("0.3.6", s.Engine.State.Version, s.Engine.State.Revision, StateJson.Serialize(s.Engine.State), Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
             Directory.CreateDirectory(s.SaveDirectory); RaceSession.AtomicWrite(Path.Combine(s.SaveDirectory, "checkpoint.json"), StateJson.Serialize(bundle));
         }
         catch (Exception e) { RaceUi.Error("个人检查点保存失败：" + e.Message); }

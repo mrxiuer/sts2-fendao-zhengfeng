@@ -15,7 +15,7 @@ public sealed record Effect(string Id, string Name, EffectKind Kind, Tier Tier, 
 
 public static class Catalog
 {
-    public const string RulesVersion = "1.0.0-design.5";
+    public const string RulesVersion = "1.0.0-design.6";
     public static readonly IReadOnlyList<Effect> All = [
         C("exhaustion", "力竭", Tier.Ordinary, Rarity.Common, "每场战斗开始失去1点力量。每次强化再失去1点。"),
         C("imbalance", "失衡", Tier.Ordinary, Rarity.Common, "每场战斗开始失去1点敏捷。每次强化再失去1点。"),
@@ -33,10 +33,10 @@ public static class Catalog
         D("tomorrow", "借来的明天", Tier.Ordinary, Rarity.Uncommon, "首回合多1能量和1抽牌，第二回合各减少1。"),
         D("greedy_pocket", "贪婪口袋", Tier.Elite, Rarity.Uncommon, "战斗金币增加25%，起手少抽1张，至少抽1张。"),
         D("bitter_sweet", "先苦后甜", Tier.Boss, Rarity.Rare, "每回合第一张手动牌费用翻倍，第三张合法手动牌重放一次。"),
-        D("burn_bridges", "过河拆桥", Tier.Elite, Rarity.Rare, "新增永久卡牌后，变化一张原有牌为其他角色同稀有度兼容牌，保留升级。"),
+        C("burn_bridges", "过河拆桥", Tier.Elite, Rarity.Rare, "从下一场战斗开始，新增永久卡牌后随机变化1张原有牌为其他角色同稀有度兼容牌，保留升级；每次叠加多变化1张。"),
         D("borrowed_time", "预借时间", Tier.Boss, Rarity.Rare, "每回合获得1能量，同时施加自身3灾厄。"),
         D("bloom_decay", "盛放与凋零", Tier.Boss, Rarity.Rare, "卡牌奖励额外选择一次；永久牌有8耐久，用尽变为可修复的粘液。"),
-        B("shared_fortune", "有福同享", Rarity.Common, "每节点复制对手最高原生金币收入的50%，最多30金。", false, true, true, true, Tier.Elite),
+        B("shared_fortune", "有福同享", Rarity.Common, "进入下一个节点时，结算期间对手最高原生金币收入的50%，最多30金；每次强化提高上限5金。", false, true, true, true, Tier.Elite),
         B("adversity_profit", "逆境生财", Rarity.Common, "有代价净化每点已激活负担获得3金，累计最多45金。", false, true, true, true, Tier.Elite),
         B("war_feeds_war", "以战养战", Rarity.Common, "发动遗物献祭攻击恢复5%最大生命，最多3次。", false, true, false, true, Tier.Ordinary),
         B("catch_up", "错峰出击", Rarity.Common, "落后一幕时接下来2场起手多抽1张，否则1场。", false, true, false, false, Tier.Ordinary),

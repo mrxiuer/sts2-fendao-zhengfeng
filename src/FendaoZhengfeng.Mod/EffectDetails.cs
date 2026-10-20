@@ -18,6 +18,7 @@ internal static class EffectDetails
         var modifier = RaceModifier.Active;
         result += id switch
         {
+            "shared_fortune" => $"\n当前记录的最高对手收入 {racer.FortuneIncome.Values.DefaultIfEmpty().Max()} 金币；待结算 {Math.Min(30 + 5 * holding.Rank, racer.FortuneIncome.Values.DefaultIfEmpty().Max() / 2)} 金币，进入下一个节点到账。转账与模式奖励不参与复制。",
             "fortune_dice" => $"\n本回合攻击伤害倍率：{modifier?.Dice ?? 100}%",
             "bitter_sweet" => $"\n本回合已手动出牌：{modifier?.ManualCards ?? 0}；首张翻倍，第三张重放。自动出牌不计。",
             "hard_shell" => $"\n当前第 {modifier?.Turn ?? 0} 回合；仅前3回合限制敌人每回合失血。敌人状态图标显示剩余额度。",

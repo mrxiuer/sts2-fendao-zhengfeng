@@ -285,18 +285,25 @@ public sealed partial class RaceModifier : ModifierModel
             finally { suppressPropagation = false; }
             return;
         }
-        if (suppressPropagation || oldPileType == PileType.Deck || card.Pile?.Type != PileType.Deck || card.Type is CardType.Status or CardType.Curse || !Me.Has("burn_bridges")) return;
-        var options = Player.Deck.Cards.Where(c => c != card && c.IsTransformable).ToList(); if (options.Count == 0) return;
+        if (suppressPropagation || oldPileType == PileType.Deck || card.Pile?.Type != PileType.Deck || card.Type is CardType.Status or CardType.Curse || N("burn_bridges") == 0) return;
+        var options = Player.Deck.Cards.Where(c => c != card && c.IsTransformable && !IsReserved(c)).ToList();
         var rng = new StableRandom(S.Engine.State.Seed + ":" + Me.Battle + ":" + Player.Deck.Cards.Count + ":" + card.Id);
-        var old = options[(int)(rng.Next() * options.Count)];
-        var pool = ModelDb.AllCharacters.Where(c => c.Id != Player.Character.Id).SelectMany(c => c.CardPool.AllCards)
-            .Where(c => c.Rarity == old.Rarity && c.CanBeGeneratedByModifiers && c.Type is CardType.Attack or CardType.Skill or CardType.Power)
-            .Where(c => !c.HasStarCostX && c.CanonicalStarCost < 0).OrderBy(c => c.Id.ToString(), StringComparer.Ordinal).ToList();
-        if (pool.Count == 0) return;
-        var replacement = RunState.CreateCard(pool[(int)(rng.Next() * pool.Count)], Player);
-        for (int i = 0; i < Math.Min(old.CurrentUpgradeLevel, replacement.MaxUpgradeLevel); i++) CardCmd.Upgrade(replacement);
         suppressPropagation = true;
-        try { var result = await CardCmd.Transform(old, replacement); if (result != null) { wear.Remove(old); wear[replacement] = 8; } }
+        try
+        {
+            for (int i = 0; i < N("burn_bridges") && options.Count > 0; i++)
+            {
+                var old = options[(int)(rng.Next() * options.Count)]; options.Remove(old);
+                var pool = ModelDb.AllCharacters.Where(c => c.Id != Player.Character.Id).SelectMany(c => c.CardPool.AllCards)
+                    .Where(c => c.Rarity == old.Rarity && c.CanBeGeneratedByModifiers && c.Type is CardType.Attack or CardType.Skill or CardType.Power)
+                    .Where(c => !c.HasStarCostX && c.CanonicalStarCost < 0).OrderBy(c => c.Id.ToString(), StringComparer.Ordinal).ToList();
+                if (pool.Count == 0) continue;
+                var replacement = RunState.CreateCard(pool[(int)(rng.Next() * pool.Count)], Player);
+                for (int upgrade = 0; upgrade < Math.Min(old.CurrentUpgradeLevel, replacement.MaxUpgradeLevel); upgrade++) CardCmd.Upgrade(replacement);
+                var result = await CardCmd.Transform(old, replacement);
+                if (result != null) { wear.Remove(old); wear[replacement] = 8; }
+            }
+        }
         finally { suppressPropagation = false; }
     }
     private async Task WitherDeck()
