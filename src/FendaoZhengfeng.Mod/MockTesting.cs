@@ -87,19 +87,10 @@ internal static class MockTesting
         if (selected < 0) return;
         await RunManager.Instance.EnterRoomDebug(selected switch { 0 => RoomType.Monster, 1 => RoomType.Elite, _ => RoomType.Boss });
     }
-    public static async Task WinBattle()
+    public static Task WinBattle()
     {
         _ = Session;
-        if (!CombatManager.Instance.IsInProgress || RaceRuntime.State?.Players.Single().Creature.CombatState is not { } combat) throw new InvalidOperationException("当前没有正在进行的战斗。");
-        // Some elites spawn another creature when killed; settle those waves too.
-        for (int wave = 0; wave < 24; wave++)
-        {
-            foreach (var enemy in combat.Enemies.Where(enemy => enemy.IsAlive).ToList()) await CreatureCmd.Kill(enemy, true);
-            await CombatManager.Instance.CheckWinCondition();
-            if (!Session.Me.InBattle || CombatManager.Instance.IsOverOrEnding) return;
-            await Task.Delay(50);
-        }
-        throw new InvalidOperationException("特殊敌人的阶段尚未结束，请手动完成战斗后继续测试。");
+        return DebugTesting.WinBattle();
     }
     public static async Task SelectService()
     {

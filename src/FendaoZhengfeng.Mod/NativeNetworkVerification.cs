@@ -207,11 +207,13 @@ internal static class NativeNetworkVerification
     }
     private static async Task WinCurrent()
     {
-        var player = RaceRuntime.State!.Players.Single();
-        if (player.Creature.CombatState is { } combat)
-            foreach (var enemy in combat.Enemies.ToList()) await CreatureCmd.Kill(enemy, true);
-        await CombatManager.Instance.CheckWinCondition();
-        await Wait(() => !RaceSession.Current!.Me.InBattle, "combat victory settlement");
+        var session = RaceSession.Current!;
+        RaceUi.Refresh();
+        Check(RaceUi.DebugWinButtonVisible, "network peer exposes quick victory in debug panel");
+        int victories = session.Me.VictoryCount;
+        await DebugTesting.WinBattle();
+        await Wait(() => !session.Me.InBattle, "combat victory settlement");
+        Check(session.Me.VictoryCount == victories + 1, "debug quick victory settles exactly once through native hooks");
     }
     private sealed class Listener : IStartRunLobbyListener
     {

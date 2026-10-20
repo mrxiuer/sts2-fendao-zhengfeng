@@ -78,7 +78,7 @@ public static class RaceRuntime
         {
             var s = RaceSession.Current!; var save = RunManager.Instance.ToSave(State?.CurrentRoom is CombatRoom room && room.IsPreFinished ? room : null);
             var writer = new PacketWriter(); save.Serialize(writer);
-            var bundle = new NativeCheckpoint.Bundle("0.3.4", s.Engine.State.Version, s.Engine.State.Revision, StateJson.Serialize(s.Engine.State), Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
+            var bundle = new NativeCheckpoint.Bundle("0.3.5", s.Engine.State.Version, s.Engine.State.Revision, StateJson.Serialize(s.Engine.State), Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
             Directory.CreateDirectory(s.SaveDirectory); RaceSession.AtomicWrite(Path.Combine(s.SaveDirectory, "checkpoint.json"), StateJson.Serialize(bundle));
         }
         catch (Exception e) { RaceUi.Error("个人检查点保存失败：" + e.Message); }
