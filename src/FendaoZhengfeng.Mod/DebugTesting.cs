@@ -35,4 +35,23 @@ internal static class DebugTesting
         }
         finally { settling = false; RaceUi.Refresh(); }
     }
+    public static async Task EnterHeart()
+    {
+        var session = RaceSession.Current ?? throw new InvalidOperationException("当前没有比赛。");
+        if (!RaceConfig.DebugVisible || !RaceRuntime.Live) throw new InvalidOperationException("请开启调试模式。");
+        if (session.Me.InBattle || CombatManager.Instance.IsInProgress || session.Paused || session.WaitingAtCheckpoint)
+            throw new InvalidOperationException("请先结算战斗并继续比赛。");
+        if (session.Me.Finished || session.Me.Eliminated) throw new InvalidOperationException("请重新开启测试局。");
+        RaceUi.ConcealPanel();
+        var run = RaceRuntime.State!;
+        while (run.CurrentActIndex < 4)
+        {
+            await MegaCrit.Sts2.Core.Runs.RunManager.Instance.EnterAct(run.CurrentActIndex + 1, false);
+            await session.Submit(session.New("progress", amount: run.Players.Single().Creature.CurrentHp, value: "Map"));
+        }
+        run.AddVisitedMapCoord(run.Map.SecondBossMapPoint!.coord);
+        await MegaCrit.Sts2.Core.Runs.RunManager.Instance.EnterRoomDebug(MegaCrit.Sts2.Core.Rooms.RoomType.Boss,
+            model: MegaCrit.Sts2.Core.Models.ModelDb.Encounter<TowerHeartEncounter>().ToMutable());
+    }
+
 }

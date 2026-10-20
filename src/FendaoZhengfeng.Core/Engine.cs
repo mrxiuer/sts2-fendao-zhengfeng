@@ -70,6 +70,11 @@ public sealed class Engine(Match state)
                 if (!p.ExpeditionRewards.Remove(c.Key)) throw new RuleException("悬赏奖励已处理。"); break;
             case "defeat": p.Eliminated = true; p.InBattle = false; break;
             case "revive": p.RevivalCount++; break;
+            case "heart_finish":
+                if (!p.InBattle || p.Act != 4 || p.Room != "Boss" || c.Key != p.BattleKey) throw new RuleException("心脏击杀记录不匹配。");
+                if (!p.Finished) { p.Finished = true; m.FinishOrder.Add(p.Id); }
+                // Keep the battle open until native victory hooks commit its rewards and history.
+                break;
             case "finish":
                 if (!p.Finished) { p.Finished = true; p.InBattle = false; m.FinishOrder.Add(p.Id); }
                 break;

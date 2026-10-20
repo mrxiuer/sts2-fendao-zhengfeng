@@ -26,7 +26,8 @@ internal static class NativeVerification
     {
         if (started || System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") return;
         started = true;
-        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "campaign") _ = NativeCampaignVerification.Run(game);
+        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "heart") _ = NativeHeartVerification.Run(game);
+        else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "campaign") _ = NativeCampaignVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "revival") _ = NativeRevivalVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "advanced") _ = NativeAdvancedVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "host" or "client") _ = NativeNetworkVerification.Run(game);
@@ -141,7 +142,7 @@ internal static class NativeVerification
             while (session.Me.Battle < 2 || player.PlayerCombatState?.Phase != PlayerTurnPhase.Play) { if (System.Environment.TickCount64 > until) throw new TimeoutException("第二场测试战斗启动超时。"); await Task.Delay(30); }
             await Task.Delay(250);
             var active = RaceModifier.Active!;
-            Check(session.Me.BurdenSnapshot == 27, "curse burden activated at battle boundary");
+            Check(session.Me.BurdenSnapshot == 31, "curse burden activated at battle boundary");
             Check(player.Creature.GetPowerAmount<StrengthPower>() == -1, "strength curse applied");
             Check(player.Creature.GetPowerAmount<DexterityPower>() == -1, "dexterity curse applied");
             Check(player.Creature.GetPowerAmount<DoomPower>() == 3, "borrowed time applies Doom");

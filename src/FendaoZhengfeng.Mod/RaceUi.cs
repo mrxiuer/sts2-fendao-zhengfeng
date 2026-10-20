@@ -49,7 +49,8 @@ public static class RaceUi
     internal static bool DebugWinButtonVisible => list?.GetChildren().OfType<Button>().Any(b => b.Text == "测试：击杀当前敌人并结算奖励") == true;
     internal static bool DebugButtonVisible => debugToggle?.Visible == true;
     internal static void TogglePanel() { if (panel != null) { panel.Visible = !panel.Visible; Refresh(); } }
-    public static void Error(string message) { Godot.GD.PushWarning("[分道争锋] " + message); noticeUntil = System.Environment.TickCount64 + 8000; if (notice != null) notice.Text = message; }
+    public static void Notify(string message) { noticeUntil = System.Environment.TickCount64 + 8000; if (notice != null) notice.Text = message; }
+    public static void Error(string message) { Godot.GD.PushWarning("[分道争锋] " + message); Notify(message); }
     public static void Run(Func<Task> action) => _ = Safe(action);
     private static async Task Safe(Func<Task> action) { busy++; try { await action(); } catch (Exception e) { Error(e.Message); } finally { busy--; } }
     public static async Task WhenIdle() { while (busy > 0) await Task.Delay(20); }
@@ -90,7 +91,10 @@ public static class RaceUi
                 Button("测试：模拟对手获得 100 金币", MockTesting.OpponentGold);
             }
             if (RaceRuntime.Live && RaceConfig.DebugVisible)
+            {
                 Button("测试：击杀当前敌人并结算奖励", DebugTesting.WinBattle);
+                Button("测试：进入第五幕心脏战", DebugTesting.EnterHeart);
+            }
             if (s.PauseRequested) Text(s.Paused ? "共同检查点已保存，比赛已暂停。" : "正在准备共同存档：完成当前房间结算后，选择下一个地图节点即可进入保存屏障。");
             if (s.WaitingAtCheckpoint) { Text("个人进度已冻结，等待其他玩家到达检查点或房主继续。"); return; }
             foreach (var p in s.Engine.State.Racers.Values)

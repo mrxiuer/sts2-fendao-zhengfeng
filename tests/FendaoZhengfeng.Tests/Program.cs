@@ -255,4 +255,37 @@ Test("shared fortune settles highest source once per own node with cap and carry
  e.Execute(new("f5","a","node_end","two")); Check(e.State.Racers["a"].Receipts.Count==1);
 });
 
+Test("heart schedules one opening and both attacks before each periodic buff for many seeds", () => {
+ for(int seed=0;seed<40;seed++) {
+  Check(HeartRules.ActionAt(seed.ToString(),1)==HeartAction.Debilitate);
+  for(int cycle=0;cycle<12;cycle++) {
+   int first=2+cycle*3;
+   var attacks=new[]{HeartRules.ActionAt(seed.ToString(),first),HeartRules.ActionAt(seed.ToString(),first+1)};
+   Check(attacks.Contains(HeartAction.BloodShots) && attacks.Contains(HeartAction.Echo));
+   Check(HeartRules.ActionAt(seed.ToString(),first+2)==HeartAction.Strengthen);
+  }
+ }
+});
+Test("heart ward uses quarter of actual HP with rounding and survives R scaling", () => {
+ Check(HeartRules.RoundBudget(1260)==315 && HeartRules.RoundBudget(1440)==360);
+ Check(HeartRules.RoundBudget(1261)==316 && HeartRules.RoundBudget(1)==1);
+});
+Test("heart escalation preserves native first cycles and later pressure", () => {
+ Check(HeartRules.StrengthForBuff(1)==2 && HeartRules.StrengthForBuff(2)==2 && HeartRules.StrengthForBuff(3)==2);
+ Check(HeartRules.StrengthForBuff(4)==12 && HeartRules.StrengthForBuff(5)==22 && HeartRules.StrengthForBuff(10)==22);
+ Check(HeartRules.CopyAtRound==4 && HeartRules.RestoreAtRound==7);
+});
+Test("confirmed heart kill locks rank while leaving native victory bookkeeping open", () => {
+ var e=New(); e.State.Racers["a"].Act=4; e.State.Racers["a"].Room="Boss";
+ e.Execute(new("heart-start","a","battle_start","heart"));
+ e.Execute(new("heart-rank","a","heart_finish","heart"));
+ Check(e.State.Racers["a"].Finished && e.State.Racers["a"].InBattle && e.State.FinishOrder.SequenceEqual(["a"]));
+ e.Execute(new("other-finish","b","finish"));
+ e.Execute(new("native-heart-win","a","victory","heart",Boss:true));
+ e.Execute(new("native-heart-finish","a","finish"));
+ Check(e.State.FinishOrder.SequenceEqual(["a","b"]) && !e.State.Racers["a"].InBattle && e.State.Racers["a"].VictoryCount==1);
+ var before=StateJson.Serialize(e.State); bool rejected=false;
+ try { e.Execute(new("invalid-heart","c","heart_finish","bad")); } catch(RuleException) {rejected=true;}
+ Check(rejected && StateJson.Serialize(e.State)==before);
+});
 Console.WriteLine($"{passed} checks passed");

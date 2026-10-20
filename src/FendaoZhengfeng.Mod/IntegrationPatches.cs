@@ -239,8 +239,10 @@ internal static class LocalizationPatch
     }
     static bool Prefix(LocString __instance, ref string __result)
     {
+        if (__instance.LocTable == "encounters" && __instance.LocEntryKey.StartsWith("TOWER_HEART_ENCOUNTER.", StringComparison.Ordinal)) { __result = "高塔之心"; return false; }
         if (__instance.LocTable == ModEntry.Id)
         {
+            if (HeartPresentation.Texts.TryGetValue(__instance.LocEntryKey, out var heartText)) { __result = heartText; return false; }
             if (NativeChoiceUi.Texts.TryGetValue(__instance.LocEntryKey, out var text)) { __result = text; return false; }
             if (__instance.LocEntryKey.StartsWith("display.", StringComparison.Ordinal))
             { var parts = __instance.LocEntryKey.Split('.'); __result = parts[^1] == "title" ? Catalog.Get(parts[1]).Name : EffectDetails.Describe(parts[1]); return false; }

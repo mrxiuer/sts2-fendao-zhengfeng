@@ -29,6 +29,7 @@ internal static class NativeNetworkVerification
     public static async Task Run(NGame game)
     {
         bool host = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "host";
+        bool heartNetwork = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_HEART_NETWORK") == "1";
         bool interactive = System.Environment.GetEnvironmentVariable("FDZF_INTERACTIVE_NETWORK") == "1";
         ushort port = interactive && ushort.TryParse(System.Environment.GetEnvironmentVariable("FDZF_LOCAL_PORT"), out var selectedPort) ? selectedPort : (ushort)39181;
         INetGameService? transport = null;
@@ -57,7 +58,7 @@ internal static class NativeNetworkVerification
             }
             var listener = new Listener(); var lobby = new StartRunLobby(GameMode.Standard, transport, listener, 2);
             lobby.Players.Add(new() { id = 1, character = ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
-            lobby.Players.Add(new() { id = 2, character = ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
+            lobby.Players.Add(new() { id = 2, character = heartNetwork ? ModelDb.Character<Defect>() : ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
             bool remoteDone = false, remoteSaved = false, remoteInteractiveReady = false, remoteFortuneDone = false; string? remoteCampaign = null; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "fortune_done") remoteFortuneDone = true; if (msg.Kind == "interactive_ready") remoteInteractiveReady = true; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; if (msg.Kind == "verification_campaign") remoteCampaign = msg.Content; });
             bool resume = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESUME") == "1"; RaceRuntime.ResumeRequested = resume;
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_VANILLA") == "1")
@@ -106,6 +107,7 @@ internal static class NativeNetworkVerification
                 }
                 return;
             }
+            if (heartNetwork) { await NativeHeartNetworkVerification.Run(game, run, session, host); return; }
             var campaignPreview = RunState.FromSerializable(RunManager.Instance.ToSave(null));
             var signatures = new List<string>();
             for (int index = 3; index < 5; index++)

@@ -16,6 +16,6 @@ public static class ModEntry
         {
             if (MegaCrit.Sts2.Core.Nodes.NGame.Instance is { } game) { RaceUi.Install(game); NativeVerification.MaybeRun(game); }
         }).CallDeferred();
-        Godot.GD.Print("[分道争锋] 已加载开发预览版 0.3.6，配置位于模组配置中的独立分道争锋条目。");
+        Godot.GD.Print("[分道争锋] 已加载开发预览版 0.4.0，配置位于模组配置中的独立分道争锋条目。");
     }
 }

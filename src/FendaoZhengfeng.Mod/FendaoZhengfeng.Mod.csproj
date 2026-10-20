@@ -1,12 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyName>FendaoZhengfeng</AssemblyName>
-    <Version>0.3.6</Version>
+    <Version>0.4.0</Version>
     <BaseLibPath Condition="'$(BaseLibPath)' == ''">$(GameRoot)/../../workshop/content/2868840/3737335127/BaseLib/BaseLib.dll</BaseLibPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../FendaoZhengfeng.Core/*.cs" Link="Core/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Assets/heart/*" LogicalName="FendaoZhengfeng.Heart.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Assets/icons/*.png" LogicalName="FendaoZhengfeng.Assets.%(Filename)%(Extension)" />
     <Reference Include="BaseLib"><HintPath>$(BaseLibPath)</HintPath><Private>false</Private></Reference>
     <Reference Include="sts2"><HintPath>$(GameData)/sts2.dll</HintPath><Private>false</Private></Reference>

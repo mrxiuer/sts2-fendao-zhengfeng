@@ -33,7 +33,7 @@ internal static class FiveActCampaign
             var random = new StableRandom(run.Rng.Seed + ":race-bosses:" + index);
             int first = (int)(random.Next() * bosses.Count);
             int second = (first + 1 + (int)(random.Next() * (bosses.Count - 1))) % bosses.Count;
-            act.SetBossEncounter(bosses[first]); act.SetSecondBossEncounter(bosses[second]);
+            act.SetBossEncounter(bosses[first]); act.SetSecondBossEncounter(index == 4 ? ModelDb.Encounter<TowerHeartEncounter>() : bosses[second]);
         }
     }
     internal static void ResetEncounters(RunState run)
