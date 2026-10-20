@@ -36,8 +36,10 @@ public sealed partial class RaceModifier
     { CycleUsed = false; HeavyUsed = false; EchoUsed = false; sawAttack = false; echoCard = null; }
     private async Task TierOpening()
     {
-        await Power<StrengthPower>(Player.Creature, RankValue("sharpen", 1, 1) + (Me.Has("lone_crown") ? 2 : 0));
-        await Power<DexterityPower>(Player.Creature, RankValue("light_step", 1, 1) + (Me.Has("lone_crown") ? 2 : 0));
+        int war = Balance.WarFeedsWarStacks(Me.Effects.GetValueOrDefault("war_feeds_war"));
+        await Power<StrengthPower>(Player.Creature, RankValue("sharpen", 1, 1) + (Me.Has("lone_crown") ? 2 : 0) + war);
+        await Power<DexterityPower>(Player.Creature, RankValue("light_step", 1, 1) + (Me.Has("lone_crown") ? 2 : 0) + war);
+        await Power<FocusPower>(Player.Creature, war);
         await Power<FrailPower>(Player.Creature, N("thin_armor"));
         await Power<VulnerablePower>(Player.Creature, N("exposed"));
         if (N("abrasion") > 0) await PayCurrentHp(1 + N("abrasion"));

@@ -15,7 +15,7 @@ public sealed record Effect(string Id, string Name, EffectKind Kind, Tier Tier, 
 
 public static class Catalog
 {
-    public const string RulesVersion = "1.0.0-design.7";
+    public const string RulesVersion = "1.0.0-design.8";
     public static readonly IReadOnlyList<Effect> All = [
         C("exhaustion", "力竭", Tier.Ordinary, Rarity.Common, "每场战斗开始失去1点力量。每次强化再失去1点。"),
         C("imbalance", "失衡", Tier.Ordinary, Rarity.Common, "每场战斗开始失去1点敏捷。每次强化再失去1点。"),
@@ -37,8 +37,8 @@ public static class Catalog
         D("borrowed_time", "预借时间", Tier.Boss, Rarity.Rare, "每回合获得1能量，同时施加自身3灾厄。"),
         D("bloom_decay", "盛放与凋零", Tier.Boss, Rarity.Rare, "卡牌奖励额外选择一次；永久牌有8耐久，用尽变为可修复的粘液。"),
         B("shared_fortune", "有福同享", Rarity.Common, "进入下一个节点时，结算期间对手最高原生金币收入的50%，最多30金；每次强化提高上限5金。", false, true, true, true, Tier.Elite),
-        B("adversity_profit", "逆境生财", Rarity.Common, "有代价净化每点已激活负担获得3金，累计最多45金。", false, true, true, true, Tier.Elite),
-        B("war_feeds_war", "以战养战", Rarity.Common, "发动遗物献祭攻击恢复5%最大生命，最多3次。", false, true, false, true, Tier.Ordinary),
+        B("adversity_profit", "逆境生财", Rarity.Common, "在营地或商店净化时，每清除1点已激活诅咒负担获得5金币，整局累计上限1000金币；每次强化提高上限15金币。跨幕保留，领取进度不重置；免费Boss净化不发金币。", true, true, true, true, Tier.Elite),
+        B("war_feeds_war", "以战养战", Rarity.Common, "每次获得增加1层，每场战斗开始时每层获得1力量、1敏捷、1集中，最多3层；满层后不再进入候选池。", false, true, false, true, Tier.Ordinary),
         B("catch_up", "错峰出击", Rarity.Common, "落后一幕时接下来2场起手多抽1张，否则1场。", false, true, false, false, Tier.Ordinary),
         B("shared_misery", "有难同当", Rarity.Uncommon, "敌人原始塞入的状态牌转发到对手下场战斗，全来源合计最多5张。", false, true, true, true, Tier.Elite),
         B("retaliation", "以牙还牙", Rarity.Uncommon, "受到献祭诅咒时，施加者获得一张可移除诅咒牌；每人最多2张。", false, true, true, true, Tier.Elite),
@@ -78,6 +78,9 @@ public sealed class RuleException(string message) : Exception(message);
 
 public static class Balance
 {
+    public const int AdversityGoldPerBurden = 5;
+    public static int AdversityGoldCap(int rank) => 1000 + 15 * rank;
+    public static int WarFeedsWarStacks(Holding? holding) => holding == null ? 0 : Math.Clamp(holding.Rank + 1, 1, 3);
     public static double RepeatWeight(int count) => Math.Max(Math.Pow(0.4, Math.Max(0, count)), 0.1);
     public static double RareMultiplier(int burden, bool relic) => 1 + (relic ? 1.5 : 2) * Math.Max(0, burden) / (Math.Max(0, burden) + 8d);
     public static int? CleansePrice(Effect e, int count)

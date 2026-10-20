@@ -61,7 +61,7 @@ public sealed class Engine(Match state)
                 if (p.Has("catch_up")) { var h = p.Effects["catch_up"]; if (--h.Used <= 0) p.Effects.Remove("catch_up"); }
                 if (c.Boss && p.KilledBossActs.Add(p.Act))
                 {
-                    foreach (var id in p.Effects.Values.Where(h => h.ExpiresAfterAct >= 0 && h.ExpiresAfterAct <= p.Act).Select(h => h.Id).ToList()) p.Effects.Remove(id);
+                    foreach (var id in p.Effects.Values.Where(h => !Catalog.Get(h.Id).Permanent && h.ExpiresAfterAct >= 0 && h.ExpiresAfterAct <= p.Act).Select(h => h.Id).ToList()) p.Effects.Remove(id);
                     bool first = p.ResetCount > 0 || m.BossFirstKills.TryAdd(p.Act, p.Id);
                     p.BossPrizes.Add((p.ResetCount > 0 ? "lap" + p.ResetCount + ":" : "") + p.Act + ":" + (first ? "first" : "later"));
                 }
@@ -104,7 +104,6 @@ public sealed class Engine(Match state)
                 if (effect.Kind == EffectKind.Curse)
                 {
                     foreach (var other in m.Racers.Values.Where(r => (r.Id != p.Id || effect.Id == "farewell_upgrades") && !r.Eliminated && !r.Finished)) Attack(m, p, other, effect, c.Id);
-                    if (p.Has("war_feeds_war")) { var w = p.Effects["war_feeds_war"]; if (w.Used < 3 + w.Rank) { w.Used++; p.Receipts.Add(new(c.Id + ":heal", "heal_percent", "", 5)); } }
                 }
                 else Give(m, p, effect, c.Id);
                 m.ConsumedRewards.Add(token); offer.Resolved = true;
@@ -195,6 +194,7 @@ public sealed class Engine(Match state)
     private static void Give(Match m, Racer p, Effect e, string eventId)
     {
         if (e.Id is "small_light" or "good_connections" && p.Has(e.Id)) throw new RuleException("此常驻主动增益不能重复持有。");
+        if (e.Id == "war_feeds_war" && Balance.WarFeedsWarStacks(p.Effects.GetValueOrDefault(e.Id)) >= 3) throw new RuleException("以战养战已达到3层上限。");
         p.History[e.Id] = p.History.GetValueOrDefault(e.Id) + 1;
         if (e.Id == "r_key") p.ResetCharges++;
         if (e.Id == "expedition" && p.Has(e.Id)) AdvanceExpedition(p, eventId);
@@ -234,7 +234,7 @@ public sealed class Engine(Match state)
         if (id == "no_plan") p.Receipts.Add(new(commandId + ":restore-skills", "restore_skills"));
         if (id == "bloom_decay") p.Receipts.Add(new(commandId + ":restore", "restore_deck"));
         if (at != CleanseAt.Boss && burden > 0 && p.Has("adversity_profit"))
-        { var b = p.Effects["adversity_profit"]; int gold = Math.Min(burden * 3, 45 + 15 * b.Rank - b.Used); if (gold > 0) { b.Used += gold; p.Receipts.Add(new(commandId + ":profit", "gold", "", gold)); } }
+        { var b = p.Effects["adversity_profit"]; int gold = Math.Min(burden * Balance.AdversityGoldPerBurden, Balance.AdversityGoldCap(b.Rank) - b.Used); if (gold > 0) { b.Used += gold; p.Receipts.Add(new(commandId + ":profit", "gold", "", gold)); } }
         return cost;
     }
 }

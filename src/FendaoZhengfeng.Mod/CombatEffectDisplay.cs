@@ -77,6 +77,7 @@ internal static class CombatEffectDisplay
             int amount = key.Item2 switch
             {
                 "sharpen" or "light_step" or "poise" => 1 + session.Me.Effects[key.Item2].Rank,
+                "war_feeds_war" => Balance.WarFeedsWarStacks(session.Me.Effects[key.Item2]),
                 "prepared" => 6 + 3 * session.Me.Effects[key.Item2].Rank,
                 "restoration" => 2 + session.Me.Effects[key.Item2].Rank,
                 "abrasion" => 1 + session.Me.Count(key.Item2),
