@@ -59,4 +59,5 @@ public sealed partial class RaceConfig
     [ConfigIgnore] public static bool Effect_tail_refill { get => EnabledIds().Contains("tail_refill"); set => SetEffect("tail_refill", value); }
     [ConfigIgnore] public static bool Effect_evil_echo { get => EnabledIds().Contains("evil_echo"); set => SetEffect("evil_echo", value); }
     [ConfigIgnore] public static bool Effect_flight_wings { get => EnabledIds().Contains("flight_wings"); set => SetEffect("flight_wings", value); }
+    [ConfigIgnore] public static bool Effect_gamblers_heart { get => EnabledIds().Contains("gamblers_heart"); set => SetEffect("gamblers_heart", value); }
 }

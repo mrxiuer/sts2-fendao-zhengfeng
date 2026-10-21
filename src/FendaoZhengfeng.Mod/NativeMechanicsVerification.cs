@@ -44,12 +44,13 @@ internal static class NativeMechanicsVerification
             var run = await MockTesting.StartWithCharacter(ModelDb.Character<Ironclad>(), "FDZFMECHANICS");
             var session = RaceSession.Current!; var player = run.Players.Single(); var modifier = RaceModifier.Active!;
             await CreatureCmd.SetMaxAndCurrentHp(player.Creature, 5000);
-            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "flight")
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "flight" or "gambler")
             {
                 await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
                 await Wait(() => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play);
-                await NativeFlightVerification.Run(run, Check);
-                GD.Print("[FDZF FLIGHT COMPLETE] Native flight mechanics passed."); game.GetTree().Quit(0); return;
+                bool gambler = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "gambler";
+                if (gambler) { await NativeGamblerVerification.Run(run, Check); await Capture(game, "mechanics-05-gamblers-heart"); } else await NativeFlightVerification.Run(run, Check);
+                GD.Print(gambler ? "[FDZF GAMBLER COMPLETE] Native critical mechanics passed." : "[FDZF FLIGHT COMPLETE] Native flight mechanics passed."); game.GetTree().Quit(0); return;
             }
             foreach (string id in new[] { "chaos_core", "piercing_edge", "resonant_circuit", "second_forge", "tail_refill" })
                 Check(EffectIcons.Get(id).GetWidth() == 128, id + " has a packaged transparent display icon");
@@ -148,6 +149,8 @@ internal static class NativeMechanicsVerification
             await Capture(game, "mechanics-03-evil-echo");
             await NativeFlightVerification.Run(run, Check);
             await Capture(game, "mechanics-04-flight-wings");
+            await NativeGamblerVerification.Run(run, Check);
+            await Capture(game, "mechanics-05-gamblers-heart");
             GD.Print("[FDZF MECHANICS COMPLETE] Native item mechanics passed."); game.GetTree().Quit(0);
         }
         catch (Exception error) { GD.PushError("[FDZF MECHANICS FAILED] " + error); game.GetTree().Quit(1); }

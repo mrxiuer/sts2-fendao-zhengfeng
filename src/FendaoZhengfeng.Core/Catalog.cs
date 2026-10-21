@@ -15,7 +15,7 @@ public sealed record Effect(string Id, string Name, EffectKind Kind, Tier Tier, 
 
 public static class Catalog
 {
-    public const string RulesVersion = "1.0.0-design.10";
+    public const string RulesVersion = "1.0.0-design.11";
     public static readonly IReadOnlyList<Effect> All = [
         C("exhaustion", "力竭", Tier.Ordinary, Rarity.Common, "开战失去1力量；每次强化再失去1。"),
         C("imbalance", "失衡", Tier.Ordinary, Rarity.Common, "开战失去1敏捷；每次强化再失去1。"),
@@ -73,7 +73,8 @@ public static class Catalog
         B("second_forge", "淬炼余火", Rarity.Rare, "卡牌可再次升级，额外获得3点伤害、格挡或治疗；每次强化额外+1。仍受升级禁令限制。", true, false, true, true, Tier.Boss),
         B("tail_refill", "续尾针线", Rarity.Rare, "非战斗时点击：支付350金币，恢复已消耗的蜥蜴尾巴。可重复使用。", true, false, true, true, Tier.Boss),
         B("evil_echo", "恶咒回响", Rarity.Rare, "你施加给敌人的负面效果变为2倍；每次强化再+1倍。不会放大净化或重复计算临时属性变化。", true, false, true, true, Tier.Boss),
-        B("flight_wings", "凌空之翼", Rarity.Rare, "受到的攻击伤害−50%，每次强化再减5%，最多−80%。每一击锁定当前生命最高的敌人，群攻也只命中该目标。", true, false, true, true, Tier.Boss)
+        B("flight_wings", "凌空之翼", Rarity.Rare, "受到的攻击伤害−50%，每次强化再减5%，最多−80%。每一击锁定当前生命最高的敌人，群攻也只命中该目标。", true, false, true, true, Tier.Boss),
+        B("gamblers_heart", "狂赌之心", Rarity.Rare, "造成与受到的伤害+10%。攻击有20%概率暴击，造成150%伤害；每次强化暴击率+5%，最多50%。同一次攻击的群攻与连击共用判定。", true, true, true, true, Tier.Elite)
     ];
     private static readonly IReadOnlyDictionary<string, Effect> byId = All.ToDictionary(effect => effect.Id, StringComparer.Ordinal);
     public static Effect Get(string id) => byId.TryGetValue(id, out var effect) ? effect : throw new RuleException("未知效果：" + id);
@@ -90,6 +91,8 @@ public static class Balance
     public static int EvilEchoMultiplier(int rank) => 2 + Math.Max(0, rank);
     public const int FlightMaxRank = 6;
     public static decimal FlightReceivedRatio(int rank) => Math.Max(0.2m, 0.5m - 0.05m * Math.Max(0, rank));
+    public const int CriticalMaxRank = 6;
+    public static decimal CriticalChance(int rank) => Math.Min(0.5m, 0.2m + 0.05m * Math.Max(0, rank));
     public static int ChaosInterval(int rank) => Math.Max(1, 4 - Math.Max(0, rank));
     public static decimal PierceRatio(int rank) => Math.Clamp(0.15m + 0.05m * Math.Max(0, rank), 0, 1);
     public static decimal ConductionRatio(int rank) => 0.20m + 0.05m * Math.Max(0, rank);

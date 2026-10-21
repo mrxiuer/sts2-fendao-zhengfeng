@@ -47,6 +47,7 @@ internal static class EffectDetails
             "second_forge" => $"\n再次升级额外增加 {3 + holding.Rank} 数值。",
             "evil_echo" => $"\n当前负面效果倍率 {Balance.EvilEchoMultiplier(holding.Rank)}。",
             "flight_wings" => $"\n当前攻击减伤 {1 - Balance.FlightReceivedRatio(holding.Rank):P0}；最高生命相同时按敌人站位顺序锁定。",
+            "gamblers_heart" => $"\n当前暴击率 {Balance.CriticalChance(holding.Rank):P0}。暴击只在实际攻击时判定。",
             "tail_refill" => racer.TailSpent ? "\n蜥蜴尾巴已消耗；点击补充。" : "\n当前无需补充。",
             _ => ""
         };

@@ -21,6 +21,20 @@ internal static class NativeRecoveryVerification
     internal static async Task Run(NGame game, RunState run, RaceSession session, bool host, bool resume)
     {
         var player = run.Players.Single();
+        async Task<bool[]> ProbeCriticalSequence()
+        {
+            var results = new List<bool>(); var modifier = RaceModifier.Active!;
+            var card = player.Deck.Cards.First(card => card.Type == MegaCrit.Sts2.Core.Entities.Cards.CardType.Attack);
+            for (int i = 0; i < 3; i++)
+            {
+                await new MegaCrit.Sts2.Core.Commands.Builders.AttackCommand(0).FromCard(card, null)
+                    .Targeting(player.Creature.CombatState!.Enemies.First(enemy => enemy.IsAlive)).WithNoAttackerAnim()
+                    .Execute(new MegaCrit.Sts2.Core.GameActions.Multiplayer.ThrowingPlayerChoiceContext());
+                results.Add(modifier.LastAttackCritical);
+            }
+            return results.ToArray();
+        }
+        string criticalPath = Path.Combine(System.Environment.GetEnvironmentVariable("FDZF_REPORT_DIR")!, "critical-start-" + session.LocalId + ".json");
         if (resume)
         {
             await Wait(() => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play, "restored first playable turn");
@@ -31,6 +45,9 @@ internal static class NativeRecoveryVerification
             await Wait(() => player.Gold == (host ? 99 : 432), "journal replays gold missing from last disconnected peer native backup");
             Check(session.Me.Count("iron_curtain") == 0 && session.Me.Count("iron_curtain", false) == 1, "curse received during combat remains pending after resume");
             Check(session.Me.Receipts.All(receipt => receipt.Id != "recovery-test-gold"), "recovered native gold is acknowledged without double payout");
+            var replayedCriticals = await ProbeCriticalSequence();
+            Check(replayedCriticals.SequenceEqual(StateJson.Deserialize<bool[]>(File.ReadAllText(criticalPath))) && RaceModifier.Active!.CriticalRolls == 3,
+                "restarting unfinished combat replays the original critical sequence from its beginning");
             session.Transport.SendMessage(new RaceMessage { Kind = "recovery_test_done" });
             await Task.Delay(600);
             GD.Print("[FDZF RECOVERY COMPLETE] " + (host ? "host" : "client") + " resumed host-owned save."); game.GetTree().Quit(0); return;
@@ -42,6 +59,8 @@ internal static class NativeRecoveryVerification
         {
             foreach (var racer in session.Engine.State.Racers.Values)
                 foreach (var id in new[] { "abrasion", "exhaustion" }) racer.Effects[id] = new() { Id = id, Grants = [new() { EventId = "fixture", ActiveBattle = 1, Source = "1" }] };
+            foreach (var racer in session.Engine.State.Racers.Values)
+                racer.Effects["gamblers_heart"] = new() { Id = "gamblers_heart" };
             await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
         }
         await Wait(() => session.Me.Effects.ContainsKey("abrasion"), "test opening curse fixture");
@@ -49,6 +68,7 @@ internal static class NativeRecoveryVerification
         var point = run.Map.StartingMapPoint.Children.OrderBy(point => point.coord.ToString(), StringComparer.Ordinal).First();
         await RunManager.Instance.EnterMapCoord(point.coord);
         await Wait(() => session.Me.InBattle && player.PlayerCombatState?.Phase == PlayerTurnPhase.Play, "initial combat ready");
+        File.WriteAllText(criticalPath, StateJson.Serialize(await ProbeCriticalSequence()));
         CombatManager.Instance.SetReadyToEndTurn(player, false);
         await Wait(() => RaceModifier.Active!.Turn >= 2 && player.PlayerCombatState?.Phase == PlayerTurnPhase.Play, "second playable turn before save");
         await CreatureCmd.SetCurrentHp(player.Creature, 333);

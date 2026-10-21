@@ -24,7 +24,7 @@ Test("small and light is a rare boss boon with no elite sacrifice access", () =>
     Check(effect.Tier == Tier.Boss && effect.Rarity == Rarity.Rare && !effect.ElitePool && effect.BossPool && effect.FirstKillPool);
     Check(effect.Description.Contains("失去3最大生命"));
 });
-Test("catalog has 57 unique effects", () => { Check(Catalog.All.Count == 57); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 57); });
+Test("catalog has 58 unique effects", () => { Check(Catalog.All.Count == 58); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 58); });
 Test("cleanse prices", () => { Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 1) == 60); Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 3) == 80); Check(Balance.CleansePrice(Catalog.Get("carapace"), 3) == 195); Check(Balance.CleansePrice(Catalog.Get("hard_shell"), 1) == null); });
 Test("repeat weight floor", () => { Check(Balance.RepeatWeight(0) == 1); Check(Balance.RepeatWeight(1) == 0.4); Check(Math.Abs(Balance.RepeatWeight(2) - 0.16) < 1e-10); Check(Balance.RepeatWeight(10) == 0.1); });
 Test("burden saturates monotonically", () => { Check(Balance.RareMultiplier(0, false) == 1); Check(Balance.RareMultiplier(8, false) == 2); Check(Balance.RareMultiplier(100000, false) < 3); Check(Balance.RareMultiplier(32, false) > Balance.RareMultiplier(8, false)); });
@@ -422,6 +422,16 @@ Test("flight scales to eighty percent reduction and capped repeat offers stay at
  e.State.Offers["stale-flight"]=new(){Id="stale-flight",Player="a",RewardKey="stale-flight",Route=Route.Grow,Candidates=["flight_wings"]};
  string before=StateJson.Serialize(e.State); bool rejected=false;
  try{e.Execute(new("stale-flight-pick","a","choose","stale-flight","flight_wings"));}catch(RuleException){rejected=true;}
+ Check(rejected && StateJson.Serialize(e.State)==before);
+});
+Test("critical chance caps and fully reinforced offers cannot be claimed twice", () => {
+ Check(Balance.CriticalChance(0)==0.2m && Balance.CriticalChance(1)==0.25m && Balance.CriticalChance(6)==0.5m && Balance.CriticalChance(99)==0.5m);
+ var e=New(); Grant(e,"a","gamblers_heart"); e.State.Racers["a"].Effects["gamblers_heart"].Rank=Balance.CriticalMaxRank;
+ foreach(var route in new[]{Route.Mixed,Route.Grow,Route.FirstKill})
+  for(int i=0;i<30;i++) Check(!Candidates.Generate(e.State,e.State.Racers["a"],"capped-critical"+i,route,true).Contains("gamblers_heart"));
+ e.State.Offers["stale-critical"]=new(){Id="stale-critical",Player="a",RewardKey="stale-critical",Route=Route.Grow,Candidates=["gamblers_heart"]};
+ string before=StateJson.Serialize(e.State); bool rejected=false;
+ try{e.Execute(new("stale-critical-pick","a","choose","stale-critical","gamblers_heart"));}catch(RuleException){rejected=true;}
  Check(rejected && StateJson.Serialize(e.State)==before);
 });
 Console.WriteLine($"{passed} checks passed");

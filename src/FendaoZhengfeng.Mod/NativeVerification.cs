@@ -26,7 +26,7 @@ internal static class NativeVerification
     {
         if (started || System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") return;
         started = true;
-        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "mechanics" or "flight") _ = NativeMechanicsVerification.Run(game);
+        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "mechanics" or "flight" or "gambler") _ = NativeMechanicsVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "economy") _ = NativeEconomyVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "heart") _ = NativeHeartVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "campaign") _ = NativeCampaignVerification.Run(game);
@@ -182,7 +182,7 @@ internal static class NativeVerification
                 && session.Me.Ghosts == 1, "scapegoat excludes player card life payments without consuming a charge");
             session.Me.Ghosts = 0;
 
-            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == EffectIcons.TextureSize), "all 50 hand-painted effect icons load from embedded PNG resources");
+            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == EffectIcons.TextureSize), $"all {Catalog.All.Count} hand-painted effect icons load from embedded PNG resources");
             Check(ReferenceEquals(ModelDb.Modifier<RaceModifier>().Icon, EffectIcons.Mode), "native mode icon replaces missing NOPE placeholder");
             EffectHud.Refresh();
             Check(EffectHud.IsVisible && EffectHud.IconCount == session.Me.Effects.Count, "effect icons stay visible near relics with race panel closed");

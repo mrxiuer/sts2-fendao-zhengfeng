@@ -33,6 +33,7 @@ public sealed partial class RaceModifier
 {
     public override Task BeforeAttack(AttackCommand command)
     {
+        BeginCriticalAttack(command);
         if (FlightWings.Applies(command))
         {
             // Forced targeting also replaces random targeting, without rolling

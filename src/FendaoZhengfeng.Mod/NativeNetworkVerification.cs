@@ -139,6 +139,7 @@ internal static class NativeNetworkVerification
                 if (!host) Check(session.Me.BurdenSnapshot > 0, "remote curse survives process restart");
                 Check(session.Engine.State.Racers["1"].Effects["evil_echo"].Rank == 1, "reinforced evil echo survives real ENet checkpoint restart");
                 Check(session.Engine.State.Racers["1"].Effects.ContainsKey("flight_wings"), "flight holding survives real ENet checkpoint restart");
+                Check(session.Engine.State.Racers["1"].Effects["gamblers_heart"].Rank == 1, "critical reinforcement survives real ENet checkpoint restart");
                 if (host) await Wait(() => remoteDone, "resumed client completion");
                 else { transport.SendMessage(new RaceMessage { Kind = "verification_done" }); await Task.Delay(500); }
                 GD.Print("[FDZF NETWORK RESUME COMPLETE] " + (host ? "host" : "client") + " restored and entered live combat."); game.GetTree().Quit(0); return;
@@ -189,6 +190,7 @@ internal static class NativeNetworkVerification
             {
                 session.Me.Effects["evil_echo"] = new() { Id = "evil_echo", Rank = 1 };
                 session.Me.Effects["flight_wings"] = new() { Id = "flight_wings" };
+                session.Me.Effects["gamblers_heart"] = new() { Id = "gamblers_heart", Rank = 1 };
                 await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
             }
             await Wait(() => session.Engine.State.Racers["1"].Effects.GetValueOrDefault("evil_echo")?.Rank == 1, "evil echo holding crosses actual ENet transport");
@@ -203,8 +205,21 @@ internal static class NativeNetworkVerification
             flightHero.LoseBlockInternal(flightHero.Block); int beforeFlightHit = flightHero.CurrentHp;
             await CreatureCmd.Damage(new ThrowingPlayerChoiceContext(), flightHero, 20,
                 MegaCrit.Sts2.Core.ValueProps.ValueProp.Move | MegaCrit.Sts2.Core.ValueProps.ValueProp.Unpowered, echoTarget, null, null);
-            Check(flightHero.CurrentHp == beforeFlightHit - (host ? 10 : 20),
+            Check(flightHero.CurrentHp == beforeFlightHit - (host ? 11 : 20),
                 "real ENet flight reduces attacks only in its holder's independent battle");
+            Check(session.Engine.State.Racers["1"].Effects.GetValueOrDefault("gamblers_heart")?.Rank == 1, "critical reinforcement crosses actual ENet transport");
+            await CreatureCmd.SetMaxAndCurrentHp(echoTarget, Math.Max(echoTarget.MaxHp, 10000));
+            echoTarget.LoseBlockInternal(echoTarget.Block); int beforeGamblerDamage = echoTarget.CurrentHp;
+            await CreatureCmd.Damage(new ThrowingPlayerChoiceContext(), echoTarget, 10,
+                MegaCrit.Sts2.Core.ValueProps.ValueProp.Unpowered, run.Players.Single().Creature, null, null);
+            Check(echoTarget.CurrentHp == beforeGamblerDamage - (host ? 11 : 10), "real ENet gambler damage bonus applies only to its holder's independent battle");
+            var criticalModifier = RaceModifier.Active!; int beforeCriticalRolls = criticalModifier.CriticalRolls;
+            var criticalProbe = await new MegaCrit.Sts2.Core.Commands.Builders.AttackCommand(100)
+                .FromCard(run.Players.Single().Deck.Cards.First(card => card.Type == MegaCrit.Sts2.Core.Entities.Cards.CardType.Attack), null)
+                .Targeting(echoTarget).Unpowered().WithNoAttackerAnim().Execute(new ThrowingPlayerChoiceContext());
+            Check(criticalModifier.CriticalRolls == beforeCriticalRolls + (host ? 1 : 0)
+                && criticalProbe.Results.Single().Single().UnblockedDamage == (host ? criticalModifier.LastAttackCritical ? 165 : 110 : 100),
+                "real ENet actual attack rolls criticals only for its holder and applies the matching damage");
             await CreatureCmd.Damage(new ThrowingPlayerChoiceContext(), run.Players.Single().Creature, 9999,
                 MegaCrit.Sts2.Core.ValueProps.ValueProp.Unpowered, run.Players.Single().Creature.CombatState!.Enemies.First(), null, null);
             Check(session.Me.RevivalCount == 1 && run.Players.Single().Creature.CurrentHp > 0,

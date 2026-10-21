@@ -70,6 +70,7 @@ public sealed partial class RaceModifier : ModifierModel
     {
         ResetTierCombat();
         ChaosChannels = 0;
+        ResetCriticalAttacks();
         Turn = 0; ManualCards = 0; firstDraw = false; barbsHits.Clear(); hpLost.Clear(); initialEnemies.Clear(); openingMaxHp.Clear();
         string key = RaceRuntime.RoomKey;
         replayOpening = RaceRuntime.ReplayingBattleKey == key && Me.InBattle;
@@ -163,6 +164,7 @@ public sealed partial class RaceModifier : ModifierModel
             : dealer?.IsEnemy == true ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1m;
         if (target == Player.Creature && Me.Has("flight_wings") && props.HasFlag(ValueProp.Move))
             multiplier *= Balance.FlightReceivedRatio(Me.Effects["flight_wings"].Rank);
+        multiplier *= GamblerDamageMultiplier(target, props, dealer, cardSource, cardPlay);
         return multiplier;
     }
     public override decimal ModifyBlockMultiplicative(Creature target, decimal block, ValueProp props, CardModel? cardSource, CardPlay? cardPlay)

@@ -1,4 +1,4 @@
-param([ValidateSet('Single','Mechanics','Flight','Recovery','RewardRecovery','Economy','Heart','HeartNetwork','Campaign','Advanced','Revival','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2')
+param([ValidateSet('Single','Mechanics','Flight','Gambler','Recovery','RewardRecovery','Economy','Heart','HeartNetwork','Campaign','Advanced','Revival','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2')
 $ErrorActionPreference='Stop'
 $repoRoot=Split-Path -Parent $PSScriptRoot
 $reportRoot=Join-Path $repoRoot 'artifacts\verification'
@@ -40,7 +40,7 @@ function Wait-Verification($Records) {
     }
     foreach($record in $Records) {
       $log=Get-Content -LiteralPath $record.Log -Raw
-      $marker=if($Suite -eq 'RewardRecovery') {'[FDZF REWARD RECOVERY COMPLETE]'} elseif($Suite -eq 'Recovery') {'[FDZF RECOVERY COMPLETE]'} elseif($record.HeartNetwork) {'[FDZF HEART NETWORK COMPLETE]'} elseif($record.Vanilla) {'[FDZF VANILLA COMPLETE]'} elseif($record.Role -eq 'flight') {'[FDZF FLIGHT COMPLETE]'} elseif($record.Role -eq 'mechanics') {'[FDZF MECHANICS COMPLETE]'} elseif($record.Role -eq 'economy') {'[FDZF ECONOMY COMPLETE]'} elseif($record.Role -eq 'heart') {'[FDZF HEART COMPLETE]'} elseif($record.Role -eq 'campaign') {'[FDZF CAMPAIGN COMPLETE]'} elseif($record.Role -eq 'revival') {'[FDZF REVIVAL COMPLETE]'} elseif($record.Role -eq 'advanced') {'[FDZF ADVANCED COMPLETE]'} elseif($record.Role -eq 'single') {'[FDZF VERIFY COMPLETE]'} elseif($record.Resume) {'[FDZF NETWORK RESUME COMPLETE]'} else {'[FDZF NETWORK COMPLETE]'}
+      $marker=if($Suite -eq 'RewardRecovery') {'[FDZF REWARD RECOVERY COMPLETE]'} elseif($Suite -eq 'Recovery') {'[FDZF RECOVERY COMPLETE]'} elseif($record.HeartNetwork) {'[FDZF HEART NETWORK COMPLETE]'} elseif($record.Vanilla) {'[FDZF VANILLA COMPLETE]'} elseif($record.Role -eq 'gambler') {'[FDZF GAMBLER COMPLETE]'} elseif($record.Role -eq 'flight') {'[FDZF FLIGHT COMPLETE]'} elseif($record.Role -eq 'mechanics') {'[FDZF MECHANICS COMPLETE]'} elseif($record.Role -eq 'economy') {'[FDZF ECONOMY COMPLETE]'} elseif($record.Role -eq 'heart') {'[FDZF HEART COMPLETE]'} elseif($record.Role -eq 'campaign') {'[FDZF CAMPAIGN COMPLETE]'} elseif($record.Role -eq 'revival') {'[FDZF REVIVAL COMPLETE]'} elseif($record.Role -eq 'advanced') {'[FDZF ADVANCED COMPLETE]'} elseif($record.Role -eq 'single') {'[FDZF VERIFY COMPLETE]'} elseif($record.Resume) {'[FDZF NETWORK RESUME COMPLETE]'} else {'[FDZF NETWORK COMPLETE]'}
       if($record.Process.ExitCode -ne 0 -or !$log.Contains($marker)) {throw "Verification failed: $($record.Log)"}
       if($log -match 'LocException|ObjectDisposedException|turn loop died|\[FDZF (?:VERIFY|NETWORK|ADVANCED|CAMPAIGN|REVIVAL|HEART|ECONOMY) FAILED\]') {throw "Native runtime error: $($record.Log)"}
       Write-Output "PASS $($record.Role) resume=$($record.Resume): $($record.Log)"
@@ -77,3 +77,5 @@ if($Suite -in @('Recovery','RewardRecovery')) {
 if($Suite -in @('Mechanics','All')) {Write-Output 'Starting native new-item mechanics verification';Wait-Verification @((Start-VerificationProcess 'mechanics' $false))}
 
 if($Suite -eq 'Flight') {Write-Output 'Starting focused native flight verification';Wait-Verification @((Start-VerificationProcess 'flight' $false))}
+
+if($Suite -eq 'Gambler') {Write-Output 'Starting focused native critical verification';Wait-Verification @((Start-VerificationProcess 'gambler' $false))}
