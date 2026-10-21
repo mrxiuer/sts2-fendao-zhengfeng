@@ -57,4 +57,6 @@ public sealed partial class RaceConfig
     [ConfigIgnore] public static bool Effect_resonant_circuit { get => EnabledIds().Contains("resonant_circuit"); set => SetEffect("resonant_circuit", value); }
     [ConfigIgnore] public static bool Effect_second_forge { get => EnabledIds().Contains("second_forge"); set => SetEffect("second_forge", value); }
     [ConfigIgnore] public static bool Effect_tail_refill { get => EnabledIds().Contains("tail_refill"); set => SetEffect("tail_refill", value); }
+    [ConfigIgnore] public static bool Effect_evil_echo { get => EnabledIds().Contains("evil_echo"); set => SetEffect("evil_echo", value); }
+    [ConfigIgnore] public static bool Effect_flight_wings { get => EnabledIds().Contains("flight_wings"); set => SetEffect("flight_wings", value); }
 }

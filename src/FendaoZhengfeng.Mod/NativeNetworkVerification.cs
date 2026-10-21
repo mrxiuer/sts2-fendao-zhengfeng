@@ -137,6 +137,8 @@ internal static class NativeNetworkVerification
                 Check(run.CurrentMapCoord == session.Restored!.Value.Save.VisitedMapCoords.Last(), "resumed at committed next map node");
                 Check(session.Me.Battle == session.Restored!.Value.Match.Racers[session.LocalId].Battle + 1, "resumption advances one new battle only");
                 if (!host) Check(session.Me.BurdenSnapshot > 0, "remote curse survives process restart");
+                Check(session.Engine.State.Racers["1"].Effects["evil_echo"].Rank == 1, "reinforced evil echo survives real ENet checkpoint restart");
+                Check(session.Engine.State.Racers["1"].Effects.ContainsKey("flight_wings"), "flight holding survives real ENet checkpoint restart");
                 if (host) await Wait(() => remoteDone, "resumed client completion");
                 else { transport.SendMessage(new RaceMessage { Kind = "verification_done" }); await Task.Delay(500); }
                 GD.Print("[FDZF NETWORK RESUME COMPLETE] " + (host ? "host" : "client") + " restored and entered live combat."); game.GetTree().Quit(0); return;
@@ -183,6 +185,26 @@ internal static class NativeNetworkVerification
             }
             await RunManager.Instance.EnterRoomDebug(host ? RoomType.Elite : RoomType.Monster);
             await Wait(() => RaceModifier.Active?.Turn == 1 && run.Players[0].PlayerCombatState?.Phase == PlayerTurnPhase.Play, "first combat ready");
+            if (host)
+            {
+                session.Me.Effects["evil_echo"] = new() { Id = "evil_echo", Rank = 1 };
+                session.Me.Effects["flight_wings"] = new() { Id = "flight_wings" };
+                await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
+            }
+            await Wait(() => session.Engine.State.Racers["1"].Effects.GetValueOrDefault("evil_echo")?.Rank == 1, "evil echo holding crosses actual ENet transport");
+            var echoTarget = run.Players[0].Creature.CombatState!.Enemies.First(enemy => enemy.IsAlive);
+            if (echoTarget.GetPower<MegaCrit.Sts2.Core.Models.Powers.ArtifactPower>() is { } artifact) await PowerCmd.Remove(artifact);
+            int echoWeak = echoTarget.GetPowerAmount<MegaCrit.Sts2.Core.Models.Powers.WeakPower>();
+            await PowerCmd.Apply<MegaCrit.Sts2.Core.Models.Powers.WeakPower>(new ThrowingPlayerChoiceContext(), echoTarget, 1, run.Players[0].Creature, run.Players[0].Deck.Cards.First());
+            Check(echoTarget.GetPowerAmount<MegaCrit.Sts2.Core.Models.Powers.WeakPower>() == echoWeak + (host ? 3 : 1),
+                "real ENet evil echo applies only to its holder's independent battle");
+            Check(session.Engine.State.Racers["1"].Effects.ContainsKey("flight_wings"), "flight holding crosses actual ENet transport");
+            var flightHero = run.Players.Single().Creature;
+            flightHero.LoseBlockInternal(flightHero.Block); int beforeFlightHit = flightHero.CurrentHp;
+            await CreatureCmd.Damage(new ThrowingPlayerChoiceContext(), flightHero, 20,
+                MegaCrit.Sts2.Core.ValueProps.ValueProp.Move | MegaCrit.Sts2.Core.ValueProps.ValueProp.Unpowered, echoTarget, null, null);
+            Check(flightHero.CurrentHp == beforeFlightHit - (host ? 10 : 20),
+                "real ENet flight reduces attacks only in its holder's independent battle");
             await CreatureCmd.Damage(new ThrowingPlayerChoiceContext(), run.Players.Single().Creature, 9999,
                 MegaCrit.Sts2.Core.ValueProps.ValueProp.Unpowered, run.Players.Single().Creature.CombatState!.Enemies.First(), null, null);
             Check(session.Me.RevivalCount == 1 && run.Players.Single().Creature.CurrentHp > 0,

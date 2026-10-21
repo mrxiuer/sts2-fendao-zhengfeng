@@ -24,7 +24,7 @@ Test("small and light is a rare boss boon with no elite sacrifice access", () =>
     Check(effect.Tier == Tier.Boss && effect.Rarity == Rarity.Rare && !effect.ElitePool && effect.BossPool && effect.FirstKillPool);
     Check(effect.Description.Contains("失去3最大生命"));
 });
-Test("catalog has 55 unique effects", () => { Check(Catalog.All.Count == 55); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 55); });
+Test("catalog has 57 unique effects", () => { Check(Catalog.All.Count == 57); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 57); });
 Test("cleanse prices", () => { Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 1) == 60); Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 3) == 80); Check(Balance.CleansePrice(Catalog.Get("carapace"), 3) == 195); Check(Balance.CleansePrice(Catalog.Get("hard_shell"), 1) == null); });
 Test("repeat weight floor", () => { Check(Balance.RepeatWeight(0) == 1); Check(Balance.RepeatWeight(1) == 0.4); Check(Math.Abs(Balance.RepeatWeight(2) - 0.16) < 1e-10); Check(Balance.RepeatWeight(10) == 0.1); });
 Test("burden saturates monotonically", () => { Check(Balance.RareMultiplier(0, false) == 1); Check(Balance.RareMultiplier(8, false) == 2); Check(Balance.RareMultiplier(100000, false) < 3); Check(Balance.RareMultiplier(32, false) > Balance.RareMultiplier(8, false)); });
@@ -375,6 +375,7 @@ Test("new combat scaling has explicit interval and penetration floors and caps",
  Check(Balance.ChaosInterval(0)==4 && Balance.ChaosInterval(1)==3 && Balance.ChaosInterval(100)==1);
  Check(Balance.PierceRatio(0)==0.15m && Balance.PierceRatio(1)==0.20m && Balance.PierceRatio(100)==1);
  Check(Balance.ConductionRatio(0)==0.20m && Balance.ConductionRatio(1)==0.25m);
+ Check(Balance.EvilEchoMultiplier(0)==2 && Balance.EvilEchoMultiplier(1)==3 && Balance.EvilEchoMultiplier(-5)==2);
 });
 Test("queued saves coalesce while a disk write is blocked and dispose flushes latest state", () => {
  using var entered=new ManualResetEventSlim(); using var release=new ManualResetEventSlim();
@@ -412,5 +413,15 @@ Test("atomic queued snapshots reach the real disk and leave no temporary files",
   foreach(string path in new[]{match,checkpoint,match+".tmp",checkpoint+".tmp"}) if(File.Exists(path)) File.Delete(path);
   if(Directory.Exists(folder)) Directory.Delete(folder);
  }
+});
+Test("flight scales to eighty percent reduction and capped repeat offers stay atomic", () => {
+ Check(Balance.FlightReceivedRatio(0)==0.5m && Balance.FlightReceivedRatio(1)==0.45m && Balance.FlightReceivedRatio(6)==0.2m && Balance.FlightReceivedRatio(99)==0.2m);
+ var e=New(); Grant(e,"a","flight_wings"); e.State.Racers["a"].Effects["flight_wings"].Rank=Balance.FlightMaxRank;
+ foreach(var route in new[]{Route.Mixed,Route.Grow,Route.FirstKill})
+  for(int i=0;i<30;i++) Check(!Candidates.Generate(e.State,e.State.Racers["a"],"capped-flight"+i,route,true).Contains("flight_wings"));
+ e.State.Offers["stale-flight"]=new(){Id="stale-flight",Player="a",RewardKey="stale-flight",Route=Route.Grow,Candidates=["flight_wings"]};
+ string before=StateJson.Serialize(e.State); bool rejected=false;
+ try{e.Execute(new("stale-flight-pick","a","choose","stale-flight","flight_wings"));}catch(RuleException){rejected=true;}
+ Check(rejected && StateJson.Serialize(e.State)==before);
 });
 Console.WriteLine($"{passed} checks passed");

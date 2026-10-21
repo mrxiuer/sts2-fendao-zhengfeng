@@ -26,7 +26,7 @@ internal static class NativeVerification
     {
         if (started || System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") return;
         started = true;
-        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "mechanics") _ = NativeMechanicsVerification.Run(game);
+        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "mechanics" or "flight") _ = NativeMechanicsVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "economy") _ = NativeEconomyVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "heart") _ = NativeHeartVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "campaign") _ = NativeCampaignVerification.Run(game);

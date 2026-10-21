@@ -210,6 +210,7 @@ public sealed class Engine(Match state)
     {
         if (e.Id is "small_light" or "good_connections" or "tail_refill" && p.Has(e.Id)) throw new RuleException("此常驻主动增益不能重复持有。");
         if (e.Id == "war_feeds_war" && Balance.WarFeedsWarStacks(p.Effects.GetValueOrDefault(e.Id)) >= 3) throw new RuleException("以战养战已达到3层上限。");
+        if (e.Id == "flight_wings" && p.Has(e.Id) && p.Effects[e.Id].Rank >= Balance.FlightMaxRank) throw new RuleException("凌空之翼已达到80%减伤上限。");
         p.History[e.Id] = p.History.GetValueOrDefault(e.Id) + 1;
         if (e.Id == "r_key") p.ResetCharges++;
         if (e.Id == "expedition" && p.Has(e.Id)) AdvanceExpedition(p, eventId);

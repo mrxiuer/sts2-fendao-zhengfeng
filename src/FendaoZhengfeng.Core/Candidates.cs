@@ -41,6 +41,7 @@ public static class Candidates
             _ => e.Kind == EffectKind.Boon && e.FirstKillPool
         }).Where(e => e.Id is not ("small_light" or "good_connections" or "tail_refill") || !p.Has(e.Id))
             .Where(e => e.Id != "war_feeds_war" || Balance.WarFeedsWarStacks(p.Effects.GetValueOrDefault(e.Id)) < 3)
+            .Where(e => e.Id != "flight_wings" || !p.Has(e.Id) || p.Effects[e.Id].Rank < Balance.FlightMaxRank)
             .Where(e => e.Id != "scapegoat" || !p.Has(e.Id) || p.Ghosts < 2).ToList();
         double Weight(Effect e) => e.Weight * (e.Kind == EffectKind.Curse ? 1 : Balance.RepeatWeight(p.History.GetValueOrDefault(e.Id)));
         void Take(Func<Effect, bool> filter)

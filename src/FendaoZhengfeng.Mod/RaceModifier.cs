@@ -158,7 +158,13 @@ public sealed partial class RaceModifier : ModifierModel
         await ApplyReceipts(ctx, true);
     }
     public override decimal ModifyDamageMultiplicative(Creature? target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource, CardPlay? cardPlay)
-        => dealer == Player.Creature && cardSource?.Type == CardType.Attack ? (decimal)(1 + Me.Growth) * Dice / 100m : dealer?.IsEnemy == true ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1m;
+    {
+        decimal multiplier = dealer == Player.Creature && cardSource?.Type == CardType.Attack ? (decimal)(1 + Me.Growth) * Dice / 100m
+            : dealer?.IsEnemy == true ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1m;
+        if (target == Player.Creature && Me.Has("flight_wings") && props.HasFlag(ValueProp.Move))
+            multiplier *= Balance.FlightReceivedRatio(Me.Effects["flight_wings"].Rank);
+        return multiplier;
+    }
     public override decimal ModifyBlockMultiplicative(Creature target, decimal block, ValueProp props, CardModel? cardSource, CardPlay? cardPlay)
         => target == Player.Creature ? (Me.Has("all_in") && Turn == 1 ? 0 : (decimal)(1 + Me.Growth)) : target.IsEnemy ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1;
     public override decimal ModifyHpLostAfterOstyLate(Creature target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource)
@@ -183,6 +189,7 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override Task BeforeCardPlayed(CardPlay play)
     {
+        FlightWings.RetargetCard(play);
         TierBeforePlay(play);
         if (play.IsFirstInSeries) barbsHits.RemoveWhere(hit => hit.Item1 == play.Card);
         if (!play.IsAutoPlay && play.IsFirstInSeries)
