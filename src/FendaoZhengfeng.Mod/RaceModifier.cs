@@ -54,6 +54,9 @@ public sealed partial class RaceModifier : ModifierModel
     [SavedProperty] public string OpeningStatuses { get; set; } = "[]";
     private bool replayOpening;
     [SavedProperty] public int AppliedMaxHpBonus { get; set; }
+    // Registers the extension property's name in the native binary serializer.
+    // Individual cards carry its value in SerializableCard.Props.
+    [SavedProperty] public int FdzfSecondForgeBonus { get; set; }
     [SavedProperty]
     public string WearJson
     {
@@ -66,6 +69,7 @@ public sealed partial class RaceModifier : ModifierModel
     public override async Task BeforeCombatStart()
     {
         ResetTierCombat();
+        ChaosChannels = 0;
         Turn = 0; ManualCards = 0; firstDraw = false; barbsHits.Clear(); hpLost.Clear(); initialEnemies.Clear(); openingMaxHp.Clear();
         string key = RaceRuntime.RoomKey;
         replayOpening = RaceRuntime.ReplayingBattleKey == key && Me.InBattle;
@@ -148,6 +152,7 @@ public sealed partial class RaceModifier : ModifierModel
     {
         if (player != Player) return;
         await TierTurnStart(ctx);
+        await ChaosTurnStart(ctx);
         if (Turn != 1) return;
         if (N("clutter") > 0) for (int i = 0; i < 1 + N("clutter"); i++) await CardPileCmd.AddGeneratedCardToCombat(Player.Creature.CombatState!.CreateCard<ClutterCard>(Player), PileType.Hand, null);
         await ApplyReceipts(ctx, true);
@@ -171,6 +176,7 @@ public sealed partial class RaceModifier : ModifierModel
     { if (initialEnemies.Contains(creature) && delta < 0) hpLost[creature] = hpLost.GetValueOrDefault(creature) + (int)-delta; return Task.CompletedTask; }
     public override async Task AfterDamageGiven(PlayerChoiceContext ctx, Creature? dealer, DamageResult result, ValueProp props, Creature target, CardModel? cardSource)
     {
+        await ConductDamage(ctx, dealer, result, target);
         if (reflecting || dealer != Player.Creature || cardSource?.Type != CardType.Attack || result.UnblockedDamage <= 0 || !initialEnemies.Contains(target) || N("barbs") == 0) return;
         if (!barbsHits.Add((cardSource, target))) return;
         reflecting = true; try { await CreatureCmd.Damage(ctx, Player.Creature, N("barbs"), ValueProp.Unpowered, null, null, null); } finally { reflecting = false; }
@@ -251,6 +257,7 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public async Task UpdateMaxHp()
     {
+        SecondForge.RefreshOwned();
         decimal basis = Player.Creature.MaxHp - AppliedMaxHpBonus + SmallLightLoss;
         int target = (int)Math.Floor(basis * (1 + (Me.Has("death_defiance") ? Me.RevivalCount * (0.1m + 0.01m * Me.Effects["death_defiance"].Rank) : 0))) - SmallLightLoss;
         target = Math.Max(1, target);
@@ -276,6 +283,10 @@ public sealed partial class RaceModifier : ModifierModel
                 switch (r.Kind)
                 {
                     case "gold": await PlayerCmd.GainGold(r.Amount, Player); break;
+                    case "refill_tail":
+                        var tail = Player.Relics.OfType<LizardTail>().FirstOrDefault(tail => tail.WasUsed);
+                        if (tail != null) { tail.WasUsed = false; tail.Status = MegaCrit.Sts2.Core.Entities.Relics.RelicStatus.Normal; }
+                        break;
                     case "spend_gold": await PlayerCmd.LoseGold(r.Amount, Player); break;
                     case "heal": await CreatureCmd.Heal(Player.Creature, r.Amount); break;
                     case "heal_percent": await CreatureCmd.Heal(Player.Creature, Math.Max(1, Math.Floor(Player.Creature.MaxHp * r.Amount / 100m))); break;

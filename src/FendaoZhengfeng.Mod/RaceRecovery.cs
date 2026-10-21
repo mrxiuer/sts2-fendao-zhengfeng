@@ -66,12 +66,13 @@ internal sealed class RaceRecovery(RaceSession session)
             session.AppliedReceiptIds(), RaceModifier.Active is { } modifier ? StateJson.Deserialize<string[]>(modifier.AppliedTrades) : [],
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
-    internal void SendSnapshot()
+    internal RecoverySnapshot? SendSnapshot()
     {
-        if (session.IsMock || !RaceRuntime.Live || session.WaitingAtCheckpoint || !session.IsHost && !session.Transport.IsConnected) return;
+        if (session.IsMock || !RaceRuntime.Live || session.WaitingAtCheckpoint || !session.IsHost && !session.Transport.IsConnected) return null;
         var snapshot = Capture(session); lastCapture = Environment.TickCount64;
         if (session.IsHost) Accept(snapshot, session.LocalId);
         else if (session.Transport.IsConnected) session.Transport.SendMessage(new RaceMessage { Kind = "recovery_snapshot", Content = RaceMessage.Compress(StateJson.Serialize(snapshot)) }, session.HostId);
+        return snapshot;
     }
     internal void Tick()
     {

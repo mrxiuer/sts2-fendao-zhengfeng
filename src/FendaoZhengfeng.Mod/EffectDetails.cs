@@ -41,6 +41,11 @@ internal static class EffectDetails
             "small_light" => $"\n累计支付 {modifier?.SmallLightLoss ?? 0} 最大生命。",
             "good_connections" => $"\n点击图标购买；下次价格 {100 + 50 * racer.Purchases} 金币，已购买 {racer.Purchases} 次。待接收 {session!.Engine.State.Trades.Count(trade => trade.Buyer == racer.Id && !trade.Delivered)} 张，待交出 {session.Engine.State.Trades.Count(trade => trade.Seller == racer.Id && !trade.Removed)} 张。",
             "r_key" => $"\n点击图标使用；可用 {racer.ResetCharges} 次，已重置 {racer.ResetCount} 次，怪物生命/伤害/格挡额外 +{20 * racer.ResetCount}%。",
+            "chaos_core" => $"\n当前间隔 {Balance.ChaosInterval(holding.Rank)} 回合。",
+            "piercing_edge" => $"\n当前穿透 {Balance.PierceRatio(holding.Rank):P0}。",
+            "resonant_circuit" => $"\n当前传导 {Balance.ConductionRatio(holding.Rank):P0}。",
+            "second_forge" => $"\n再次升级额外增加 {3 + holding.Rank} 数值。",
+            "tail_refill" => racer.TailSpent ? "\n蜥蜴尾巴已消耗；点击补充。" : "\n当前无需补充。",
             _ => ""
         };
         if (effect.Kind != EffectKind.Boon) result += "\n持续至净化；净化移除全部同名层数。";

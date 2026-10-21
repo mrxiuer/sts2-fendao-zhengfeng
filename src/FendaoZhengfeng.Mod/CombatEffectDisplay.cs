@@ -18,7 +18,7 @@ public sealed class RaceDisplayPower : PowerModel
 {
     public string EffectId { get; set; } = "exhaustion";
     public override PowerType Type => Catalog.Get(EffectId).Kind == EffectKind.Boon ? PowerType.Buff : PowerType.Debuff;
-    public override PowerStackType StackType => EffectId is "fortune_dice" or "bitter_sweet" or "hard_shell" or "scapegoat" or "no_plan" or "r_key" or "expedition" or "combo_tax" or "cornered" or "disorder" or "combat_cycle" or "heavy_followup" or "desperate_echo" ? PowerStackType.Counter : PowerStackType.Single;
+    public override PowerStackType StackType => EffectId is "fortune_dice" or "bitter_sweet" or "hard_shell" or "scapegoat" or "no_plan" or "r_key" or "expedition" or "combo_tax" or "cornered" or "disorder" or "combat_cycle" or "heavy_followup" or "desperate_echo" or "chaos_core" or "piercing_edge" or "resonant_circuit" or "second_forge" ? PowerStackType.Counter : PowerStackType.Single;
     public override bool ShouldReceiveCombatHooks => false;
     public override bool ShouldPlayVfx => false;
     public override LocString Title => new(ModEntry.Id, "display." + EffectId + ".title");
@@ -94,6 +94,10 @@ internal static class CombatEffectDisplay
                 "combat_cycle" => modifier.CycleUsed ? 0 : 1,
                 "heavy_followup" => modifier.HeavyUsed ? 0 : 1,
                 "desperate_echo" => modifier.EchoUsed ? 0 : 1,
+                "chaos_core" => Balance.ChaosInterval(session.Me.Effects[key.Item2].Rank) - (Math.Max(1, modifier.Turn) - 1) % Balance.ChaosInterval(session.Me.Effects[key.Item2].Rank),
+                "piercing_edge" => (int)(100 * Balance.PierceRatio(session.Me.Effects[key.Item2].Rank)),
+                "resonant_circuit" => (int)(100 * Balance.ConductionRatio(session.Me.Effects[key.Item2].Rank)),
+                "second_forge" => 3 + session.Me.Effects[key.Item2].Rank,
                 _ => session.Me.Count(key.Item2)
             };
             AccessTools.Field(typeof(PowerModel), "_amount").SetValue(entry.Model, amount);

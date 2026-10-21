@@ -6,13 +6,13 @@ void Check(bool value, string message = "Assertion failed") { if (!value) throw 
 Engine New() => new(new Match { Id = "test", Seed = "seed", Racers = new() { ["a"] = new() { Id = "a" }, ["b"] = new() { Id = "b" }, ["c"] = new() { Id = "c" } } });
 void Grant(Engine engine, string player, string id, int count = 1) { engine.State.Racers[player].Effects[id] = new() { Id = id, Grants = Enumerable.Range(0, count).Select(i => new Grant { EventId = i.ToString(), Source = "a", ActiveBattle = 1 }).ToList() }; }
 Test("owned permanent actives leave every pool and stale grants are atomic", () => {
-    var e = New(); Grant(e, "a", "small_light"); Grant(e, "a", "good_connections");
+    var e = New(); Grant(e, "a", "small_light"); Grant(e, "a", "good_connections"); Grant(e, "a", "tail_refill");
     foreach (var route in new[] { Route.Mixed, Route.Grow, Route.FirstKill })
         for (int i = 0; i < 40; i++) {
             var picks = Candidates.Generate(e.State, e.State.Racers["a"], "owned" + i, route, true);
-            Check(!picks.Contains("small_light") && !picks.Contains("good_connections"));
+            Check(!picks.Contains("small_light") && !picks.Contains("good_connections") && !picks.Contains("tail_refill"));
         }
-    foreach (var id in new[] { "small_light", "good_connections" }) {
+    foreach (var id in new[] { "small_light", "good_connections", "tail_refill" }) {
         e.State.Offers[id] = new() { Id = id, Player = "a", RewardKey = "stale:" + id, Route = Route.Grow, Candidates = [id] };
         var before = StateJson.Serialize(e.State); bool rejected = false;
         try { e.Execute(new("duplicate:" + id, "a", "choose", id, id)); } catch (RuleException) { rejected = true; }
@@ -24,7 +24,7 @@ Test("small and light is a rare boss boon with no elite sacrifice access", () =>
     Check(effect.Tier == Tier.Boss && effect.Rarity == Rarity.Rare && !effect.ElitePool && effect.BossPool && effect.FirstKillPool);
     Check(effect.Description.Contains("失去3最大生命"));
 });
-Test("catalog has 50 unique effects", () => { Check(Catalog.All.Count == 50); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 50); });
+Test("catalog has 55 unique effects", () => { Check(Catalog.All.Count == 55); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 55); });
 Test("cleanse prices", () => { Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 1) == 60); Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 3) == 80); Check(Balance.CleansePrice(Catalog.Get("carapace"), 3) == 195); Check(Balance.CleansePrice(Catalog.Get("hard_shell"), 1) == null); });
 Test("repeat weight floor", () => { Check(Balance.RepeatWeight(0) == 1); Check(Balance.RepeatWeight(1) == 0.4); Check(Math.Abs(Balance.RepeatWeight(2) - 0.16) < 1e-10); Check(Balance.RepeatWeight(10) == 0.1); });
 Test("burden saturates monotonically", () => { Check(Balance.RareMultiplier(0, false) == 1); Check(Balance.RareMultiplier(8, false) == 2); Check(Balance.RareMultiplier(100000, false) < 3); Check(Balance.RareMultiplier(32, false) > Balance.RareMultiplier(8, false)); });
@@ -353,5 +353,64 @@ Test("war feeds war stacks through acquisition to three and never heals on sacri
  string before=StateJson.Serialize(e.State); bool rejected=false;
  try{e.Execute(new("stale-war-pick","a","choose","stale-war","war_feeds_war"));}catch(RuleException){rejected=true;}
  Check(rejected && StateJson.Serialize(e.State)==before);
+});
+Test("tail refill costs 350 and reserves the spent native relic once", () => {
+ var e=New(); Grant(e,"a","tail_refill"); var p=e.State.Racers["a"]; p.TailSpent=true; p.Gold=1000;
+ var c=new Command("refill","a","tail_refill"); e.Execute(c); p=e.State.Racers["a"];
+ Check(!p.TailSpent && p.Receipts.Single(r=>r.Kind=="spend_gold").Amount==350 && p.Receipts.Count(r=>r.Kind=="refill_tail")==1);
+ Check(!e.Execute(c)); p.TailSpent=true; var before=StateJson.Serialize(e.State); bool rejected=false;
+ try{e.Execute(new("double","a","tail_refill"));}catch(RuleException){rejected=true;}
+ Check(rejected && before==StateJson.Serialize(e.State));
+});
+Test("tail refill invalid conditions preserve money and state", () => {
+ foreach(var reason in new[]{"unspent","combat","poor","no-item"}) {
+  var e=New(); Grant(e,"a","tail_refill"); var p=e.State.Racers["a"]; p.TailSpent=true; p.Gold=350;
+  if(reason=="unspent") p.TailSpent=false; if(reason=="combat") p.InBattle=true; if(reason=="poor") p.Gold=349; if(reason=="no-item") p.Effects.Clear();
+  var before=StateJson.Serialize(e.State); bool rejected=false;
+  try{e.Execute(new("bad","a","tail_refill"));}catch(RuleException){rejected=true;}
+  Check(rejected && before==StateJson.Serialize(e.State));
+ }
+});
+Test("new combat scaling has explicit interval and penetration floors and caps", () => {
+ Check(Balance.ChaosInterval(0)==4 && Balance.ChaosInterval(1)==3 && Balance.ChaosInterval(100)==1);
+ Check(Balance.PierceRatio(0)==0.15m && Balance.PierceRatio(1)==0.20m && Balance.PierceRatio(100)==1);
+ Check(Balance.ConductionRatio(0)==0.20m && Balance.ConductionRatio(1)==0.25m);
+});
+Test("queued saves coalesce while a disk write is blocked and dispose flushes latest state", () => {
+ using var entered=new ManualResetEventSlim(); using var release=new ManualResetEventSlim();
+ var saved=new Dictionary<string,string>(); int writes=0;
+ var writer=new LatestFileWriter((path,contents)=>{
+  if(Interlocked.Increment(ref writes)==1) { entered.Set(); if(!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException(); }
+  saved[path]=contents;
+ });
+ try {
+  writer.Enqueue("match","old"); Check(entered.Wait(TimeSpan.FromSeconds(10)));
+  for(int i=0;i<1000;i++) writer.Enqueue("match",i.ToString());
+  writer.Enqueue("checkpoint","native-backup");
+ } finally { release.Set(); writer.Dispose(); }
+ Check(saved["match"]=="999" && saved["checkpoint"]=="native-backup" && writes==3);
+ bool rejected=false; try{writer.Enqueue("match","late");}catch(ObjectDisposedException){rejected=true;} Check(rejected);
+});
+Test("queued saves report IO failures and a newer write repairs the failed path", () => {
+ int attempts=0; string? saved=null;
+ using var writer=new LatestFileWriter((_,contents)=>{if(++attempts==1) throw new IOException("disk full"); saved=contents;});
+ writer.Enqueue("match","first"); bool rejected=false; try{writer.Flush();}catch(AggregateException){rejected=true;}
+ Check(rejected && writer.TakeErrors().Length==1 && writer.TakeErrors().Length==0);
+ writer.Enqueue("match","recovered"); writer.Flush(); Check(saved=="recovered");
+});
+Test("atomic queued snapshots reach the real disk and leave no temporary files", () => {
+ string folder=Path.Combine(Path.GetTempPath(),"fdzf-writer-"+Guid.NewGuid().ToString("N"));
+ string match=Path.Combine(folder,"match.json"), checkpoint=Path.Combine(folder,"checkpoint.json");
+ try {
+  using(var writer=new LatestFileWriter()) {
+   for(int i=0;i<200;i++) writer.Enqueue(match,StateJson.Serialize(new Match {Id="disk",Revision=i}));
+   writer.Enqueue(checkpoint,"native-packet");
+  }
+  Check(StateJson.Deserialize<Match>(File.ReadAllText(match)).Revision==199 && File.ReadAllText(checkpoint)=="native-packet");
+  Check(!File.Exists(match+".tmp") && !File.Exists(checkpoint+".tmp"));
+ } finally {
+  foreach(string path in new[]{match,checkpoint,match+".tmp",checkpoint+".tmp"}) if(File.Exists(path)) File.Delete(path);
+  if(Directory.Exists(folder)) Directory.Delete(folder);
+ }
 });
 Console.WriteLine($"{passed} checks passed");

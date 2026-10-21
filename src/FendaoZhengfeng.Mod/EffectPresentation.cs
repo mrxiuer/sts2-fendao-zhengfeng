@@ -77,7 +77,7 @@ internal static class EffectHud
                 new HoverTip(new LocString(ModEntry.Id, "effect." + effect.Id + ".title"), EffectDetails.Describe(effect.Id), EffectIcons.Get(effect.Id)), HoverTipAlignment.Right);
             badge.MouseExited += () => NHoverTipSet.Remove(badge);
             badge.TreeExiting += () => NHoverTipSet.Remove(badge);
-            if (effect.Id is "small_light" or "good_connections" or "r_key") badge.GuiInput += input =>
+            if (effect.Id is "small_light" or "good_connections" or "r_key" or "tail_refill") badge.GuiInput += input =>
             { if (input is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { badge.AcceptEvent(); RaceUi.Run(() => AdvancedEffects.Click(effect.Id)); } };
             string stack = effect.Kind == EffectKind.Boon ? holding.Rank > 0 ? "+" + holding.Rank : "" : pending > 0 ? active > 0 ? $"{active}+{pending}" : "待" : active > 1 ? active.ToString() : "";
             if (effect.Id == "expedition") stack = $"{session.Me.ExpeditionProgress}/{FendaoZhengfeng.Core.Engine.ExpeditionGoal(session.Me.Act)}";
@@ -100,7 +100,7 @@ internal static class EffectHud
             badge.MouseExited += () => NHoverTipSet.Remove(badge); badge.TreeExiting += () => NHoverTipSet.Remove(badge); strip.AddChild(badge);
         }
         if (session.Me.BossPrizes.Count > 0) AddRewardAction("Boss额外奖励 · 2选1", "点击后选择本幕增益/净化，或1层诅咒护盾。", 2);
-        if (RaceModifier.Active?.CanRecoverSkill == true) AddRewardAction("无计可施 · 取回1张", "本场胜利尚可从暂存技能牌中选择1张取回。", 1);
+        if (RaceModifier.Active?.CanRecoverSkill == true) AddRewardAction("技艺封存 · 取回1张", "本场胜利尚可从暂存技能牌中选择1张取回。", 1);
     }
     private static void AddRewardAction(string title, string description, int kind)
     {

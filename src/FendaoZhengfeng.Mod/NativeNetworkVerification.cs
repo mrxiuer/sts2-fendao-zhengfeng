@@ -215,6 +215,15 @@ internal static class NativeNetworkVerification
                 Check(session.Me.BurdenSnapshot > 0, "queued curse activates on next battle boundary");
                 await Wait(() => session.PauseRequested, "host shared-save request");
             }
+            var captureTimer = System.Diagnostics.Stopwatch.StartNew();
+            RaceRuntime.Checkpoint(); captureTimer.Stop(); session.FlushPersistence();
+            var queuedCheckpoint = StateJson.Deserialize<NativeCheckpoint.Bundle>(File.ReadAllText(Path.Combine(session.SaveDirectory, "checkpoint.json")));
+            Check(queuedCheckpoint.Revision == session.Engine.State.Revision && queuedCheckpoint.ReplayBattleKey == session.Me.BattleKey,
+                "background checkpoint flush preserves latest revision and current combat on real disk");
+            var queuedNative = NativeCheckpoint.Restore(queuedCheckpoint);
+            Check(queuedNative.Save.Players.Count == 1 && queuedCheckpoint.AppliedReceipts != null,
+                "background checkpoint keeps readable native run and receipt journal");
+            GD.Print($"[FDZF PERFORMANCE] checkpoint capture and queue {captureTimer.Elapsed.TotalMilliseconds:F2} ms; disk flush measured separately");
             await WinCurrent();
             var next = run.Map.StartingMapPoint.Children.OrderBy(p => p.coord.ToString(), StringComparer.Ordinal).First();
             var barrier = RunManager.Instance.EnterMapCoord(next.coord);

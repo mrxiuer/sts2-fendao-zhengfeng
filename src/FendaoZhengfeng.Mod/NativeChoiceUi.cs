@@ -93,14 +93,14 @@ internal sealed class RaceActionReward(Player player, int kind) : Reward(player)
     internal const int SerializedType = 464620;
     protected override RewardType RewardType => (RewardType)SerializedType;
     public override int RewardsSetIndex => 4;
-    private string Label => kind == 1 ? "无计可施 · 取回1张技能牌" : "Boss额外奖励 · 2选1";
+    private string Label => kind == 1 ? "技艺封存 · 取回1张技能牌" : "Boss额外奖励 · 2选1";
     public override LocString Description => NativeChoiceUi.Text(Label);
     public override bool IsPopulated => true;
     public override void Populate() { }
     public override void MarkContentAsSeen() { }
     public override Control CreateIcon() => NativeChoiceUi.Icon(EffectIcons.Get("choice_reward"));
     public override IEnumerable<IHoverTip> HoverTips => [new HoverTip(NativeChoiceUi.Text(Label), kind == 1
-        ? $"从无计可施暂存的 {RaceModifier.Active?.VaultCount ?? 0} 张技能牌中任选1张取回；保留原升级与耐久。每场胜利最多1次。"
+        ? $"从技艺封存暂存的 {RaceModifier.Active?.VaultCount ?? 0} 张技能牌中任选1张取回；保留原升级与耐久。每场胜利最多1次。"
         : "点击进入选择：首杀可选增益或1层诅咒护盾；非首杀可选净化或1层诅咒护盾。与遗物献祭独立。", EffectIcons.Get("choice_reward"))];
     protected override async Task<bool> OnSelect()
     {

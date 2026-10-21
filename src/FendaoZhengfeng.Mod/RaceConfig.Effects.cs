@@ -52,4 +52,9 @@ public sealed partial class RaceConfig
     [ConfigIgnore] public static bool Effect_lone_crown { get => EnabledIds().Contains("lone_crown"); set => SetEffect("lone_crown", value); }
     [ConfigIgnore] public static bool Effect_desperate_echo { get => EnabledIds().Contains("desperate_echo"); set => SetEffect("desperate_echo", value); }
     [ConfigIgnore] public static bool Effect_expedition { get => EnabledIds().Contains("expedition"); set => SetEffect("expedition", value); }
+    [ConfigIgnore] public static bool Effect_chaos_core { get => EnabledIds().Contains("chaos_core"); set => SetEffect("chaos_core", value); }
+    [ConfigIgnore] public static bool Effect_piercing_edge { get => EnabledIds().Contains("piercing_edge"); set => SetEffect("piercing_edge", value); }
+    [ConfigIgnore] public static bool Effect_resonant_circuit { get => EnabledIds().Contains("resonant_circuit"); set => SetEffect("resonant_circuit", value); }
+    [ConfigIgnore] public static bool Effect_second_forge { get => EnabledIds().Contains("second_forge"); set => SetEffect("second_forge", value); }
+    [ConfigIgnore] public static bool Effect_tail_refill { get => EnabledIds().Contains("tail_refill"); set => SetEffect("tail_refill", value); }
 }

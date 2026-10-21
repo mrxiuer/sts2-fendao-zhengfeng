@@ -78,15 +78,13 @@ public static class RaceRuntime
     public static void Checkpoint()
     {
         if (!Live || RaceSession.Current?.IsMock == true) return;
-        try { RaceSession.Current!.Recovery.SendSnapshot(); }
-        catch (Exception error) { RaceUi.Error("比赛恢复备份失败：" + error.Message); }
-        if (System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") == "1") return;
         try
         {
-            var s = RaceSession.Current!; var save = RunManager.Instance.ToSave(State?.CurrentRoom is CombatRoom room && room.IsPreFinished ? room : null);
-            var writer = new PacketWriter(); save.Serialize(writer);
-            var bundle = new NativeCheckpoint.Bundle("0.4.1", s.Engine.State.Version, s.Engine.State.Revision, StateJson.Serialize(s.Engine.State), Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
-            Directory.CreateDirectory(s.SaveDirectory); RaceSession.AtomicWrite(Path.Combine(s.SaveDirectory, "checkpoint.json"), StateJson.Serialize(bundle));
+            var s = RaceSession.Current!; var snapshot = s.Recovery.SendSnapshot();
+            if (snapshot == null) return;
+            var bundle = new NativeCheckpoint.Bundle("0.5.0", s.Engine.State.Version, s.Engine.State.Revision,
+                StateJson.Serialize(s.Engine.State), snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey);
+            s.QueueSave("checkpoint.json", StateJson.Serialize(bundle));
         }
         catch (Exception e) { RaceUi.Error("个人检查点保存失败：" + e.Message); }
     }

@@ -21,7 +21,7 @@ public sealed class Holding
 public sealed record RouteStep(int Act, int Row, int Col);
 public sealed record MarketCard(string Id, string Packet, string Name, int Wear = -1);
 public sealed record PublicProfile(string Packet, int Health, int MaxHealth, int Act, int Floor, string Room, RouteStep? Position,
-    int Gold = 0, List<MarketCard>? Cards = null);
+    int Gold = 0, List<MarketCard>? Cards = null, bool TailSpent = false);
 public sealed class CardTrade
 {
     public string Id { get; set; } = "";
@@ -36,6 +36,7 @@ public sealed class CardTrade
 }
 public sealed class Racer
 {
+    public bool TailSpent { get; set; }
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public string PublicPacket { get; set; } = "";

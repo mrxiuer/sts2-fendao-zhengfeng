@@ -31,6 +31,7 @@ public sealed class RaceSession : IDisposable
     internal string[] AppliedReceiptIds() => appliedReceipts.ToArray();
     private readonly HashSet<string> ghostReservations = [];
     private readonly SemaphoreSlim commandGate = new(1);
+    private readonly LatestFileWriter persistence = new();
     private bool disposed;
     private bool sendingTelemetry;
     private long lastTelemetry;
@@ -107,6 +108,7 @@ public sealed class RaceSession : IDisposable
     public void Tick()
     {
         if (disposed) return; Transport.Update();
+        foreach (var error in persistence.TakeErrors()) RaceUi.Error("比赛进度保存失败：" + error.Message);
         Recovery.Tick();
         if ((IsHost || Transport.IsConnected) && (!localVerification || IsMock) && !sendingTelemetry && !WaitingAtCheckpoint && Environment.TickCount64 - lastTelemetry >= 1000 && RaceRuntime.Live && RaceRuntime.State is { } state)
         {
@@ -130,7 +132,7 @@ public sealed class RaceSession : IDisposable
             if (!IsHost && !Transport.IsConnected) throw new IOException("比赛通信已断开，请等待房主恢复比赛。");
             if (Recovery.Frozen && command.Kind is not ("ack" or "profile")) throw new RuleException("房主正在保存比赛，请稍候。");
             if (WaitingAtCheckpoint && command.Kind != "ack") throw new RuleException("个人进度已进入共同检查点，请等待房主继续比赛。");
-            if (IsHost) { Engine.Execute(command); Recovery.ObserveReceipts(); Persist(); Broadcast(); Changed?.Invoke(); return; }
+            if (IsHost) { Engine.Execute(command); Recovery.ObserveReceipts(); PublishState(); Changed?.Invoke(); return; }
             var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); pending.Add(command.Id, done);
             try { Transport.SendMessage(new RaceMessage { Kind = "command", Content = StateJson.Serialize(command) }); await done.Task.WaitAsync(TimeSpan.FromSeconds(15)); }
             finally { pending.Remove(command.Id); }
@@ -153,14 +155,15 @@ public sealed class RaceSession : IDisposable
             {
                 var c = StateJson.Deserialize<Command>(message.Content);
                 if (c.Actor != sender.ToString(System.Globalization.CultureInfo.InvariantCulture)) throw new RuleException("操作身份不匹配。");
-                try { if (Recovery.Frozen && c.Kind is not ("ack" or "profile")) throw new RuleException("房主正在保存比赛，请稍候。"); Engine.Execute(c); Recovery.ObserveReceipts(); Persist(); Broadcast(); Changed?.Invoke(); }
+                try { if (Recovery.Frozen && c.Kind is not ("ack" or "profile")) throw new RuleException("房主正在保存比赛，请稍候。"); Engine.Execute(c); Recovery.ObserveReceipts(); PublishState(); Changed?.Invoke(); }
                 catch (Exception e) { Transport.SendMessage(new RaceMessage { Kind = "reject", Content = c.Id + "\n" + e.Message }, sender); }
             }
             else if (message.Kind == "state" && sender == HostId && !IsHost)
             {
-                var state = StateJson.Deserialize<Match>(RaceMessage.Expand(message.Content));
+                string json = RaceMessage.Expand(message.Content);
+                var state = StateJson.Deserialize<Match>(json);
                 if (state.Id != Engine.State.Id || state.Version != Catalog.RulesVersion || state.Revision < Engine.State.Revision) return;
-                Engine = new(state); Persist(); foreach (var pair in pending) if (state.ProcessedCommands.Contains(pair.Key)) pair.Value.TrySetResult(); Changed?.Invoke();
+                Engine = new(state); Persist(json); foreach (var pair in pending) if (state.ProcessedCommands.Contains(pair.Key)) pair.Value.TrySetResult(); Changed?.Invoke();
             }
             else if (message.Kind == "reject" && sender == HostId)
             { var split = message.Content.IndexOf('\n'); if (split > 0 && pending.TryGetValue(message.Content[..split], out var t)) t.TrySetException(new RuleException(message.Content[(split + 1)..])); }
@@ -182,17 +185,21 @@ public sealed class RaceSession : IDisposable
         }
         catch (Exception e) { RaceUi.Error("比赛消息处理失败：" + e.Message); }
     }
-    private void Broadcast()
-    { Transport.SendMessage(new RaceMessage { Kind = "state", Content = RaceMessage.Compress(StateJson.Serialize(Engine.State)) }); }
-    public string SaveDirectory => ProjectSettings.GlobalizePath("user://FendaoZhengfeng/" + Engine.State.Id + "/" + LocalId);
-    private void Persist()
+    private void PublishState()
+    { string json = StateJson.Serialize(Engine.State); Persist(json); Broadcast(json); }
+    private void Broadcast(string? json = null)
+    { Transport.SendMessage(new RaceMessage { Kind = "state", Content = RaceMessage.Compress(json ?? StateJson.Serialize(Engine.State)) }); }
+    public string SaveDirectory => Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") == "1"
+        ? Path.Combine(Environment.GetEnvironmentVariable("FDZF_REPORT_DIR") ?? throw new InvalidOperationException("验证报告目录未指定。"), "persistence", Engine.State.Id, LocalId)
+        : ProjectSettings.GlobalizePath("user://FendaoZhengfeng/" + Engine.State.Id + "/" + LocalId);
+    private void Persist(string json) => QueueSave("match.json", json);
+    internal void QueueSave(string filename, string json)
     {
-        if (localVerification || Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") == "1") return;
-        Directory.CreateDirectory(SaveDirectory);
-        AtomicWrite(Path.Combine(SaveDirectory, "match.json"), StateJson.Serialize(Engine.State));
+        if (IsMock) return;
+        persistence.Enqueue(Path.Combine(SaveDirectory, filename), json);
     }
-    internal static void AtomicWrite(string path, string contents)
-    { var temp = path + ".tmp"; File.WriteAllText(temp, contents, Encoding.UTF8); File.Move(temp, path, true); }
+    internal void FlushPersistence() => persistence.Flush();
+    internal static void AtomicWrite(string path, string contents) => LatestFileWriter.AtomicWrite(path, contents);
     public bool ReceiptApplied(string id) => appliedReceipts.Contains(id);
     public void MarkReceiptApplied(string id) => appliedReceipts.Add(id);
     public void RequestPause()
@@ -222,7 +229,7 @@ public sealed class RaceSession : IDisposable
     private void CommitPause()
     {
         if (checkpointPacket == null || checkpointGate == null) throw new RuleException("个人检查点尚未就绪。");
-        var bundle = new NativeCheckpoint.Bundle("0.4.1", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket);
+        var bundle = new NativeCheckpoint.Bundle("0.5.0", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket);
         Directory.CreateDirectory(Path.GetDirectoryName(ResumePath)!); AtomicWrite(ResumePath, StateJson.Serialize(bundle)); Paused = true;
         RaceUi.Error("共同检查点已保存。可等待房主继续，或全员退出后重建房间并勾选恢复共同检查点。"); RaceUi.Refresh();
     }
@@ -248,6 +255,7 @@ public sealed class RaceSession : IDisposable
         if (disposed) return; disposed = true; Transport.UnregisterMessageHandler<RaceMessage>(OnMessage); Transport.Disconnected -= OnDisconnected;
         foreach (var task in pending.Values) task.TrySetCanceled(); if (Current == this) Current = null;
         checkpointGate?.TrySetCanceled();
+        try { persistence.Dispose(); } catch (Exception error) { RaceUi.Error("退出前保存进度失败：" + error.Message); }
         if (Transport.IsConnected) Transport.Disconnect(NetError.Quit);
     }
 }

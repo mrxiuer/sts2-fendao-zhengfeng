@@ -34,6 +34,7 @@ public sealed class Engine(Match state)
                 if (profile.Position is { } point && (point.Act != profile.Act || point.Row < -1 || point.Row > 200 || point.Col < 0 || point.Col > 100))
                     throw new RuleException("地图坐标无效。");
                 p.PublicPacket = profile.Packet; p.ProfileRevision++; p.Gold = profile.Gold; p.MarketCards = profile.Cards ?? [];
+                p.TailSpent = profile.TailSpent;
                 p.Health = profile.Health; p.MaxHealth = profile.MaxHealth; p.Act = profile.Act; p.Floor = profile.Floor; p.Room = profile.Room;
                 p.Position = profile.Position;
                 if (profile.Position is { } location && (p.Trail.Count == 0 || p.Trail[^1] != location))
@@ -182,6 +183,12 @@ public sealed class Engine(Match state)
                 if (!p.ResetPending) throw new RuleException("没有待完成的重置。"); p.ResetPending = false; break;
             case "ghost":
                 if (p.Ghosts <= 0) throw new RuleException("没有替死鬼。"); p.Ghosts--; break;
+            case "tail_refill":
+                if (!p.Has("tail_refill") || p.InBattle || p.Finished || p.ResetPending || !p.TailSpent || p.Receipts.Any(r => r.Kind == "refill_tail")) throw new RuleException("需要在非战斗时补充已消耗的蜥蜴尾巴。");
+                if (p.Gold - p.Receipts.Where(r => r.Kind == "spend_gold").Sum(r => r.Amount) < Balance.TailRefillCost) throw new RuleException("需要350金币。");
+                p.TailSpent = false;
+                p.Receipts.Add(new(c.Id + ":tail-cost", "spend_gold", "", Balance.TailRefillCost));
+                p.Receipts.Add(new(c.Id + ":tail", "refill_tail")); break;
             case "ack": p.Receipts.RemoveAll(r => r.Id == c.Key); break;
             default: throw new RuleException("未知操作：" + c.Kind);
         }
@@ -201,7 +208,7 @@ public sealed class Engine(Match state)
     }
     private static void Give(Match m, Racer p, Effect e, string eventId)
     {
-        if (e.Id is "small_light" or "good_connections" && p.Has(e.Id)) throw new RuleException("此常驻主动增益不能重复持有。");
+        if (e.Id is "small_light" or "good_connections" or "tail_refill" && p.Has(e.Id)) throw new RuleException("此常驻主动增益不能重复持有。");
         if (e.Id == "war_feeds_war" && Balance.WarFeedsWarStacks(p.Effects.GetValueOrDefault(e.Id)) >= 3) throw new RuleException("以战养战已达到3层上限。");
         p.History[e.Id] = p.History.GetValueOrDefault(e.Id) + 1;
         if (e.Id == "r_key") p.ResetCharges++;

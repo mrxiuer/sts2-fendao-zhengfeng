@@ -149,13 +149,22 @@ internal static class AdvancedEffects
         pumping = true;
         RaceUi.Run(async () => { try { await modifier.ApplyReceipts(new ThrowingPlayerChoiceContext(), session.Me.InBattle, true); } finally { pumping = false; } });
     }
-    internal static bool UpgradeBlocked(CardModel card) => RaceRuntime.Live && card.Owner != null && card.Owner.RunState == RaceRuntime.State
+    internal static bool UpgradeBlocked(CardModel card) => !card.IsCanonical && RaceRuntime.Live && card.Owner != null && card.Owner.RunState == RaceRuntime.State
         && (RaceSession.Current!.Me.Has("farewell_upgrades") || RaceModifier.Active?.IsReserved(card) == true);
     internal static async Task Click(string id)
     {
         if (RaceSession.Current is not { } session || RaceModifier.Active is not { } modifier) return;
         if (id == "small_light") await modifier.RemoveWithSmallLight();
         else if (id == "good_connections") await BuyCard();
+        else if (id == "tail_refill")
+        {
+            var player = RaceRuntime.State!.Players.Single();
+            if (session.Me.InBattle || CombatManager.Instance.IsInProgress || !player.Relics.OfType<MegaCrit.Sts2.Core.Models.Relics.LizardTail>().Any(tail => tail.WasUsed)) throw new RuleException("请在非战斗时补充已消耗的蜥蜴尾巴。");
+            await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(RaceRuntime.State)) });
+            await session.Submit(session.New("tail_refill"));
+            await modifier.ApplyReceipts(new ThrowingPlayerChoiceContext(), false);
+            RaceRuntime.Checkpoint(); RaceUi.Refresh();
+        }
         else if (id == "r_key")
         {
             int choice = await RaceUi.Choose("R键 · 确认重置", ["使用R键\n保留当前角色资源与全部模式状态，回到第一幕起点；此后怪物生命、伤害、格挡累计增加20%。", "取消"]);
@@ -165,9 +174,9 @@ internal static class AdvancedEffects
     internal static async Task BuyCard(string? sellerId = null, string? cardId = null)
     {
         var session = RaceSession.Current!; var run = RaceRuntime.State!; var modifier = RaceModifier.Active!;
-        if (!session.Me.Has("good_connections")) throw new RuleException("尚未取得广结善缘。");
+        if (!session.Me.Has("good_connections")) throw new RuleException("尚未取得强买强卖。");
         var sellers = session.Engine.State.Racers.Values.Where(racer => racer.Id != session.LocalId && !racer.Eliminated && !racer.Finished && !racer.ResetPending).ToList();
-        int who = sellerId == null ? await RaceUi.Choose("广结善缘 · 选择玩家", sellers.Select(racer => racer.Name + "\n查看其当前公开牌组，已被购买的牌不能再次购买。").ToList()) : sellers.FindIndex(racer => racer.Id == sellerId);
+        int who = sellerId == null ? await RaceUi.Choose("强买强卖 · 选择玩家", sellers.Select(racer => racer.Name + "\n查看其当前公开牌组，已被购买的牌不能再次购买。").ToList()) : sellers.FindIndex(racer => racer.Id == sellerId);
         if (who < 0) return;
         var seller = sellers[who]; var cards = seller.MarketCards.Where(card => !session.Engine.State.Trades.Any(trade => trade.Seller == seller.Id && trade.Card.Id == card.Id)).ToList();
         if (cards.Count == 0) throw new RuleException("对方尚无可购买的公开卡牌，请稍后刷新。");

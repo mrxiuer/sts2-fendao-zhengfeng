@@ -39,7 +39,7 @@ public static class Candidates
             Route.Contract => e.Kind == EffectKind.Contract && !p.Effects.ContainsKey(e.Id) && (boss || e.Tier != Tier.Boss),
             Route.Grow => e.Kind == EffectKind.Boon && (boss ? e.BossPool : e.ElitePool),
             _ => e.Kind == EffectKind.Boon && e.FirstKillPool
-        }).Where(e => e.Id is not ("small_light" or "good_connections") || !p.Has(e.Id))
+        }).Where(e => e.Id is not ("small_light" or "good_connections" or "tail_refill") || !p.Has(e.Id))
             .Where(e => e.Id != "war_feeds_war" || Balance.WarFeedsWarStacks(p.Effects.GetValueOrDefault(e.Id)) < 3)
             .Where(e => e.Id != "scapegoat" || !p.Has(e.Id) || p.Ghosts < 2).ToList();
         double Weight(Effect e) => e.Weight * (e.Kind == EffectKind.Curse ? 1 : Balance.RepeatWeight(p.History.GetValueOrDefault(e.Id)));

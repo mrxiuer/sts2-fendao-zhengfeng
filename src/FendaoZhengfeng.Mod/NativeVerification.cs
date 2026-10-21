@@ -26,7 +26,8 @@ internal static class NativeVerification
     {
         if (started || System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") return;
         started = true;
-        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "economy") _ = NativeEconomyVerification.Run(game);
+        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "mechanics") _ = NativeMechanicsVerification.Run(game);
+        else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "economy") _ = NativeEconomyVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "heart") _ = NativeHeartVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "campaign") _ = NativeCampaignVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "revival") _ = NativeRevivalVerification.Run(game);
@@ -62,7 +63,7 @@ internal static class NativeVerification
             var configPage = mainMenu.SubmenuStack.PushSubmenuType<BaseLib.Config.UI.NModConfigSubmenu>();
             HarmonyLib.AccessTools.Method(typeof(BaseLib.Config.UI.NModConfigSubmenu), "LoadModConfig").Invoke(configPage, [RaceConfig.Instance]);
             await Task.Delay(200);
-            Check(configPage.FindChildren("*", "", true, false).OfType<BaseLib.Config.UI.NConfigTickbox>().Count() == Catalog.All.Count + 2, "config renders mode and debug toggles plus 50 effect checkboxes");
+            Check(configPage.FindChildren("*", "", true, false).OfType<BaseLib.Config.UI.NConfigTickbox>().Count() == Catalog.All.Count + 2, "config renders mode and debug toggles plus all effect checkboxes");
             RaceConfig.Effect_exhaustion = false;
             Check(!RaceConfig.EnabledIds().Contains("exhaustion"), "effect checkbox updates next-match whitelist");
             RaceConfig.Effect_exhaustion = true;
