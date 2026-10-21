@@ -16,6 +16,7 @@ internal static class HeartPresentation
     private static readonly Dictionary<string, Texture2D> textures = [];
     internal static readonly Dictionary<string, string> Texts = new()
     {
+        ["puppet.name"] = "替身傀儡",
         ["heart.name"] = "高塔之心", ["heart.ward.title"] = "高塔不灭", ["heart.beat.title"] = "死亡律动", ["heart.copy.title"] = "众生回响", ["heart.stabs.title"] = "痛苦回响",
         ["heart.copy.intent"] = "复制另一名仍在比赛玩家的永久牌组快照（保留升级），生成你自己的临时战斗副本。第5、6回合使用，第7回合抽牌前恢复原牌堆；对方不受影响。人工制品可以抵挡。"
     };

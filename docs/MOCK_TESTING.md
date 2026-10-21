@@ -142,7 +142,10 @@ Set-Location 'D:\Projects\sts2-fendao-zhengfeng'
 
 狂赌之心快速入口：`scripts/Verify-Native.ps1 -Suite Gambler`，包含22项原生检查。`scripts/Capture-Native.ps1 -Gambler -OutputDirectory <绝对目录>` 运行真实图形进程，保存实际暴击弹字与状态栏。覆盖预览无随机消耗、单体/连击/群攻/分组/嵌套攻击、攻击异常清理、原生中毒归属、奥斯蒂、格挡、飞行组合、自伤与强化上限。
 
-测试使用内存进度，实际截图中的高生命值是测试夹具。本地规则版本为 `1.0.0-design.11`；旧规则检查点不混读。该版本尚未上传发布。
+测试使用内存进度，实际截图中的高生命值是测试夹具。本地规则版本为 `1.0.0-design.12`；旧规则检查点不混读。该版本尚未上传发布。
 
 
 真实双进程 `Network` 验证恶咒回响、凌空之翼与狂赌之心只作用于持有者的独立战斗，`Resume` 验证持有状态跨进程重启恢复。`Network` 另会在隔离报告目录写入检查点文件并验证最新内容；`Recovery` 验证掉线保存、双方重启恢复，以及本场暴击序列从起点重放。性能修改与实测范围见 [PERFORMANCE.md](PERFORMANCE.md)。
+
+
+替身傀儡基础验证入口：`scripts/Verify-Native.ps1 -Suite PuppetBody`；图形入口 `scripts/Capture-Native.ps1 -PuppetBody -OutputDirectory <绝对目录>`。28项原生检查覆盖真实宠物、独立生命/格挡、原生状态与壁垒、血条站位、待机动作、死亡重建、攻击转移、破盾事件、致死溢出和同次连击中的死亡。该测试使用独立内存局，完整道具尚未加入候选或配置池；不能用通过基础测试代替取得、负面状态转移、治疗限制和存档的完整验收。详见 [实现记录](PUPPET-IMPLEMENTATION.md)。

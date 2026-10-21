@@ -15,7 +15,7 @@ public sealed record Effect(string Id, string Name, EffectKind Kind, Tier Tier, 
 
 public static class Catalog
 {
-    public const string RulesVersion = "1.0.0-design.11";
+    public const string RulesVersion = "1.0.0-design.12";
     public static readonly IReadOnlyList<Effect> All = [
         C("exhaustion", "力竭", Tier.Ordinary, Rarity.Common, "开战失去1力量；每次强化再失去1。"),
         C("imbalance", "失衡", Tier.Ordinary, Rarity.Common, "开战失去1敏捷；每次强化再失去1。"),

@@ -44,6 +44,13 @@ internal static class NativeMechanicsVerification
             var run = await MockTesting.StartWithCharacter(ModelDb.Character<Ironclad>(), "FDZFMECHANICS");
             var session = RaceSession.Current!; var player = run.Players.Single(); var modifier = RaceModifier.Active!;
             await CreatureCmd.SetMaxAndCurrentHp(player.Creature, 5000);
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "puppet_body")
+            {
+                await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
+                await Wait(() => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play);
+                await NativePuppetBodyVerification.Run(run, Check);
+                GD.Print("[FDZF PUPPET BODY COMPLETE] Native follower body passed."); game.GetTree().Quit(0); return;
+            }
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "flight" or "gambler")
             {
                 await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
