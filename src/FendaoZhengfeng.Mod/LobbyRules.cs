@@ -4,7 +4,7 @@ using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 
 namespace FendaoZhengfeng.Mod;
 
-internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, HashSet<string> Effects, bool Resume)
+internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, HashSet<string> Effects, bool Resume, string ResumeBundle = "")
 {
     internal static LobbyRules Local() => new(Catalog.RulesVersion, RaceConfig.ModeEnabled, RaceConfig.DebugMode, RaceConfig.EnabledIds(), RaceRuntime.ResumeRequested);
     // Every modded participant enters this handshake, including clients whose local mode is disabled.
@@ -16,6 +16,17 @@ internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, Hash
         var expected = lobby.Players.Select(p => p.id).ToHashSet();
         var ready = new HashSet<ulong> { transport.NetId };
         LobbyRules? agreed = host ? Local() : null;
+        RecoveryArchive? archive = host && agreed!.Resume && RaceRuntime.ResumeFromHostArchive ? RaceRecovery.Read(transport.NetId.ToString()) : null;
+        LobbyRules ForPlayer(ulong id)
+        {
+            if (archive == null) return agreed!;
+            string playerId = id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var match = StateJson.Deserialize<Match>(archive.MatchJson);
+            if (!expected.Select(peer => peer.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToHashSet().SetEquals(match.Racers.Keys)) throw new RuleException("恢复比赛需要原来的玩家名单。");
+            if (!archive.Players.TryGetValue(playerId, out var snapshot)) throw new RuleException("缺少该玩家的恢复备份。");
+            var bundle = new NativeCheckpoint.Bundle("0.4.1", archive.RulesVersion, match.Revision, archive.MatchJson, snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey);
+            return agreed! with { Enabled = true, Debug = match.DebugMode, Effects = match.EnabledEffects, ResumeBundle = RaceMessage.Compress(StateJson.Serialize(bundle)) };
+        }
         string? error = null; bool committed = false;
         if (transport is INetHostGameService hostService)
             foreach (ulong peer in expected.Where(id => id != transport.NetId)) hostService.SetPeerReadyForBroadcasting(peer);
@@ -25,7 +36,7 @@ internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, Hash
             try
             {
                 if (message.Kind == "rules_hello" && host)
-                    transport.SendMessage(new RaceMessage { Kind = "rules", Content = StateJson.Serialize(agreed) }, sender);
+                    transport.SendMessage(new RaceMessage { Kind = "rules", Content = StateJson.Serialize(ForPlayer(sender)) }, sender);
                 else if (message.Kind == "rules" && !host && sender == hostId)
                 {
                     var rules = StateJson.Deserialize<LobbyRules>(message.Content);
@@ -53,12 +64,13 @@ internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, Hash
                     {
                         transport.SendMessage(new RaceMessage { Kind = "rules_commit" }); committed = true;
                     }
-                    else transport.SendMessage(new RaceMessage { Kind = "rules", Content = StateJson.Serialize(agreed) });
+                    else foreach (var peer in expected.Where(peer => peer != transport.NetId))
+                        transport.SendMessage(new RaceMessage { Kind = "rules", Content = StateJson.Serialize(ForPlayer(peer)) }, peer);
                 }
                 else transport.SendMessage(new RaceMessage { Kind = "rules_hello" });
                 if (!committed) await Task.Delay(100);
             }
-            return agreed!;
+            return host ? ForPlayer(transport.NetId) : agreed!;
         }
         finally { transport.UnregisterMessageHandler<RaceMessage>(Receive); }
     }

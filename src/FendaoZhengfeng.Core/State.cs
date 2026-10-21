@@ -64,6 +64,7 @@ public sealed class Racer
     public string BattleKey { get; set; } = "";
     public bool InBattle { get; set; }
     public int BurdenSnapshot { get; set; }
+    public int AdversityGoldSnapshot { get; set; }
     public int Shields { get; set; }
     public int Ghosts { get; set; }
     public int PendingEnergy { get; set; }

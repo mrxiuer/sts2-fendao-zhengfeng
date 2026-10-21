@@ -13,6 +13,7 @@ internal static class EffectHud
     private static HFlowContainer? strip;
     private static NRun? anchoredRun;
     private static NRelicInventory? inventory;
+    private static string renderedEffects = "";
     internal static float Bottom => strip?.Visible == true ? strip.Position.Y + strip.Size.Y : 170;
     internal static bool IsVisible => strip?.IsVisibleInTree() == true;
     internal static int IconCount => strip?.GetChildCount() ?? 0;
@@ -44,18 +45,27 @@ internal static class EffectHud
     public static void Refresh()
     {
         if (strip == null) return;
-        foreach (var node in strip.GetChildren()) { strip.RemoveChild(node); node.QueueFree(); }
         AlignWithRelics();
-        if (!strip.Visible || RaceSession.Current is not { } session) return;
+        if (RaceSession.Current is not { } session)
+        {
+            renderedEffects = "";
+            foreach (var node in strip.GetChildren()) { strip.RemoveChild(node); node.QueueFree(); }
+            return;
+        }
+        // Public profiles and receipt acknowledgements do not change HUD structure.
+        // Retain native controls and fetch live tooltip text only when hovered.
+        string signature = session.Engine.State.Id + ":" + session.LocalId + ":" + session.Me.Battle + ":"
+            + string.Join(";", session.Me.Effects.Values.Select(h => h.Id + ":" + h.Rank + ":" + h.Grants.Count))
+            + ":" + session.Me.ExpeditionProgress + ":" + string.Join(";", session.Me.BossPrizes)
+            + ":" + RaceModifier.Active?.CanRecoverSkill + ":" + string.Join(";", session.Engine.State.Trades.Select(t => t.Id + ":" + t.Delivered + ":" + t.Removed));
+        if (signature == renderedEffects) return;
+        renderedEffects = signature;
+        foreach (var node in strip.GetChildren()) { strip.RemoveChild(node); node.QueueFree(); }
         foreach (var holding in session.Me.Effects.Values)
         {
             var effect = Catalog.Get(holding.Id);
             int active = session.Me.Count(effect.Id);
             int pending = effect.Kind == EffectKind.Boon ? 0 : holding.Grants.Count - active;
-            string category = effect.Kind switch { EffectKind.Curse => "诅咒", EffectKind.Contract => "双刃契约", _ => "增益" };
-            string duration = effect.Kind != EffectKind.Boon ? "持续至净化" : effect.Permanent ? "持续本局" : effect.Id == "catch_up" ? $"剩余 {holding.Used} 场战斗" : "持续至自己的下一次幕 Boss 击杀";
-            string sources = string.Join("、", holding.Grants.Select(g => g.Source).Distinct().Select(id => id == session.LocalId ? "自己" : session.Engine.State.Racers.TryGetValue(id, out var racer) ? racer.Name : id));
-            string counts = effect.Kind == EffectKind.Boon ? $"强化 {holding.Rank}" : $"已激活 {active} 次，待生效 {pending} 次";
             var badge = new TextureRect
             {
                 Texture = EffectIcons.Get(effect.Id), CustomMinimumSize = new Vector2(64, 64),
@@ -63,9 +73,8 @@ internal static class EffectHud
                 MouseFilter = Control.MouseFilterEnum.Stop,
                 SelfModulate = new Color(1, 1, 1, active == 0 && pending > 0 ? 0.65f : 1)
             };
-            string description = EffectDetails.Describe(effect.Id);
-            var tip = new HoverTip(new LocString(ModEntry.Id, "effect." + effect.Id + ".title"), description, EffectIcons.Get(effect.Id));
-            badge.MouseEntered += () => NHoverTipSet.CreateAndShow(badge, tip, HoverTipAlignment.Right);
+            badge.MouseEntered += () => NHoverTipSet.CreateAndShow(badge,
+                new HoverTip(new LocString(ModEntry.Id, "effect." + effect.Id + ".title"), EffectDetails.Describe(effect.Id), EffectIcons.Get(effect.Id)), HoverTipAlignment.Right);
             badge.MouseExited += () => NHoverTipSet.Remove(badge);
             badge.TreeExiting += () => NHoverTipSet.Remove(badge);
             if (effect.Id is "small_light" or "good_connections" or "r_key") badge.GuiInput += input =>

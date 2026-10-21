@@ -47,12 +47,21 @@ public sealed class Engine(Match state)
                 p.Act = c.Act; p.Floor = c.Floor; p.Room = c.Value; p.Health = Math.Max(0, c.Amount); p.MaxHealth = Math.Max(0, c.MaxHealth); break;
             case "battle_start":
                 if (p.InBattle) { if (p.BattleKey == c.Key) break; throw new RuleException("上一场尚未结束。"); }
-                p.Battle++; p.BattleKey = c.Key; p.InBattle = true; p.BurdenSnapshot = p.Burden; break;
+                p.Battle++; p.BattleKey = c.Key; p.InBattle = true; p.BurdenSnapshot = p.Burden;
+                p.AdversityGoldSnapshot = p.Has("adversity_profit") ? p.Effects.Keys.Select(Catalog.Get)
+                    .Where(e => e.Kind == EffectKind.Curse && p.Has(e.Id)).Sum(e => Balance.AdversityGoldPerKind(e.Tier)) : 0;
+                break;
             case "victory":
                 if (c.Key != p.BattleKey || !p.InBattle) throw new RuleException("战斗记录不匹配。");
                 p.InBattle = false;
                 if (!p.WonBattles.Add(c.Key)) break;
                 p.VictoryCount++;
+                if (p.Effects.TryGetValue("adversity_profit", out var profit))
+                {
+                    int gold = Math.Min(p.AdversityGoldSnapshot, Math.Max(0, Balance.AdversityGoldCap(profit.Rank) - profit.Used));
+                    if (gold > 0) { profit.Used += gold; p.Receipts.Add(new(c.Id + ":profit", "gold", "", gold)); }
+                }
+                p.AdversityGoldSnapshot = 0;
                 if (p.Has("restoration")) p.Receipts.Add(new(c.Id + ":restoration", "heal", "", 2 + p.Effects["restoration"].Rank));
                 if (p.Has("expedition") && c.Value == "Elite") AdvanceExpedition(p, c.Id);
 
@@ -120,8 +129,7 @@ public sealed class Engine(Match state)
             case "camp_cleanse":
                 Service(p, c.Key, "camp"); Cleanse(p, c.Effect, CleanseAt.Camp, c.Id); break;
             case "shop_cleanse":
-                Service(p, c.Key, "shop"); var cost = Cleanse(p, c.Effect, CleanseAt.Shop, c.Id);
-                if (c.Amount < cost) throw new RuleException("金币不足。"); p.Receipts.Add(new(c.Id + ":cost", "spend_gold", "", cost)); break;
+                throw new RuleException("商店不提供模式效果净化。");
             case "repair":
                 if (!p.Has("bloom_decay")) throw new RuleException("没有可恢复的契约。"); Service(p, c.Key, "camp"); p.Receipts.Add(new(c.Id + ":repair", "repair")); break;
             case "siphon":
@@ -229,12 +237,9 @@ public sealed class Engine(Match state)
         if (e.Kind == EffectKind.Boon || !p.Effects.TryGetValue(id, out var h)) throw new RuleException("没有可净化的效果。");
         if (at == CleanseAt.Camp && e.Tier != Tier.Ordinary || at == CleanseAt.Shop && e.Tier == Tier.Boss) throw new RuleException("此渠道不能净化该档位。");
         int cost = at == CleanseAt.Shop ? Balance.CleansePrice(e, h.Grants.Count) ?? throw new RuleException("不可净化。") : 0;
-        int burden = e.Kind == EffectKind.Curse ? h.Grants.Count(g => g.ActiveBattle <= p.Battle) * e.Burden : 0;
         p.Effects.Remove(id);
         if (id == "no_plan") p.Receipts.Add(new(commandId + ":restore-skills", "restore_skills"));
         if (id == "bloom_decay") p.Receipts.Add(new(commandId + ":restore", "restore_deck"));
-        if (at != CleanseAt.Boss && burden > 0 && p.Has("adversity_profit"))
-        { var b = p.Effects["adversity_profit"]; int gold = Math.Min(burden * Balance.AdversityGoldPerBurden, Balance.AdversityGoldCap(b.Rank) - b.Used); if (gold > 0) { b.Used += gold; p.Receipts.Add(new(commandId + ":profit", "gold", "", gold)); } }
         return cost;
     }
 }

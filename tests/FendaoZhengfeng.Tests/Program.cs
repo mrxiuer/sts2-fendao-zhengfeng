@@ -47,7 +47,7 @@ Test("group attack independently consumes shields", () => { var e = New(); e.Sta
 Test("cannot claim two routes for one reward", () => { var e = New(); OfferEffect(e, "o", "exhaustion"); OfferEffect(e, "other", "imbalance"); e.Execute(new("first", "a", "choose", "o", "exhaustion")); var before = StateJson.Serialize(e.State); try { e.Execute(new("second", "a", "choose", "other", "imbalance")); } catch (RuleException) { } Check(StateJson.Serialize(e.State) == before); });
 Test("contract applies only to self and has zero burden", () => { var e = New(); OfferEffect(e, "o", "borrowed_time", Route.Contract); e.Execute(new("choice", "a", "choose", "o", "borrowed_time")); e.Execute(new("start", "a", "battle_start", "battle")); Check(e.State.Racers["a"].Has("borrowed_time")); Check(e.State.Racers["a"].Burden == 0); Check(!e.State.Racers["b"].Has("borrowed_time")); });
 Test("retaliation does not recurse and blocked attacks do not reflect", () => { var e = New(); e.State.Racers["b"].Effects["retaliation"] = new() { Id = "retaliation" }; e.State.Racers["c"].Effects["retaliation"] = new() { Id = "retaliation" }; e.State.Racers["b"].Shields = 1; OfferEffect(e, "o", "exhaustion"); e.Execute(new("choice", "a", "choose", "o", "exhaustion")); Check(e.State.Racers["a"].Receipts.Count(r => r.Kind == "curse_card") == 1); Check(e.State.Racers["b"].Effects["retaliation"].Counters.Count == 0); });
-Test("shop cleanses pending and active stacks together", () => { var e = New(); Grant(e, "b", "exhaustion", 2); e.State.Racers["b"].Effects["exhaustion"].Grants[0].ActiveBattle = 0; e.Execute(new("clean", "b", "shop_cleanse", "node", "exhaustion", 100)); Check(!e.State.Racers["b"].Effects.ContainsKey("exhaustion")); Check(e.State.Racers["b"].Receipts.Single(r => r.Kind == "spend_gold").Amount == 70); });
+Test("camp cleanses pending and active ordinary stacks together", () => { var e = New(); Grant(e, "b", "exhaustion", 2); e.State.Racers["b"].Effects["exhaustion"].Grants[0].ActiveBattle = 0; e.Execute(new("clean", "b", "camp_cleanse", "node", "exhaustion")); Check(!e.State.Racers["b"].Effects.ContainsKey("exhaustion")); Check(!e.State.Racers["b"].Receipts.Any(r => r.Kind == "spend_gold")); });
 Test("first-kill shield invalidates an older boon offer", () => { var e = New(); e.State.Racers["a"].BossPrizes.Add("0:first"); e.Execute(new("offer", "a", "offer", "0:first", Route: Route.FirstKill)); var offer = e.State.Offers.Values.Single(); e.Execute(new("shield", "a", "boss_shield", "0:first")); var before = StateJson.Serialize(e.State); try { e.Execute(new("choose", "a", "choose", offer.Id, offer.Candidates[0])); } catch (RuleException) { } Check(StateJson.Serialize(e.State) == before); });
 Test("status forwarding cap is global across sources", () => { var e = New(); foreach (var id in new[] { "a", "c" }) { e.State.Racers[id].Effects["shared_misery"] = new() { Id = "shared_misery" }; e.Execute(new("start" + id, id, "battle_start", id)); e.Execute(new("status" + id, id, "status", Amount: 4, Value: "slimed")); } Check(e.State.Racers["b"].PendingStatuses.Count == 5); });
 Test("opening grants consumed once", () => { var e = New(); e.State.Racers["a"].PendingEnergy = 2; e.Execute(new("start", "a", "battle_start", "battle")); e.Execute(new("opening", "a", "consume_opening", "battle")); Check(e.State.Racers["a"].PendingEnergy == 0); Check(e.State.Racers["a"].Receipts.Single(r => r.Kind == "energy").Amount == 2); var before = StateJson.Serialize(e.State); try { e.Execute(new("again", "a", "consume_opening", "battle")); } catch (RuleException) { } Check(StateJson.Serialize(e.State) == before); });
@@ -242,7 +242,8 @@ Test("burn bridges targets opponents and activates at their next battle with ful
   e.Execute(new("bridge-start-"+id,id,"battle_start","bridge-battle"));
   Check(e.State.Racers[id].Count("burn_bridges")==1);
  }
- e.Execute(new("bridge-clean","b","shop_cleanse","shop","burn_bridges",1000));
+ e.State.Racers["b"].BossPrizes.Add("0:later");
+ e.Execute(new("bridge-clean","b","boss_cleanse","0:later","burn_bridges"));
  Check(!e.State.Racers["b"].Effects.ContainsKey("burn_bridges"));
 });
 Test("shared fortune settles highest source once per own node with cap and carry boundaries", () => {
@@ -288,28 +289,38 @@ Test("confirmed heart kill locks rank while leaving native victory bookkeeping o
  try { e.Execute(new("invalid-heart","c","heart_finish","bad")); } catch(RuleException) {rejected=true;}
  Check(rejected && StateJson.Serialize(e.State)==before);
 });
-Test("adversity pays five per active burden only for paid cleansing", () => {
- var e=New(); Grant(e,"a","adversity_profit"); Grant(e,"a","exhaustion",3);
- e.State.Racers["a"].Battle=1; e.State.Racers["a"].Effects["exhaustion"].Grants[2].ActiveBattle=2;
- e.Execute(new("paid","a","camp_cleanse","camp","exhaustion"));
- Check(e.State.Racers["a"].Effects["adversity_profit"].Used==10);
- Check(e.State.Racers["a"].Receipts.Single(r=>r.Kind=="gold").Amount==10);
- Grant(e,"a","ritual"); e.State.Racers["a"].BossPrizes.Add("0:later");
- e.Execute(new("free","a","boss_cleanse","0:later","ritual"));
- Grant(e,"a","tomorrow"); e.Execute(new("contract-clean","a","camp_cleanse","camp2","tomorrow"));
- Check(e.State.Racers["a"].Effects["adversity_profit"].Used==10);
+Test("adversity pays per active curse family and tier on victory", () => {
+ var e=New(); Grant(e,"a","adversity_profit"); Grant(e,"a","exhaustion",3); Grant(e,"a","carapace"); Grant(e,"a","ritual"); Grant(e,"a","tomorrow");
+ e.Execute(new("start","a","battle_start","battle"));
+ Check(e.State.Racers["a"].AdversityGoldSnapshot==9);
+ Grant(e,"a","imbalance"); e.State.Racers["a"].Effects["imbalance"].Grants[0].ActiveBattle=2;
+ e.Execute(new("win","a","victory","battle"));
+ Check(e.State.Racers["a"].Effects["adversity_profit"].Used==9);
+ Check(e.State.Racers["a"].Receipts.Single(r=>r.Kind=="gold").Amount==9);
+ Check(!e.Execute(new("win","a","victory","battle")));
+ e.Execute(new("clean","a","camp_cleanse","camp","exhaustion"));
+ Check(e.State.Racers["a"].Effects["adversity_profit"].Used==9);
+ e.Execute(new("start2","a","battle_start","battle2"));
+ e.Execute(new("win2","a","victory","battle2"));
+ Check(e.State.Racers["a"].Effects["adversity_profit"].Used==18);
 });
-Test("adversity lifetime cap is one thousand and reinforcement does not reset claimed gold", () => {
- var e=New(); Grant(e,"a","adversity_profit"); e.State.Racers["a"].Effects["adversity_profit"].Used=997;
- e.State.Racers["a"].Battle=1; Grant(e,"a","exhaustion",2);
- e.Execute(new("cap","a","shop_cleanse","shop","exhaustion",1000));
- Check(e.State.Racers["a"].Effects["adversity_profit"].Used==1000 && e.State.Racers["a"].Receipts.Single(r=>r.Kind=="gold").Amount==3);
- Grant(e,"a","imbalance"); e.Execute(new("at-cap","a","camp_cleanse","camp","imbalance"));
+Test("adversity cap is eight hundred plus four hundred per rank without resetting claimed gold", () => {
+ var e=New(); Grant(e,"a","adversity_profit"); Grant(e,"a","ritual"); e.State.Racers["a"].Effects["adversity_profit"].Used=797;
+ e.Execute(new("s1","a","battle_start","b1")); e.Execute(new("w1","a","victory","b1"));
+ Check(e.State.Racers["a"].Effects["adversity_profit"].Used==800 && e.State.Racers["a"].Receipts.Single(r=>r.Kind=="gold").Amount==3);
+ e.Execute(new("s2","a","battle_start","b2")); e.Execute(new("w2","a","victory","b2"));
  Check(e.State.Racers["a"].Receipts.Count(r=>r.Kind=="gold")==1);
  OfferEffect(e,"repeat-profit","adversity_profit",Route.Grow);
  e.Execute(new("repeat-profit-pick","a","choose","repeat-profit","adversity_profit"));
  var h=e.State.Racers["a"].Effects["adversity_profit"];
- Check(h.Used==1000 && h.Rank==1 && Balance.AdversityGoldCap(h.Rank)==1015);
+ Check(h.Used==800 && h.Rank==1 && Balance.AdversityGoldCap(h.Rank)==1200);
+ e.Execute(new("s3","a","battle_start","b3")); e.Execute(new("w3","a","victory","b3"));
+ Check(e.State.Racers["a"].Effects["adversity_profit"].Used==805 && Balance.AdversityGoldCap(2)==1600);
+});
+Test("shop cleansing is unavailable even with enough gold and ordinary effects", () => {
+ var e=New(); Grant(e,"a","exhaustion"); var before=StateJson.Serialize(e.State); bool rejected=false;
+ try { e.Execute(new("shop","a","shop_cleanse","shop","exhaustion",100000)); } catch(RuleException) { rejected=true; }
+ Check(rejected && StateJson.Serialize(e.State)==before);
 });
 Test("adversity persists across act boss kills and saved legacy expiry without refreshing its cap", () => {
  var e=New(); OfferEffect(e,"profit","adversity_profit",Route.Grow);

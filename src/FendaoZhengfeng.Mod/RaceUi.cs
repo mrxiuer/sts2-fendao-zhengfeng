@@ -62,6 +62,7 @@ public static class RaceUi
             renderedRevision = RaceSession.Current?.Engine.State.Revision ?? -1;
             renderedLive = RaceRuntime.Live;
             EffectHud.Refresh(); RaceRoster.Refresh();
+            if (panel?.Visible != true) return;
             foreach (var node in list.GetChildren()) { list.RemoveChild(node); node.QueueFree(); }
             if (RaceSession.Current is not { } s)
             {
@@ -121,8 +122,6 @@ public static class RaceUi
                 else Button("领取本幕净化奖励", async () => { var id = await ChooseCleanse(CleanseAt.Boss); if (id != null) await s.Submit(s.New("boss_cleanse", captured, id)); await Apply(); Refresh(); });
                 Button("领取一层诅咒护盾", async () => { await s.Submit(s.New("boss_shield", captured)); Refresh(); });
             }
-            if (RaceRuntime.State?.CurrentRoom is MegaCrit.Sts2.Core.Rooms.MerchantRoom)
-                Button("商店净化", async () => { var id = await ChooseCleanse(CleanseAt.Shop); if (id != null) { await s.Submit(s.New("shop_cleanse", RaceRuntime.RoomKey, id, RaceRuntime.State.Players.Single().Gold)); await Apply(); RaceRuntime.Checkpoint(); } Refresh(); });
         }
         finally { refreshing = false; }
     }
@@ -171,6 +170,7 @@ public static class RaceUi
     }
     public static async Task<string?> ChooseCleanse(CleanseAt place)
     {
+        if (place == CleanseAt.Shop) { Error("商店不提供模式效果净化。"); return null; }
         var s = RaceSession.Current!;
         var effects = s.Me.Effects.Values.Where(h => Catalog.Get(h.Id).Kind != EffectKind.Boon)
             .Where(h => place == CleanseAt.Boss || place == CleanseAt.Camp && Catalog.Get(h.Id).Tier == Tier.Ordinary || place == CleanseAt.Shop && Catalog.Get(h.Id).Tier != Tier.Boss).ToList();

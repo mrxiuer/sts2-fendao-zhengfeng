@@ -42,7 +42,7 @@ public sealed partial class RaceModifier
         await Power<FocusPower>(Player.Creature, war);
         await Power<FrailPower>(Player.Creature, N("thin_armor"));
         await Power<VulnerablePower>(Player.Creature, N("exposed"));
-        if (N("abrasion") > 0) await PayCurrentHp(1 + N("abrasion"));
+        if (N("abrasion") > 0 && !replayOpening) await PayCurrentHp(1 + N("abrasion"));
     }
     private async Task PayCurrentHp(int amount)
     {

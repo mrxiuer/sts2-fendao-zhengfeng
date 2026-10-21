@@ -19,12 +19,16 @@ public sealed class RaceSession : IDisposable
     public bool IsMock { get; }
     public bool IsHost => localVerification || Transport.Type == NetGameType.Host;
     public ulong HostId { get; }
-    public string LocalId => Transport.NetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private readonly string localId;
+    public string LocalId => localId;
     public Engine Engine { get; private set; }
     public Racer Me => Engine.State.Racers[LocalId];
     private readonly Dictionary<string, TaskCompletionSource> pending = [];
     private readonly HashSet<ulong> hello = [];
     private readonly HashSet<string> appliedReceipts = [];
+    private RaceRecovery? recovery;
+    internal RaceRecovery Recovery => recovery ??= new(this);
+    internal string[] AppliedReceiptIds() => appliedReceipts.ToArray();
     private readonly HashSet<string> ghostReservations = [];
     private readonly SemaphoreSlim commandGate = new(1);
     private bool disposed;
@@ -49,6 +53,7 @@ public sealed class RaceSession : IDisposable
         if (!mock && Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") throw new InvalidOperationException("本地验证未启用。");
         IsMock = mock;
         Current?.Dispose(); localVerification = true; Transport = new MegaCrit.Sts2.Core.Multiplayer.NetSingleplayerGameService(); HostId = 1;
+        localId = Transport.NetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
         Engine = new(new Match { Id = mock ? "mock-" + Guid.NewGuid().ToString("N")[..8] : "native-verification", Seed = seed, Racers = new() { ["1"] = new() { Id = "1", Name = mock ? "本地玩家" : "验证玩家" }, ["2"] = new() { Id = "2", Name = mock ? "模拟对手" : "验证对手", Health = 80, MaxHealth = 80 } } });
         Engine.State.EnabledEffects = RaceConfig.EnabledIds(); Engine.State.DebugMode = RaceConfig.DebugMode;
         PublicProfiles.Reset(); Current = this;
@@ -58,6 +63,7 @@ public sealed class RaceSession : IDisposable
     internal RaceSession(StartRunLobby lobby, string seed, LobbyRules rules)
     {
         Current?.Dispose(); Current = this; Transport = lobby.NetService;
+        localId = Transport.NetId.ToString(System.Globalization.CultureInfo.InvariantCulture);
         HostId = IsHost ? Transport.NetId : ((INetClientGameService)Transport).NetClient?.HostNetId ?? throw new InvalidOperationException("找不到房主。");
         var m = new Match { Id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((Transport.GetRawLobbyIdentifier() ?? "local") + seed)))[..24], Seed = seed };
         int slot = 0;
@@ -66,8 +72,18 @@ public sealed class RaceSession : IDisposable
         Engine = new(m); PublicProfiles.Reset(); hello.Add(Transport.NetId);
         if (RaceRuntime.ResumeRequested)
         {
-            if (!File.Exists(ResumePath)) throw new InvalidOperationException("没有完整的共同检查点，请所有玩家选择新开局或先完成共同存档。");
-            Restored = NativeCheckpoint.Read(ResumePath);
+            if (!string.IsNullOrEmpty(rules.ResumeBundle))
+            {
+                var bundle = StateJson.Deserialize<NativeCheckpoint.Bundle>(RaceMessage.Expand(rules.ResumeBundle));
+                Restored = NativeCheckpoint.Restore(bundle);
+                appliedReceipts.UnionWith(bundle.AppliedReceipts ?? []);
+                RaceRuntime.ReplayingBattleKey = bundle.ReplayBattleKey;
+            }
+            else
+            {
+                if (!File.Exists(ResumePath)) throw new InvalidOperationException("找不到比赛恢复存档，请由保存的房主点击继续分道争锋。");
+                Restored = NativeCheckpoint.Read(ResumePath);
+            }
             if (!Restored.Value.Match.Racers.Keys.Order().SequenceEqual(m.Racers.Keys.Order())) throw new InvalidOperationException("恢复比赛必须使用原来的玩家名单。");
             if (Restored.Value.Run.Players.Single().Character.Id != lobby.LocalPlayer.character.Id) throw new InvalidOperationException("恢复比赛时请选择原来的角色。");
             Engine = new(Restored.Value.Match);
@@ -91,7 +107,8 @@ public sealed class RaceSession : IDisposable
     public void Tick()
     {
         if (disposed) return; Transport.Update();
-        if ((!localVerification || IsMock) && !sendingTelemetry && !WaitingAtCheckpoint && Environment.TickCount64 - lastTelemetry >= 1000 && RaceRuntime.Live && RaceRuntime.State is { } state)
+        Recovery.Tick();
+        if ((IsHost || Transport.IsConnected) && (!localVerification || IsMock) && !sendingTelemetry && !WaitingAtCheckpoint && Environment.TickCount64 - lastTelemetry >= 1000 && RaceRuntime.Live && RaceRuntime.State is { } state)
         {
             lastTelemetry = Environment.TickCount64;
             var profile = StateJson.Serialize(PublicProfiles.Capture(state));
@@ -110,8 +127,10 @@ public sealed class RaceSession : IDisposable
         try
         {
             if (disposed) throw new InvalidOperationException("比赛连接已关闭。");
+            if (!IsHost && !Transport.IsConnected) throw new IOException("比赛通信已断开，请等待房主恢复比赛。");
+            if (Recovery.Frozen && command.Kind is not ("ack" or "profile")) throw new RuleException("房主正在保存比赛，请稍候。");
             if (WaitingAtCheckpoint && command.Kind != "ack") throw new RuleException("个人进度已进入共同检查点，请等待房主继续比赛。");
-            if (IsHost) { Engine.Execute(command); Persist(); Broadcast(); Changed?.Invoke(); return; }
+            if (IsHost) { Engine.Execute(command); Recovery.ObserveReceipts(); Persist(); Broadcast(); Changed?.Invoke(); return; }
             var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); pending.Add(command.Id, done);
             try { Transport.SendMessage(new RaceMessage { Kind = "command", Content = StateJson.Serialize(command) }); await done.Task.WaitAsync(TimeSpan.FromSeconds(15)); }
             finally { pending.Remove(command.Id); }
@@ -134,7 +153,7 @@ public sealed class RaceSession : IDisposable
             {
                 var c = StateJson.Deserialize<Command>(message.Content);
                 if (c.Actor != sender.ToString(System.Globalization.CultureInfo.InvariantCulture)) throw new RuleException("操作身份不匹配。");
-                try { Engine.Execute(c); Persist(); Broadcast(); Changed?.Invoke(); }
+                try { if (Recovery.Frozen && c.Kind is not ("ack" or "profile")) throw new RuleException("房主正在保存比赛，请稍候。"); Engine.Execute(c); Recovery.ObserveReceipts(); Persist(); Broadcast(); Changed?.Invoke(); }
                 catch (Exception e) { Transport.SendMessage(new RaceMessage { Kind = "reject", Content = c.Id + "\n" + e.Message }, sender); }
             }
             else if (message.Kind == "state" && sender == HostId && !IsHost)
@@ -154,6 +173,12 @@ public sealed class RaceSession : IDisposable
                 Engine = new(shared); CommitPause();
             }
             else if (message.Kind == "pause_continue" && sender == HostId) ContinueLocal();
+            else if (message.Kind == "recovery_request" && sender == HostId) Recovery.HoldAndSendSnapshot();
+            else if (message.Kind == "recovery_release" && sender == HostId) Recovery.Release();
+            else if (message.Kind == "recovery_saved_exit" && sender == HostId && !IsHost)
+                RaceUi.Run(async () => { RaceUi.Notify("房主已保存比赛；下次由原房主点击继续分道争锋并邀请你。"); await MegaCrit.Sts2.Core.Nodes.NGame.Instance!.ReturnToMainMenu(); });
+            else if (message.Kind == "recovery_snapshot" && IsHost)
+                Recovery.Accept(StateJson.Deserialize<RecoverySnapshot>(RaceMessage.Expand(message.Content)), sender.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
         catch (Exception e) { RaceUi.Error("比赛消息处理失败：" + e.Message); }
     }
@@ -217,7 +242,7 @@ public sealed class RaceSession : IDisposable
         return true;
     }
     private void OnDisconnected(NetErrorInfo error)
-    { foreach (var task in pending.Values) task.TrySetException(new IOException("比赛通信已断开。")); RaceUi.Error("比赛通信中断，当前存档已保留；不要继续作出不可逆奖励选择。"); }
+    { Recovery.Release(); foreach (var task in pending.Values) task.TrySetException(new IOException("比赛通信已断开。")); RaceUi.Error("比赛通信中断；房主仍可保存退出，请勿继续领取奖励。"); }
     public void Dispose()
     {
         if (disposed) return; disposed = true; Transport.UnregisterMessageHandler<RaceMessage>(OnMessage); Transport.Disconnected -= OnDisconnected;

@@ -129,7 +129,7 @@ internal static class NativeAdvancedVerification
             await Capture(game, "advanced-01-card-durability"); displayCard.QueueFree(); frontCard.QueueFree();
             await Capture(game, "advanced-02-combat-status");
             await MockTesting.GrantEffect("carapace");
-            var choose = RaceUi.ChooseCleanse(CleanseAt.Shop);
+            var choose = RaceUi.ChooseCleanse(CleanseAt.Boss);
             await Task.Delay(200);
             var overlay = game.GetTree().Root.FindChildren("FdzfNativeChoice", "", true, false).OfType<Control>().Last();
             var row = overlay.FindChildren("*", "", true, false).OfType<NRewardButton>().First();

@@ -20,6 +20,8 @@ public static class RaceRuntime
 {
     public static bool Enabled { get => RaceConfig.ModeEnabled; set => RaceConfig.ModeEnabled = value; }
     public static bool ResumeRequested { get; set; }
+    internal static bool ResumeFromHostArchive { get; set; }
+    internal static string ReplayingBattleKey { get; set; } = "";
     public static CombatRoom? RewardRoom { get; set; }
     internal static RewardsSet? CombatRewards { get; set; }
     public static CardPlay? CurrentCardPlay { get; set; }
@@ -76,6 +78,8 @@ public static class RaceRuntime
     public static void Checkpoint()
     {
         if (!Live || RaceSession.Current?.IsMock == true) return;
+        try { RaceSession.Current!.Recovery.SendSnapshot(); }
+        catch (Exception error) { RaceUi.Error("比赛恢复备份失败：" + error.Message); }
         if (System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") == "1") return;
         try
         {
@@ -107,7 +111,8 @@ internal static class SharedCheckpointBarrierPatch
 
 public static class NativeCheckpoint
 {
-    public sealed record Bundle(string ModVersion, string RulesVersion, long Revision, string MatchJson, string NativePacket);
+    public sealed record Bundle(string ModVersion, string RulesVersion, long Revision, string MatchJson, string NativePacket,
+        string[]? AppliedReceipts = null, string ReplayBattleKey = "");
     public static string EncodeCard(CardModel card)
     { var writer = new PacketWriter(); card.ToSerializable().Serialize(writer); return Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition); }
     public static CardModel DecodeCard(string value, RunState run, Player owner)
@@ -115,6 +120,10 @@ public static class NativeCheckpoint
     public static (Match Match, RunState Run, SerializableRun Save) Read(string path)
     {
         var b = StateJson.Deserialize<Bundle>(File.ReadAllText(path));
+        return Restore(b);
+    }
+    public static (Match Match, RunState Run, SerializableRun Save) Restore(Bundle b)
+    {
         if (b.RulesVersion != Catalog.RulesVersion) throw new InvalidDataException("检查点规则版本不兼容。");
         var match = StateJson.Deserialize<Match>(b.MatchJson); var reader = new PacketReader(); reader.Reset(Convert.FromBase64String(b.NativePacket));
         var save = new SerializableRun(); save.Deserialize(reader); return (match, RunState.FromSerializable(save), save);

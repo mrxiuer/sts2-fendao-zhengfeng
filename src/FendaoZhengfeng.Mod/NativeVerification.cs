@@ -232,10 +232,9 @@ internal static class NativeVerification
                 await MockTesting.EnterService(RoomType.Shop);
                 await MockTesting.Gold();
                 int balance = player.Gold;
-                int price = Balance.CleansePrice(Catalog.Get("exhaustion"), session.Me.Count("exhaustion", false))!.Value;
-                await session.Submit(session.New("shop_cleanse", RaceRuntime.RoomKey, "exhaustion", balance));
-                await active.ApplyReceipts(new ThrowingPlayerChoiceContext(), false);
-                Check(RaceRuntime.State!.CurrentRoom is MerchantRoom && !session.Me.Effects.ContainsKey("exhaustion") && player.Gold == balance - price, "interactive mock shop deducts native gold and cleanses all stacks");
+                bool shopRejected = false;
+                try { await session.Submit(session.New("shop_cleanse", RaceRuntime.RoomKey, "exhaustion", balance)); } catch (RuleException) { shopRejected = true; }
+                Check(shopRejected && session.Me.Effects.ContainsKey("exhaustion") && player.Gold == balance, "shop mode cleansing is rejected without spending native gold");
                 await MockTesting.EnterService(RoomType.RestSite);
                 Check(MegaCrit.Sts2.Core.Entities.RestSite.RestSiteOption.Generate(player).OfType<RaceRestOption>().Any(), "interactive mock camp exposes native cleanse option");
                 await session.Submit(session.New("camp_cleanse", RaceRuntime.RoomKey, "imbalance"));

@@ -48,6 +48,11 @@ public sealed partial class RaceModifier : ModifierModel
     private readonly Dictionary<CardModel, int> wear = [];
     private readonly HashSet<Reward> expandedRewards = [];
     private string deferredWear = "[]";
+    [SavedProperty] public string OpeningBattleKey { get; set; } = "";
+    [SavedProperty] public string OpeningReceiptId { get; set; } = "";
+    [SavedProperty] public int OpeningEnergy { get; set; }
+    [SavedProperty] public string OpeningStatuses { get; set; } = "[]";
+    private bool replayOpening;
     [SavedProperty] public int AppliedMaxHpBonus { get; set; }
     [SavedProperty]
     public string WearJson
@@ -63,6 +68,7 @@ public sealed partial class RaceModifier : ModifierModel
         ResetTierCombat();
         Turn = 0; ManualCards = 0; firstDraw = false; barbsHits.Clear(); hpLost.Clear(); initialEnemies.Clear(); openingMaxHp.Clear();
         string key = RaceRuntime.RoomKey;
+        replayOpening = RaceRuntime.ReplayingBattleKey == key && Me.InBattle;
         await S.Submit(S.New("battle_start", key));
         await BeforeAdvancedCombat();
         var state = Player.Creature.CombatState ?? throw new InvalidOperationException("战斗未创建。");
@@ -79,7 +85,14 @@ public sealed partial class RaceModifier : ModifierModel
         }
         await TierOpening();
         await UpdateMaxHp();
-        await S.Submit(S.New("consume_opening", key));
+        if (!Me.UsedServices.Contains("opening:" + key))
+        {
+            var opening = S.New("consume_opening", key);
+            OpeningBattleKey = key; OpeningReceiptId = opening.Id; OpeningEnergy = Me.PendingEnergy;
+            OpeningStatuses = StateJson.Serialize(Me.PendingStatuses);
+            await S.Submit(opening);
+        }
+        else if (!replayOpening) throw new RuleException("该战斗开场已经结算，不能重复进入。");
     }
     private async Task Power<T>(Creature creature, int amount) where T : PowerModel
     { if (amount != 0) await PowerCmd.Apply<T>(Context(), creature, amount, null, null); }
@@ -92,6 +105,18 @@ public sealed partial class RaceModifier : ModifierModel
         {
             if (Me.Has("all_in")) await PlayerCmd.GainEnergy(1, player);
             if (Me.Has("tomorrow")) await PlayerCmd.GainEnergy(1, player);
+            if (replayOpening && OpeningBattleKey == Me.BattleKey)
+            {
+                foreach (var receipt in Me.Receipts.Where(receipt => receipt.Id.StartsWith(OpeningReceiptId + ":", StringComparison.Ordinal)).ToList())
+                    await S.Submit(S.New("ack", receipt.Id));
+                await PlayerCmd.GainEnergy(OpeningEnergy, Player);
+                foreach (string id in StateJson.Deserialize<string[]>(OpeningStatuses))
+                {
+                    var model = ModelDb.AllCards.FirstOrDefault(card => card.Id.ToString() == id && card.Type == CardType.Status);
+                    if (model != null) await CardPileCmd.AddGeneratedCardToCombat(Player.Creature.CombatState!.CreateCard(model, Player), PileType.Draw, null);
+                }
+            }
+            replayOpening = false; RaceRuntime.ReplayingBattleKey = "";
             await ApplyReceipts(Context(), true);
         }
         if (Turn == 2 && Me.Has("tomorrow")) await PlayerCmd.LoseEnergy(1, player);
@@ -242,7 +267,8 @@ public sealed partial class RaceModifier : ModifierModel
     {
         foreach (var r in Me.Receipts.ToList())
         {
-            if (S.ReceiptApplied(r.Id) || monetaryOnly && r.Kind is not ("gold" or "spend_gold")) continue;
+            if (S.ReceiptApplied(r.Id)) { await S.Submit(S.New("ack", r.Id)); continue; }
+            if (monetaryOnly && r.Kind is not ("gold" or "spend_gold")) continue;
             if ((r.Kind is "energy" or "status") && !inCombat) continue;
             suppressPropagation = true;
             try

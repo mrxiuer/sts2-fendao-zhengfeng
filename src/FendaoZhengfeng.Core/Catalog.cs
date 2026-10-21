@@ -17,58 +17,59 @@ public static class Catalog
 {
     public const string RulesVersion = "1.0.0-design.8";
     public static readonly IReadOnlyList<Effect> All = [
-        C("exhaustion", "力竭", Tier.Ordinary, Rarity.Common, "每场战斗开始失去1点力量。每次强化再失去1点。"),
-        C("imbalance", "失衡", Tier.Ordinary, Rarity.Common, "每场战斗开始失去1点敏捷。每次强化再失去1点。"),
-        C("iron_curtain", "铁幕", Tier.Ordinary, Rarity.Common, "敌人每回合获得2点格挡。每次强化增加2点。"),
-        C("timidity", "怯战", Tier.Ordinary, Rarity.Common, "开战获得1回合虚弱。每次强化延长1回合。"),
-        C("fortune_dice", "命运骰子", Tier.Elite, Rarity.Common, "每回合攻击伤害为80%至110%。强化每次降低下限5个百分点，最低50%。"),
-        C("clutter", "滞念", Tier.Elite, Rarity.Uncommon, "起手抽牌后加入2张杂念，每次强化多1张；回合结束消耗。"),
-        C("abet", "助凶", Tier.Ordinary, Rarity.Uncommon, "敌人开战获得1点力量。每次强化增加1点。"),
-        C("carapace", "甲壳", Tier.Elite, Rarity.Uncommon, "敌人每回合获得3层覆甲。每次强化增加1层。"),
-        C("overgrowth", "血肉滋长", Tier.Ordinary, Rarity.Rare, "敌人初始生命提高10%。每次强化再提高基础生命的10%。"),
-        C("barbs", "倒刺", Tier.Elite, Rarity.Rare, "每张攻击牌对每名敌人首次造成伤害后反伤1。每次强化增加1。"),
-        C("hard_shell", "硬壳", Tier.Boss, Rarity.Rare, "前三回合敌人每回合最多失去40%最大生命。强化每次降低5个百分点，最低20%。"),
-        C("ritual", "邪仪", Tier.Boss, Rarity.Rare, "敌人每次行动结束获得1力量，每次强化增加1。"),
-        D("all_in", "孤注一掷", Tier.Elite, Rarity.Uncommon, "首回合获得1能量，但不能新获得格挡。"),
-        D("tomorrow", "借来的明天", Tier.Ordinary, Rarity.Uncommon, "首回合多1能量和1抽牌，第二回合各减少1。"),
-        D("greedy_pocket", "贪婪口袋", Tier.Elite, Rarity.Uncommon, "战斗金币增加25%，起手少抽1张，至少抽1张。"),
-        D("bitter_sweet", "先苦后甜", Tier.Boss, Rarity.Rare, "每回合第一张手动牌费用翻倍，第三张合法手动牌重放一次。"),
-        C("burn_bridges", "过河拆桥", Tier.Elite, Rarity.Rare, "从下一场战斗开始，新增永久卡牌后随机变化1张原有牌为其他角色同稀有度兼容牌，保留升级；每次叠加多变化1张。"),
-        D("borrowed_time", "预借时间", Tier.Boss, Rarity.Rare, "每回合获得1能量，同时施加自身3灾厄。"),
-        D("bloom_decay", "盛放与凋零", Tier.Boss, Rarity.Rare, "卡牌奖励额外选择一次；永久牌有8耐久，用尽变为可修复的粘液。"),
-        B("shared_fortune", "有福同享", Rarity.Common, "进入下一个节点时，结算期间对手最高原生金币收入的50%，最多30金；每次强化提高上限5金。", false, true, true, true, Tier.Elite),
-        B("adversity_profit", "逆境生财", Rarity.Common, "在营地或商店净化时，每清除1点已激活诅咒负担获得5金币，整局累计上限1000金币；每次强化提高上限15金币。跨幕保留，领取进度不重置；免费Boss净化不发金币。", true, true, true, true, Tier.Elite),
-        B("war_feeds_war", "以战养战", Rarity.Common, "每次获得增加1层，每场战斗开始时每层获得1力量、1敏捷、1集中，最多3层；满层后不再进入候选池。", false, true, false, true, Tier.Ordinary),
-        B("catch_up", "错峰出击", Rarity.Common, "落后一幕时接下来2场起手多抽1张，否则1场。", false, true, false, false, Tier.Ordinary),
-        B("shared_misery", "有难同当", Rarity.Uncommon, "敌人原始塞入的状态牌转发到对手下场战斗，全来源合计最多5张。", false, true, true, true, Tier.Elite),
-        B("retaliation", "以牙还牙", Rarity.Uncommon, "受到献祭诅咒时，施加者获得一张可移除诅咒牌；每人最多2张。", false, true, true, true, Tier.Elite),
-        B("siphon", "汲取", Rarity.Uncommon, "每场放弃一次卡牌奖励，获得10金与下场首回合2能量。", true, true, true, true, Tier.Elite),
-        B("battle_hardened", "愈战愈勇", Rarity.Rare, "每次个人战斗胜利提高攻击伤害与格挡1%，追溯历史。", true, false, true, true, Tier.Boss),
-        B("death_defiance", "死不足惜", Rarity.Rare, "每次真实复活提高最大生命、攻击伤害和格挡10%，追溯历史。", true, false, true, true, Tier.Boss),
-        D("no_plan", "无计可施", Tier.Boss, Rarity.Rare, "下场战斗前移出牌组全部技能牌；此后每胜可从移出的牌中任选1张取回，直到取完。净化返还剩余牌。"),
-        B("small_light", "小而轻", Rarity.Rare, "非战斗时点击图标，任选1张永久牌移除并失去3最大生命；可反复使用，最大生命不得低于1；持有后不再进入候选池。", true, false, true, true, Tier.Boss),
-        C("farewell_upgrades", "和你的升级说再见吧", Tier.Boss, Rarity.Rare, "包括施加者在内的所有玩家，从各自下场战斗起不能再升级卡牌；保留已有升级，诅咒护盾正常抵挡。"),
-        B("good_connections", "广结善缘", Rarity.Rare, "点击图标购买对手永久牌，100金币起，每成功购买一次加50；金币支付原主人，双方各自在下场开战时交接；持有后不再进入候选池。", true, false, true, true, Tier.Boss),
-        B("r_key", "R键", Rarity.Rare, "非战斗时点击重回第一幕起点，保留生命、牌组、遗物、金币、药水与模式状态；每次取得可用1次，每次重置使怪物生命、伤害和格挡再加20%，此后每幕按首杀发奖。", true, false, true, false, Tier.Boss),
-        B("sharpen", "磨刃", Rarity.Common, "每场开战获得1力量，每次强化再加1；持续至自己的下一次幕Boss击杀。", false, true, false, true, Tier.Ordinary),
-        B("light_step", "轻步", Rarity.Common, "每场开战获得1敏捷，每次强化再加1；持续至自己的下一次幕Boss击杀。", false, true, false, true, Tier.Ordinary),
-        B("prepared", "整装", Rarity.Common, "每场开战获得6格挡，每次强化再加3；持续至自己的下一次幕Boss击杀。", false, true, false, true, Tier.Ordinary),
-        B("poise", "蓄势", Rarity.Common, "每场首回合额外抽1张，每次强化再加1；持续至自己的下一次幕Boss击杀。", false, true, false, true, Tier.Ordinary),
-        B("restoration", "静养", Rarity.Common, "每场胜利恢复2生命，每次强化再加1；持续至自己的下一次幕Boss击杀。", false, true, false, true, Tier.Ordinary),
-        C("thin_armor", "薄甲", Tier.Ordinary, Rarity.Common, "每场开战获得1回合脆弱，每次强化延长1回合。"),
-        C("exposed", "露隙", Tier.Ordinary, Rarity.Common, "每场开战获得1回合易伤，每次强化延长1回合。"),
-        C("abrasion", "磨损", Tier.Ordinary, Rarity.Common, "每场开战失去2当前生命，每次强化再失去1，最低保留1；不触发卖血收益。"),
-        B("combat_cycle", "攻守轮转", Rarity.Uncommon, "每回合首次先手动打出攻击再打出技能，获得4格挡，每次强化再加2；每回合一次。", false, true, true, true, Tier.Elite),
-        B("heavy_followup", "重剑余势", Rarity.Uncommon, "每回合首次手动打出实际支付至少2能量的攻击，抽1张；强化每级使每场一次触发额外再抽1张；仍每回合最多触发一次。", false, true, true, true, Tier.Elite),
-        B("cornered", "困中求生", Rarity.Uncommon, "回合开始时生命不高于50%，获得8格挡并抽1张，每场一次；每次强化增加4格挡。", false, true, true, true, Tier.Elite),
-        C("combo_tax", "连打缴税", Tier.Elite, Rarity.Uncommon, "每回合手动打出第4、8、12张等卡牌后，所有存活敌人获得3格挡；每次强化再加2。"),
-        C("disorder", "失序", Tier.Elite, Rarity.Uncommon, "每场第一次重洗弃牌堆时，将2张临时晕眩加入抽牌堆；每次强化多1张。"),
-        D("lone_crown", "孤勇王冠", Tier.Boss, Rarity.Rare, "每场开战获得2力量、2敏捷；普通治疗减半，营地恢复与复活不受影响。"),
-        D("desperate_echo", "破釜回响", Tier.Boss, Rarity.Rare, "每回合首次手动打出实际支付至少2能量的非X费攻击重放1次，然后失去2生命，最低保留1。"),
-        B("expedition", "远征悬赏", Rarity.Rare, "获得后击杀精英领取额外可献祭遗物；前两幕需3次、第三四幕需2次、第五幕需1次；完成后继续下一轮，重复获得增加1进度。", true, false, true, true, Tier.Boss),
-        B("scapegoat", "替死鬼", Rarity.Rare, "每5胜储存1次抵挡致命伤害，最多2次，重复取得补1次。触发后剩1生命；不保护直接处决、强制死亡或主动支付生命。", true, false, true, true, Tier.Boss)
+        C("exhaustion", "力竭", Tier.Ordinary, Rarity.Common, "开战失去1力量；每次强化再失去1。"),
+        C("imbalance", "失衡", Tier.Ordinary, Rarity.Common, "开战失去1敏捷；每次强化再失去1。"),
+        C("iron_curtain", "铁幕", Tier.Ordinary, Rarity.Common, "敌人每回合获得2格挡；每次强化+2。"),
+        C("timidity", "怯战", Tier.Ordinary, Rarity.Common, "开战获得1回合虚弱；每次强化+1回合。"),
+        C("fortune_dice", "命运骰子", Tier.Elite, Rarity.Common, "每回合攻击伤害随机为80%～110%。每次强化降低下限5%，最低50%。"),
+        C("clutter", "滞念", Tier.Elite, Rarity.Uncommon, "起手加入2张杂念，回合结束消耗；每次强化多1张。"),
+        C("abet", "助凶", Tier.Ordinary, Rarity.Uncommon, "敌人开战获得1力量；每次强化+1。"),
+        C("carapace", "甲壳", Tier.Elite, Rarity.Uncommon, "敌人每回合获得3覆甲；每次强化+1。"),
+        C("overgrowth", "血肉滋长", Tier.Ordinary, Rarity.Rare, "敌人初始生命+10%；每次强化再+10%。"),
+        C("barbs", "倒刺", Tier.Elite, Rarity.Rare, "每张攻击牌对每名敌人首次造成未格挡伤害时，受到1反伤；每次强化+1。"),
+        C("hard_shell", "硬壳", Tier.Boss, Rarity.Rare, "前3回合，敌人每回合最多损失40%最大生命；每次强化降低5%，最低20%。"),
+        C("ritual", "邪仪", Tier.Boss, Rarity.Rare, "敌人每次行动结束获得1力量；每次强化+1。"),
+        D("all_in", "孤注一掷", Tier.Elite, Rarity.Uncommon, "首回合获得1能量，但不能获得格挡。"),
+        D("tomorrow", "借来的明天", Tier.Ordinary, Rarity.Uncommon, "首回合多1能量、抽1张牌；第二回合各减少1。"),
+        D("greedy_pocket", "贪婪口袋", Tier.Elite, Rarity.Uncommon, "战斗金币+25%；起手少抽1张牌，至少抽1张。"),
+        D("bitter_sweet", "先苦后甜", Tier.Boss, Rarity.Rare, "每回合首张手动牌费用翻倍，第三张手动牌额外打出一次。"),
+        C("burn_bridges", "过河拆桥", Tier.Elite, Rarity.Rare, "每获得1张永久牌，随机将1张原有牌变为其他角色的同稀有度牌，保留升级；每次强化多变化1张。"),
+        D("borrowed_time", "预借时间", Tier.Boss, Rarity.Rare, "每回合获得1能量，同时获得3灾厄。"),
+        D("bloom_decay", "盛放与凋零", Tier.Boss, Rarity.Rare, "每次卡牌奖励可多选1张。永久牌有8耐久，打出消耗1；耗尽后枯萎，可在营地修复。"),
+        B("shared_fortune", "有福同享", Rarity.Common, "进入下一节点时，获得期间单个对手最高金币收入的50%，上限30；每次强化上限+5。转账与模式金币不计。", false, true, true, true, Tier.Elite),
+        B("adversity_profit", "逆境生财", Rarity.Common, "每次战斗胜利，按开战时携带的不同诅咒获得金币：普通1、精英3、Boss5。同名只计一次，契约不计。整局上限800；每次强化上限+400。", true, true, true, true, Tier.Elite),
+        B("war_feeds_war", "以战养战", Rarity.Common, "每次取得叠1层，最多3层。开战时每层获得1力量、1敏捷、1集中。", false, true, false, true, Tier.Ordinary),
+        B("catch_up", "错峰出击", Rarity.Common, "接下来1场战斗起手多抽1张牌；落后至少一幕时延长至2场。", false, true, false, false, Tier.Ordinary),
+        B("shared_misery", "有难同当", Rarity.Uncommon, "敌人塞入的状态牌会转发给对手，在其下场战斗加入；每名对手最多待收5张。", false, true, true, true, Tier.Elite),
+        B("retaliation", "以牙还牙", Rarity.Uncommon, "收到献祭诅咒时，施加者获得1张诅咒牌；每名施加者最多2张，每次强化上限+1。", false, true, true, true, Tier.Elite),
+        B("siphon", "汲取", Rarity.Uncommon, "每场可放弃1次卡牌奖励，获得10金币和下场首回合2能量；每次强化金币+2。", true, true, true, true, Tier.Elite),
+        B("battle_hardened", "愈战愈勇", Rarity.Rare, "每胜利1场，攻击伤害与格挡+1%；每次强化使每胜加成再+0.1%。计入本局此前胜利。", true, false, true, true, Tier.Boss),
+        B("death_defiance", "死不足惜", Rarity.Rare, "每复活1次，最大生命、攻击伤害与格挡+10%；每次强化使每次加成再+1%。计入本局此前复活。", true, false, true, true, Tier.Boss),
+        D("no_plan", "无计可施", Tier.Boss, Rarity.Rare, "下场开战移出全部技能牌；此后每胜任选1张取回。净化时返还余牌。"),
+        B("small_light", "小而轻", Rarity.Rare, "非战斗时点击：失去3最大生命，移除1张牌。可重复使用，至少保留1最大生命。", true, false, true, true, Tier.Boss),
+        C("farewell_upgrades", "和你的升级说再见吧", Tier.Boss, Rarity.Rare, "所有玩家从下场战斗起无法升级卡牌，包括施加者。保留已有升级，可被诅咒护盾抵挡。"),
+        B("good_connections", "广结善缘", Rarity.Rare, "点击购买对手的1张牌，金币交给原主人。100金币起，每次购买涨50；双方在各自下场开战时交接。", true, false, true, true, Tier.Boss),
+        B("r_key", "R键", Rarity.Rare, "非战斗时点击：保留物品和状态，回到第一幕。怪物生命、伤害、格挡+20%，可累加；此后Boss均算首杀。每次取得可用1次。", true, false, true, false, Tier.Boss),
+        B("sharpen", "磨刃", Rarity.Common, "开战获得1力量；每次强化+1。", false, true, false, true, Tier.Ordinary),
+        B("light_step", "轻步", Rarity.Common, "开战获得1敏捷；每次强化+1。", false, true, false, true, Tier.Ordinary),
+        B("prepared", "整装", Rarity.Common, "开战获得6格挡；每次强化+3。", false, true, false, true, Tier.Ordinary),
+        B("poise", "蓄势", Rarity.Common, "首回合多抽1张牌；每次强化+1。", false, true, false, true, Tier.Ordinary),
+        B("restoration", "静养", Rarity.Common, "每场胜利恢复2生命；每次强化+1。", false, true, false, true, Tier.Ordinary),
+        C("thin_armor", "薄甲", Tier.Ordinary, Rarity.Common, "开战获得1回合脆弱；每次强化+1回合。"),
+        C("exposed", "露隙", Tier.Ordinary, Rarity.Common, "开战获得1回合易伤；每次强化+1回合。"),
+        C("abrasion", "磨损", Tier.Ordinary, Rarity.Common, "开战失去2生命，至少保留1；每次强化多失去1。不触发失血收益。"),
+        B("combat_cycle", "攻守轮转", Rarity.Uncommon, "每回合首次手动先打攻击再打技能，获得4格挡；每次强化+2。", false, true, true, true, Tier.Elite),
+        B("heavy_followup", "重剑余势", Rarity.Uncommon, "每回合首次手动打出实付至少2能量的攻击，抽1张牌；每次强化增加1次本场额外抽1张的机会。", false, true, true, true, Tier.Elite),
+        B("cornered", "困中求生", Rarity.Uncommon, "回合开始时，若生命不高于一半，获得8格挡并抽1张牌。每场1次；每次强化格挡+4。", false, true, true, true, Tier.Elite),
+        C("combo_tax", "连打缴税", Tier.Elite, Rarity.Uncommon, "每手动打出4张牌，所有存活敌人获得3格挡；每次强化+2。"),
+        C("disorder", "失序", Tier.Elite, Rarity.Uncommon, "每场首次重洗弃牌堆时，在抽牌堆加入2张临时晕眩；每次强化多1张。"),
+        D("lone_crown", "孤勇王冠", Tier.Boss, Rarity.Rare, "开战获得2力量、2敏捷。普通治疗减半，营地治疗与复活不受影响。"),
+        D("desperate_echo", "破釜回响", Tier.Boss, Rarity.Rare, "每回合首次手动打出实付至少2能量的非X费攻击，额外打出1次，并失去2生命，至少保留1。"),
+        B("expedition", "远征悬赏", Rarity.Rare, "击杀精英累计悬赏，完成后获得1份可献祭遗物并重新累计。前两幕需3次，第三四幕2次，第五幕1次；重复取得进度+1。", true, false, true, true, Tier.Boss),
+        B("scapegoat", "替死鬼", Rarity.Rare, "每5胜储存1次免死，最多2次；重复取得补1次。触发后剩1生命，不能抵挡直接处决或主动支付生命。", true, false, true, true, Tier.Boss)
     ];
-    public static Effect Get(string id) => All.FirstOrDefault(e => e.Id == id) ?? throw new RuleException("未知效果：" + id);
+    private static readonly IReadOnlyDictionary<string, Effect> byId = All.ToDictionary(effect => effect.Id, StringComparer.Ordinal);
+    public static Effect Get(string id) => byId.TryGetValue(id, out var effect) ? effect : throw new RuleException("未知效果：" + id);
     private static Effect C(string id, string n, Tier t, Rarity r, string d) => new(id, n, EffectKind.Curse, t, r, d);
     private static Effect D(string id, string n, Tier t, Rarity r, string d) => new(id, n, EffectKind.Contract, t, r, d);
     private static Effect B(string id, string n, Rarity r, string d, bool p, bool e, bool b, bool f, Tier tier) => new(id, n, EffectKind.Boon, tier, r, d, p, e, b, f);
@@ -78,8 +79,8 @@ public sealed class RuleException(string message) : Exception(message);
 
 public static class Balance
 {
-    public const int AdversityGoldPerBurden = 5;
-    public static int AdversityGoldCap(int rank) => 1000 + 15 * rank;
+    public static int AdversityGoldCap(int rank) => checked(800 + 400 * Math.Max(0, rank));
+    public static int AdversityGoldPerKind(Tier tier) => tier switch { Tier.Ordinary => 1, Tier.Elite => 3, _ => 5 };
     public static int WarFeedsWarStacks(Holding? holding) => holding == null ? 0 : Math.Clamp(holding.Rank + 1, 1, 3);
     public static double RepeatWeight(int count) => Math.Max(Math.Pow(0.4, Math.Max(0, count)), 0.1);
     public static double RareMultiplier(int burden, bool relic) => 1 + (relic ? 1.5 : 2) * Math.Max(0, burden) / (Math.Max(0, burden) + 8d);
