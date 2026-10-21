@@ -24,7 +24,7 @@ internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, Hash
             var match = StateJson.Deserialize<Match>(archive.MatchJson);
             if (!expected.Select(peer => peer.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToHashSet().SetEquals(match.Racers.Keys)) throw new RuleException("恢复比赛需要原来的玩家名单。");
             if (!archive.Players.TryGetValue(playerId, out var snapshot)) throw new RuleException("缺少该玩家的恢复备份。");
-            var bundle = new NativeCheckpoint.Bundle("0.5.0", archive.RulesVersion, match.Revision, archive.MatchJson, snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey);
+            var bundle = new NativeCheckpoint.Bundle("0.5.0", archive.RulesVersion, match.Revision, archive.MatchJson, snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey, snapshot.Rewards);
             return agreed! with { Enabled = true, Debug = match.DebugMode, Effects = match.EnabledEffects, ResumeBundle = RaceMessage.Compress(StateJson.Serialize(bundle)) };
         }
         string? error = null; bool committed = false;

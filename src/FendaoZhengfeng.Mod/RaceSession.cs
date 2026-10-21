@@ -79,6 +79,7 @@ public sealed class RaceSession : IDisposable
                 Restored = NativeCheckpoint.Restore(bundle);
                 appliedReceipts.UnionWith(bundle.AppliedReceipts ?? []);
                 RaceRuntime.ReplayingBattleKey = bundle.ReplayBattleKey;
+                RewardRecovery.Pending = bundle.Rewards;
             }
             else
             {
@@ -255,6 +256,7 @@ public sealed class RaceSession : IDisposable
         if (disposed) return; disposed = true; Transport.UnregisterMessageHandler<RaceMessage>(OnMessage); Transport.Disconnected -= OnDisconnected;
         foreach (var task in pending.Values) task.TrySetCanceled(); if (Current == this) Current = null;
         checkpointGate?.TrySetCanceled();
+        RewardRecovery.Pending = null;
         try { persistence.Dispose(); } catch (Exception error) { RaceUi.Error("退出前保存进度失败：" + error.Message); }
         if (Transport.IsConnected) Transport.Disconnect(NetError.Quit);
     }

@@ -102,7 +102,7 @@ internal static class RewardChoicePatch
     private static readonly HashSet<Reward> selecting = [];
     static bool Prefix(Reward __instance, ref Task<bool> __result)
     {
-        if (!RaceRuntime.Live || __instance is RaceActionReward || originalCalls.Contains(__instance)) return true;
+        if (!RaceRuntime.Live || originalCalls.Contains(__instance)) return true;
         if (!selecting.Add(__instance)) { __result = Task.FromResult(false); return false; }
         __result = Choose(__instance); return false;
     }

@@ -61,7 +61,7 @@ internal static class NativeNetworkVerification
             lobby.Players.Add(new() { id = 2, character = heartNetwork ? ModelDb.Character<Defect>() : ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
             bool remoteDone = false, remoteSaved = false, remoteInteractiveReady = false, remoteFortuneDone = false; string? remoteCampaign = null; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "fortune_done") remoteFortuneDone = true; if (msg.Kind == "interactive_ready") remoteInteractiveReady = true; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; if (msg.Kind == "verification_campaign") remoteCampaign = msg.Content; });
             bool resume = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESUME") == "1"; RaceRuntime.ResumeRequested = resume;
-            RaceRuntime.ResumeFromHostArchive = resume && System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RECOVERY") == "1";
+            RaceRuntime.ResumeFromHostArchive = resume && (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_RECOVERY") == "1");
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_VANILLA") == "1")
             {
                 RaceConfig.ModeEnabled = !host;
@@ -89,6 +89,8 @@ internal static class NativeNetworkVerification
             await Wait(() => session.Engine.State.Racers[otherId].PublicPacket.Length > 0 && PublicProfiles.Read(session.Engine.State.Racers[otherId])?.Relics.Any(relic => relic is MegaCrit.Sts2.Core.Models.Relics.LizardTail) == true, "peer public profile including late starting relic");
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RECOVERY") == "1")
             { await NativeRecoveryVerification.Run(game, run, session, host, resume); return; }
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_RECOVERY") == "1")
+            { await NativeRewardRecoveryVerification.Run(game, run, session, host, resume); return; }
             Check(run.Acts.Count == 5, "race run contains five acts on both real ENet peers");
             if (interactive)
             {

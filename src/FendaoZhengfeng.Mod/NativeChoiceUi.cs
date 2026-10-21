@@ -91,6 +91,7 @@ internal static class NativeChoiceUi
 internal sealed class RaceActionReward(Player player, int kind) : Reward(player)
 {
     internal const int SerializedType = 464620;
+    internal bool Available => kind == 1 ? RaceModifier.Active?.CanRecoverSkill == true : RaceSession.Current?.Me.BossPrizes.Count > 0;
     protected override RewardType RewardType => (RewardType)SerializedType;
     public override int RewardsSetIndex => 4;
     private string Label => kind == 1 ? "技艺封存 · 取回1张技能牌" : "Boss额外奖励 · 2选1";

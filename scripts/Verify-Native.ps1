@@ -1,11 +1,11 @@
-param([ValidateSet('Single','Mechanics','Recovery','Economy','Heart','HeartNetwork','Campaign','Advanced','Revival','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2')
+param([ValidateSet('Single','Mechanics','Recovery','RewardRecovery','Economy','Heart','HeartNetwork','Campaign','Advanced','Revival','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2')
 $ErrorActionPreference='Stop'
 $repoRoot=Split-Path -Parent $PSScriptRoot
 $reportRoot=Join-Path $repoRoot 'artifacts\verification'
 New-Item -ItemType Directory -Path (Join-Path $reportRoot 'network') -Force | Out-Null
 if(Get-Process SlayTheSpire2 -ErrorAction SilentlyContinue) {throw 'An existing game process is running. Close it before isolated verification.'}
 function Start-VerificationProcess([string]$Role,[bool]$Resume,[bool]$Vanilla=$false,[bool]$HeartNetwork=$false) {
-  $filename=if($Suite -eq 'Recovery') {if($Resume) {"$Role-recovery-resume.log"} else {"$Role-recovery.log"}} elseif($HeartNetwork) {"$Role-heart.log"} elseif($Vanilla) {"$Role-vanilla.log"} elseif($Role -eq 'single') {'single-final.log'} elseif($Resume) {"$Role-resume.log"} else {"$Role.log"}
+  $filename=if($Suite -in @('Recovery','RewardRecovery')) {if($Resume) {"$Role-$Suite-resume.log"} else {"$Role-$Suite.log"}} elseif($HeartNetwork) {"$Role-heart.log"} elseif($Vanilla) {"$Role-vanilla.log"} elseif($Role -eq 'single') {'single-final.log'} elseif($Resume) {"$Role-resume.log"} else {"$Role.log"}
   $logPath=if($Role -eq 'single') {Join-Path $reportRoot $filename} else {Join-Path $reportRoot "network\$filename"}
   $launch=[Diagnostics.ProcessStartInfo]::new()
   $launch.FileName=Join-Path $GameRoot 'SlayTheSpire2.exe'
@@ -18,9 +18,10 @@ function Start-VerificationProcess([string]$Role,[bool]$Resume,[bool]$Vanilla=$f
   $launch.Environment['SteamGameId']='2868840'
   $launch.Environment['FDZF_NATIVE_VERIFY']='1'
   if($Suite -eq 'Recovery') {$launch.Environment['FDZF_VERIFY_RECOVERY']='1'}
+  if($Suite -eq 'RewardRecovery') {$launch.Environment['FDZF_VERIFY_REWARD_RECOVERY']='1'}
   $launch.Environment['FDZF_REPORT_DIR']=Join-Path $reportRoot 'network'
-  if($Suite -eq 'Recovery') {
-    $recoveryReports=Join-Path $reportRoot 'recovery-suite'
+  if($Suite -in @('Recovery','RewardRecovery')) {
+    $recoveryReports=Join-Path $reportRoot "$Suite-suite"
     New-Item -ItemType Directory -Path $recoveryReports -Force | Out-Null
     $launch.Environment['FDZF_REPORT_DIR']=$recoveryReports
   }
@@ -39,7 +40,7 @@ function Wait-Verification($Records) {
     }
     foreach($record in $Records) {
       $log=Get-Content -LiteralPath $record.Log -Raw
-      $marker=if($Suite -eq 'Recovery') {'[FDZF RECOVERY COMPLETE]'} elseif($record.HeartNetwork) {'[FDZF HEART NETWORK COMPLETE]'} elseif($record.Vanilla) {'[FDZF VANILLA COMPLETE]'} elseif($record.Role -eq 'mechanics') {'[FDZF MECHANICS COMPLETE]'} elseif($record.Role -eq 'economy') {'[FDZF ECONOMY COMPLETE]'} elseif($record.Role -eq 'heart') {'[FDZF HEART COMPLETE]'} elseif($record.Role -eq 'campaign') {'[FDZF CAMPAIGN COMPLETE]'} elseif($record.Role -eq 'revival') {'[FDZF REVIVAL COMPLETE]'} elseif($record.Role -eq 'advanced') {'[FDZF ADVANCED COMPLETE]'} elseif($record.Role -eq 'single') {'[FDZF VERIFY COMPLETE]'} elseif($record.Resume) {'[FDZF NETWORK RESUME COMPLETE]'} else {'[FDZF NETWORK COMPLETE]'}
+      $marker=if($Suite -eq 'RewardRecovery') {'[FDZF REWARD RECOVERY COMPLETE]'} elseif($Suite -eq 'Recovery') {'[FDZF RECOVERY COMPLETE]'} elseif($record.HeartNetwork) {'[FDZF HEART NETWORK COMPLETE]'} elseif($record.Vanilla) {'[FDZF VANILLA COMPLETE]'} elseif($record.Role -eq 'mechanics') {'[FDZF MECHANICS COMPLETE]'} elseif($record.Role -eq 'economy') {'[FDZF ECONOMY COMPLETE]'} elseif($record.Role -eq 'heart') {'[FDZF HEART COMPLETE]'} elseif($record.Role -eq 'campaign') {'[FDZF CAMPAIGN COMPLETE]'} elseif($record.Role -eq 'revival') {'[FDZF REVIVAL COMPLETE]'} elseif($record.Role -eq 'advanced') {'[FDZF ADVANCED COMPLETE]'} elseif($record.Role -eq 'single') {'[FDZF VERIFY COMPLETE]'} elseif($record.Resume) {'[FDZF NETWORK RESUME COMPLETE]'} else {'[FDZF NETWORK COMPLETE]'}
       if($record.Process.ExitCode -ne 0 -or !$log.Contains($marker)) {throw "Verification failed: $($record.Log)"}
       if($log -match 'LocException|ObjectDisposedException|turn loop died|\[FDZF (?:VERIFY|NETWORK|ADVANCED|CAMPAIGN|REVIVAL|HEART|ECONOMY) FAILED\]') {throw "Native runtime error: $($record.Log)"}
       Write-Output "PASS $($record.Role) resume=$($record.Resume): $($record.Log)"
@@ -66,7 +67,7 @@ if($Suite -in @('HeartNetwork','All')) {Write-Output 'Starting two-process heart
 
 if($Suite -in @('Economy','All')) {Write-Output 'Starting native economy and opening-stats verification';Wait-Verification @((Start-VerificationProcess 'economy' $false))}
 
-if($Suite -eq 'Recovery') {
+if($Suite -in @('Recovery','RewardRecovery')) {
  Write-Output 'Starting host-owned disconnected save verification'
  $records=@((Start-VerificationProcess 'host' $false),(Start-VerificationProcess 'client' $false));Wait-Verification $records
  Write-Output 'Starting recovery from host archive without client resume save'

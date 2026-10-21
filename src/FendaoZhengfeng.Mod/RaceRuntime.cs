@@ -29,10 +29,12 @@ public static class RaceRuntime
     public static string RoomKey => State is { } s ? $"lap{RaceSession.Current?.Me.ResetCount ?? 0}:{s.CurrentActIndex}:{s.ActFloor}:{s.CurrentRoom?.Id}:{s.CurrentMapCoord}" : "";
     public static bool Live => RaceSession.Current != null && State?.Modifiers.Any(m => m is RaceModifier) == true;
     private static readonly Dictionary<Reward, string> rewardIds = [];
+    private static int rewardSequence;
     private static string lastNode = "";
     internal static async Task<RunState> Start(NGame game, StartRunLobby lobby, IReadOnlyList<ActModel> acts, IReadOnlyList<ModifierModel> modifiers, string seed, int ascension, LobbyRules? rules = null)
     {
-        rewardIds.Clear(); RewardRoom = null; CombatRewards = null; CurrentCardPlay = null; lastNode = "";
+        rewardIds.Clear(); rewardSequence = 0; RewardRoom = null; CombatRewards = null; CurrentCardPlay = null; lastNode = "";
+        RewardRecovery.Pending = null;
         var session = new RaceSession(lobby, seed, rules ?? LobbyRules.Local());
         try
         {
@@ -64,7 +66,13 @@ public static class RaceRuntime
     }
     internal static void BindRewardKey(Reward reward, string key) => rewardIds[reward] = key;
     public static string RewardKey(Reward reward)
-    { if (!rewardIds.TryGetValue(reward, out var key)) { key = (RaceSession.Current?.Me.BattleKey ?? RoomKey) + "|" + rewardIds.Count; rewardIds[reward] = key; } return key; }
+    {
+        if (rewardIds.TryGetValue(reward, out var key)) return key;
+        var session = RaceSession.Current;
+        do { key = (session?.Me.BattleKey ?? RoomKey) + "|" + rewardSequence++; }
+        while (rewardIds.Values.Contains(key) || session?.Engine.State.ConsumedRewards.Contains(session.LocalId + ":" + key) == true);
+        rewardIds[reward] = key; return key;
+    }
     public static async Task NodeChanged()
     {
         if (!Live || RaceSession.Current is not { } s) return;
@@ -74,7 +82,7 @@ public static class RaceRuntime
             await s.Submit(s.New("node_end", lastNode.Length > 0 ? lastNode : "initial:" + key));
         lastNode = key;
     }
-    internal static void ResetLocalTracking() { rewardIds.Clear(); RewardRoom = null; CombatRewards = null; lastNode = ""; }
+    internal static void ResetLocalTracking() { rewardIds.Clear(); rewardSequence = 0; RewardRoom = null; CombatRewards = null; RewardRecovery.Pending = null; lastNode = ""; }
     public static void Checkpoint()
     {
         if (!Live || RaceSession.Current?.IsMock == true) return;
@@ -83,7 +91,7 @@ public static class RaceRuntime
             var s = RaceSession.Current!; var snapshot = s.Recovery.SendSnapshot();
             if (snapshot == null) return;
             var bundle = new NativeCheckpoint.Bundle("0.5.0", s.Engine.State.Version, s.Engine.State.Revision,
-                StateJson.Serialize(s.Engine.State), snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey);
+                StateJson.Serialize(s.Engine.State), snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey, snapshot.Rewards);
             s.QueueSave("checkpoint.json", StateJson.Serialize(bundle));
         }
         catch (Exception e) { RaceUi.Error("个人检查点保存失败：" + e.Message); }
@@ -110,7 +118,7 @@ internal static class SharedCheckpointBarrierPatch
 public static class NativeCheckpoint
 {
     public sealed record Bundle(string ModVersion, string RulesVersion, long Revision, string MatchJson, string NativePacket,
-        string[]? AppliedReceipts = null, string ReplayBattleKey = "");
+        string[]? AppliedReceipts = null, string ReplayBattleKey = "", SavedCombatRewards? Rewards = null);
     public static string EncodeCard(CardModel card)
     { var writer = new PacketWriter(); card.ToSerializable().Serialize(writer); return Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition); }
     public static CardModel DecodeCard(string value, RunState run, Player owner)

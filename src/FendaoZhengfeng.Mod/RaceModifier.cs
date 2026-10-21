@@ -229,6 +229,7 @@ public sealed partial class RaceModifier : ModifierModel
     public override async Task BeforeCombatRewardOffered(RewardsSet rewards, CombatRoom room)
     {
         RaceRuntime.RewardRoom = room; RaceRuntime.CombatRewards = rewards;
+        if (RewardRecovery.IsRestored(rewards)) return;
         await AddExpeditionRewards(rewards);
         if (CanRecoverSkill) rewards.Rewards.Add(new RaceActionReward(Player, 1));
         if (room.RoomType == RoomType.Boss && Me.BossPrizes.Count > 0) rewards.Rewards.Add(new RaceActionReward(Player, 2));

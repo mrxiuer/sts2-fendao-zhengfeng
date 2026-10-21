@@ -11,7 +11,7 @@ namespace FendaoZhengfeng.Mod;
 // A host archive contains each isolated run, rather than pretending that the
 // native cooperative save represents these independent singleplayer worlds.
 internal sealed record RecoverySnapshot(string Player, string Character, string NativePacket,
-    string BattleKey, string[] AppliedReceipts, string[] AppliedTrades, long CapturedAt);
+    string BattleKey, string[] AppliedReceipts, string[] AppliedTrades, long CapturedAt, SavedCombatRewards? Rewards = null);
 internal sealed record RecoveryArchive(string RulesVersion, string Host, string MatchJson,
     Dictionary<string, RecoverySnapshot> Players, long SavedAt);
 
@@ -53,7 +53,7 @@ internal sealed class RaceRecovery(RaceSession session)
             save.PreFinishedRoom = new SerializableRoom
             {
                 RoomType = combat.RoomType, EncounterId = combat.Encounter.Id,
-                IsPreFinished = combat.IsPreFinished, GoldProportion = combat.GoldProportion,
+                IsPreFinished = combat.IsPreFinished || session.Me.WonBattles.Contains(session.Me.BattleKey), GoldProportion = combat.GoldProportion,
                 ParentEventId = combat.ParentEventId, ShouldResumeParentEvent = combat.ShouldResumeParentEventAfterCombat,
                 EncounterState = combat.Encounter.SaveCustomState(),
                 ExtraRewards = combat.ExtraRewards.ToDictionary(pair => pair.Key.NetId, pair => pair.Value.Select(r => r.ToSerializable()).ToList())
@@ -64,7 +64,7 @@ internal sealed class RaceRecovery(RaceSession session)
         return new(session.LocalId, run.Players.Single().Character.Id.ToString(),
             Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition), session.Me.InBattle ? session.Me.BattleKey : "",
             session.AppliedReceiptIds(), RaceModifier.Active is { } modifier ? StateJson.Deserialize<string[]>(modifier.AppliedTrades) : [],
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), run.CurrentRoom is CombatRoom rewardRoom ? RewardRecovery.Capture(rewardRoom) : null);
     }
     internal RecoverySnapshot? SendSnapshot()
     {
