@@ -30,7 +30,7 @@ internal static class EventRecovery
     internal static SavedFinishedEvent CaptureFinished(EventRoom room)
     {
         var model = room.LocalMutableEvent;
-        if (!model.IsFinished || model.LayoutType != EventLayoutType.Default) throw new InvalidDataException("不是可保存的已结束普通事件。");
+        if (!model.IsFinished || model.LayoutType != EventLayoutType.Default) throw new InvalidDataException(L10n.T("不是可保存的已结束普通事件。"));
         var writer = new PacketWriter(); model.Rng.ToSerializable().Serialize(writer);
         return new(RaceRuntime.RoomKey, model.Description?.GetFormattedText() ?? "", Convert.ToBase64String(writer.Buffer, 0, writer.BytePosition));
     }
@@ -59,7 +59,7 @@ internal static class EventRecovery
         if (player.RunState.CurrentRoom is not EventRoom room || !openPending.TryGetValue(room, out var save)) return false;
         if (model is not DenseVegetation || room.CanonicalEvent.Id != model.Id
             || save.Page is not ("DENSE_VEGETATION.pages.INITIAL.description" or "DENSE_VEGETATION.pages.REST.description"))
-            throw new InvalidDataException("无法恢复该事件页面。");
+            throw new InvalidDataException(L10n.T("无法恢复该事件页面。"));
         Initialize(model, player, synchronizer, save.RngPacket);
         model.DynamicVars.Gold.BaseValue = save.Gold; model.DynamicVars.Heal.BaseValue = save.Heal; model.DynamicVars.HpLoss.BaseValue = save.HpLoss;
         IEnumerable<EventOption> options;

@@ -80,7 +80,7 @@ public sealed partial class RaceModifier
                 if (!appliedTrades.Contains(marker))
                 {
                     var card = Player.Deck.Cards.SingleOrDefault(card => CardIdentity(card) == trade.Card.Id)
-                        ?? throw new InvalidOperationException("已成交卡牌丢失，无法安全交接：" + trade.Card.Name);
+                        ?? throw new InvalidOperationException(L10n.T("已成交卡牌丢失，无法安全交接：") + trade.Card.Name);
                     await RemovePermanent(card); appliedTrades.Add(marker);
                 }
                 await S.Submit(S.New("trade_removed", trade.Id));
@@ -117,7 +117,7 @@ public sealed partial class RaceModifier
             selected ??= (await CardSelectCmd.FromSimpleGrid(Context(), choices, Player,
                 new CardSelectorPrefs(new LocString(ModEntry.Id, "action.recover.title"), 1) { Cancelable = true })).FirstOrDefault();
             if (selected == null) return false;
-            int index = choices.IndexOf(selected); if (index < 0) throw new InvalidOperationException("技能选择失效。");
+            int index = choices.IndexOf(selected); if (index < 0) throw new InvalidOperationException(L10n.T("技能选择失效。"));
             var stored = skillVault[index];
             suppressPropagation = true;
             try { await CardPileCmd.Add(selected, PileType.Deck, skipVisuals: true); deckIds[selected] = stored.Id; if (stored.Wear >= 0) wear[selected] = stored.Wear; }
@@ -128,12 +128,12 @@ public sealed partial class RaceModifier
     }
     internal async Task RemoveWithSmallLight(CardModel? chosen = null)
     {
-        if (!Me.Has("small_light") || Me.InBattle || CombatManager.Instance.IsInProgress || Me.Finished || Me.ResetPending) throw new RuleException("小而轻只能在非战斗时使用。");
-        if (Player.Creature.MaxHp <= 3) throw new RuleException("需要支付3点最大生命，支付后至少保留1点。");
+        if (!Me.Has("small_light") || Me.InBattle || CombatManager.Instance.IsInProgress || Me.Finished || Me.ResetPending) throw new RuleException(L10n.T("小而轻只能在非战斗时使用。"));
+        if (Player.Creature.MaxHp <= 3) throw new RuleException(L10n.T("需要支付3点最大生命，支付后至少保留1点。"));
         var card = chosen ?? (await CardSelectCmd.FromDeckGeneric(Player,
             new CardSelectorPrefs(new LocString(ModEntry.Id, "action.remove.title"), 1) { Cancelable = true }, candidate => !IsReserved(candidate))).FirstOrDefault();
         if (card == null) return;
-        if (!Player.Deck.Cards.Contains(card) || IsReserved(card) || Player.Creature.MaxHp <= 3) throw new RuleException("该卡牌已不可移除。");
+        if (!Player.Deck.Cards.Contains(card) || IsReserved(card) || Player.Creature.MaxHp <= 3) throw new RuleException(L10n.T("该卡牌已不可移除。"));
         await RemovePermanent(card); SmallLightLoss += 3; await CreatureCmd.SetMaxHp(Player.Creature, Player.Creature.MaxHp - 3);
         await S.Submit(S.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(RunState)) }); RaceRuntime.Checkpoint(); RaceUi.Refresh();
     }
@@ -160,7 +160,7 @@ internal static class AdvancedEffects
         else if (id == "tail_refill")
         {
             var player = RaceRuntime.State!.Players.Single();
-            if (session.Me.InBattle || CombatManager.Instance.IsInProgress || !player.Relics.OfType<MegaCrit.Sts2.Core.Models.Relics.LizardTail>().Any(tail => tail.WasUsed)) throw new RuleException("请在非战斗时补充已消耗的蜥蜴尾巴。");
+            if (session.Me.InBattle || CombatManager.Instance.IsInProgress || !player.Relics.OfType<MegaCrit.Sts2.Core.Models.Relics.LizardTail>().Any(tail => tail.WasUsed)) throw new RuleException(L10n.T("请在非战斗时补充已消耗的蜥蜴尾巴。"));
             await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(RaceRuntime.State)) });
             await session.Submit(session.New("tail_refill"));
             await modifier.ApplyReceipts(new ThrowingPlayerChoiceContext(), false);
@@ -168,19 +168,19 @@ internal static class AdvancedEffects
         }
         else if (id == "r_key")
         {
-            int choice = await RaceUi.Choose("R键 · 确认重置", ["使用R键\n保留当前角色资源与全部模式状态，回到第一幕起点；此后怪物生命、伤害、格挡累计增加20%。", "取消"]);
+            int choice = await RaceUi.Choose(L10n.T("R键 · 确认重置"), [L10n.T("使用R键\n保留当前角色资源与全部模式状态，回到第一幕起点；此后怪物生命、伤害、格挡累计增加20%。"), L10n.T("取消")]);
             if (choice == 0) await ResetRun();
         }
     }
     internal static async Task BuyCard(string? sellerId = null, string? cardId = null)
     {
         var session = RaceSession.Current!; var run = RaceRuntime.State!; var modifier = RaceModifier.Active!;
-        if (!session.Me.Has("good_connections")) throw new RuleException("尚未取得强买强卖。");
+        if (!session.Me.Has("good_connections")) throw new RuleException(L10n.T("尚未取得强买强卖。"));
         var sellers = session.Engine.State.Racers.Values.Where(racer => racer.Id != session.LocalId && !racer.Eliminated && !racer.Finished && !racer.ResetPending).ToList();
-        int who = sellerId == null ? await RaceUi.Choose("强买强卖 · 选择玩家", sellers.Select(racer => racer.Name + "\n查看其当前公开牌组，已被购买的牌不能再次购买。").ToList()) : sellers.FindIndex(racer => racer.Id == sellerId);
+        int who = sellerId == null ? await RaceUi.Choose(L10n.T("强买强卖 · 选择玩家"), sellers.Select(racer => L10n.RacerName(racer) + L10n.T("\n查看其当前公开牌组，已被购买的牌不能再次购买。")).ToList()) : sellers.FindIndex(racer => racer.Id == sellerId);
         if (who < 0) return;
         var seller = sellers[who]; var cards = seller.MarketCards.Where(card => !session.Engine.State.Trades.Any(trade => trade.Seller == seller.Id && trade.Card.Id == card.Id)).ToList();
-        if (cards.Count == 0) throw new RuleException("对方尚无可购买的公开卡牌，请稍后刷新。");
+        if (cards.Count == 0) throw new RuleException(L10n.T("对方尚无可购买的公开卡牌，请稍后刷新。"));
         int price = checked(100 + 50 * session.Me.Purchases);
         string? selectedId = cardId;
         if (selectedId == null)
@@ -193,7 +193,7 @@ internal static class AdvancedEffects
                 if (selected == null) return; selectedId = cards[previews.IndexOf(selected)].Id;
             }
             finally { foreach (var card in previews) card.RemoveFromState(); }
-            int confirmation = await RaceUi.Choose($"支付 {price} 金币购买卡牌", ["确认购买\n金币支付给原主人；双方各自在下场开战时交接，不改变正在进行的战斗。", "取消"]);
+            int confirmation = await RaceUi.Choose(L10n.F($"支付 {price} 金币购买卡牌"), [L10n.T("确认购买\n金币支付给原主人；双方各自在下场开战时交接，不改变正在进行的战斗。"), L10n.T("取消")]);
             if (confirmation != 0) return;
         }
         await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
@@ -203,7 +203,7 @@ internal static class AdvancedEffects
     internal static async Task ResetRun()
     {
         var session = RaceSession.Current!; var run = RaceRuntime.State!;
-        if (session.Me.InBattle || CombatManager.Instance.IsInProgress || session.WaitingAtCheckpoint || session.PauseRequested) throw new RuleException("请先完成战斗与共同保存，再使用R键。");
+        if (session.Me.InBattle || CombatManager.Instance.IsInProgress || session.WaitingAtCheckpoint || session.PauseRequested) throw new RuleException(L10n.T("请先完成战斗与共同保存，再使用R键。"));
         await session.Submit(session.New("reset_use"));
         RaceRuntime.ResetLocalTracking();
         // Keep the current run and its actual player objects; only regenerate act/map state.

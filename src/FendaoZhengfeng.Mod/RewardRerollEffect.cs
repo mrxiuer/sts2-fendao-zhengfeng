@@ -68,7 +68,7 @@ internal static class RewardRerollEffect
         => RewardRerollTransaction.IsInFlight(session, key);
 
     private static string Tooltip(Reward reward)
-        => "按原奖励来源重新生成内容；次数按每份奖励单独保存。";
+        => L10n.T("按原奖励来源重新生成内容；次数按每份奖励单独保存。");
 
     internal static void AttachButton(NRewardButton row, Reward reward, RewardsSet set)
     {
@@ -122,7 +122,7 @@ internal static class RewardRerollEffect
             string key = RaceRuntime.RewardKey(reward);
             var usage = RewardRerollRules.NativeUsage(session.Me, key);
             countLabel.Text = $"{usage.Remaining}/{usage.Limit}";
-            button.TooltipText = $"再来一次 · 剩余{usage.Remaining}/{usage.Limit}次\n" + Tooltip(reward);
+            button.TooltipText = L10n.F($"再来一次 · 剩余{usage.Remaining}/{usage.Limit}次\n") + Tooltip(reward);
             button.Modulate = usage.CanRefresh ? Colors.White : new Color(0.65f, 0.7f, 0.7f);
             button.Disabled = busy || !usage.CanRefresh || !IsSupported(reward)
                 || IsInFlight(session, key)
@@ -144,19 +144,19 @@ internal static class RewardRerollEffect
 
     internal static async Task RefreshAsync(NRewardButton? row, Reward reward, RewardsSet set)
     {
-        var session = RaceSession.Current ?? throw new InvalidOperationException("比赛会话已结束。");
+        var session = RaceSession.Current ?? throw new InvalidOperationException(L10n.T("比赛会话已结束。"));
         if (!RaceRuntime.Live || !RewardRerollPersistence.IsCurrentSet(set) || !IsTrackedReward(set, reward)
-            || !IsSupported(reward)) throw new RuleException("这份奖励当前不能刷新。");
+            || !IsSupported(reward)) throw new RuleException(L10n.T("这份奖励当前不能刷新。"));
 
         string key = RaceRuntime.RewardKey(reward);
         if (!RewardRerollRules.CanRefreshNative(session.Engine.State, session.Me, key))
-            throw new RuleException("这份奖励没有可用的刷新次数。");
+            throw new RuleException(L10n.T("这份奖励没有可用的刷新次数。"));
 
         using var transaction = RewardRerollTransaction.Begin(session, key);
         var command = session.New(RewardRerollRules.NativeCommand, key);
         await session.Submit(command);
         var receipt = RewardRerollTransaction.FindCommittedReceipt(session, command.Id + ":reroll", key)
-            ?? throw new InvalidDataException("奖励刷新已提交，但未收到对应的原生刷新收据；请恢复后重试该奖励。");
+            ?? throw new InvalidDataException(L10n.T("奖励刷新已提交，但未收到对应的原生刷新收据；请恢复后重试该奖励。"));
 
         // No await may separate native mutation and its recovery marker. A save
         // between them must either replay the receipt or carry the applied token.
@@ -172,20 +172,20 @@ internal static class RewardRerollEffect
         switch (reward)
         {
             case GoldReward:
-                throw new RuleException("金币奖励不能刷新。");
+                throw new RuleException(L10n.T("金币奖励不能刷新。"));
             case PotionReward potion:
             {
                 var replacement = new PotionReward(potion.Player);
                 if (BaseRng.GetValue(potion) is Rng rng) replacement.SetRng(rng);
                 replacement.Populate();
-                if (replacement.Potion == null || PotionSetter == null) throw new InvalidOperationException("原生药水奖励生成失败。");
+                if (replacement.Potion == null || PotionSetter == null) throw new InvalidOperationException(L10n.T("原生药水奖励生成失败。"));
                 PotionSetter.Invoke(potion, [replacement.Potion]);
                 PotionIcon.SetValue(potion, null);
                 break;
             }
             case RelicReward relic:
             {
-                var old = relic.Relic ?? throw new InvalidOperationException("遗物奖励尚未生成。");
+                var old = relic.Relic ?? throw new InvalidOperationException(L10n.T("遗物奖励尚未生成。"));
                 var rng = BaseRng.GetValue(relic) as Rng;
                 bool predetermined = RelicPredetermined.GetValue(relic) != null;
                 var rarity = predetermined
@@ -219,7 +219,7 @@ internal static class RewardRerollEffect
                 break;
             }
             default:
-                throw new RuleException("这类奖励没有可复用的原生刷新规则。");
+                throw new RuleException(L10n.T("这类奖励没有可复用的原生刷新规则。"));
         }
     }
 
@@ -453,7 +453,7 @@ internal static class RewardRerollPersistence
         if (entry.Relic?.StartsWith("fdzf:encore-gold-range:", StringComparison.Ordinal) == true)
         {
             var range = DecodeJson<int[]>(entry.Relic["fdzf:encore-gold-range:".Length..]);
-            if (range.Length != 2 || range[0] > range[1]) throw new InvalidDataException("金币奖励范围数据无效。");
+            if (range.Length != 2 || range[0] > range[1]) throw new InvalidDataException(L10n.T("金币奖励范围数据无效。"));
             var saved = Unpack<SerializableReward>(entry.Packet);
             var gold = new GoldReward(range[0], range[1], player, saved.WasGoldStolenBack);
             AccessTools.PropertySetter(typeof(GoldReward), nameof(GoldReward.Amount))!.Invoke(gold, [saved.GoldAmount]);
@@ -522,7 +522,7 @@ internal static class RewardRerollPersistence
 
     private static string EncodeJson<T>(T value) => Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(value));
     private static T DecodeJson<T>(string value) => JsonSerializer.Deserialize<T>(Convert.FromBase64String(value))
-        ?? throw new InvalidDataException("奖励恢复附加数据无效。");
+        ?? throw new InvalidDataException(L10n.T("奖励恢复附加数据无效。"));
 
     internal static void Reset()
     {
@@ -637,16 +637,16 @@ internal static class RewardRerollOfferUi
 
     internal static string RefreshLabel(string offerId)
     {
-        if (RaceSession.Current is not { } session) return "刷新候选";
+        if (RaceSession.Current is not { } session) return L10n.T("刷新候选");
         var usage = RewardRerollRules.OfferUsage(session.Me, offerId);
-        return $"刷新候选 · 已用 {usage.Used}/{usage.Limit}";
+        return L10n.F($"刷新候选 · 已用 {usage.Used}/{usage.Limit}");
     }
 
     internal static async Task RefreshAsync(string rewardKey, Route route)
     {
-        var session = RaceSession.Current ?? throw new InvalidOperationException("比赛会话已结束。");
+        var session = RaceSession.Current ?? throw new InvalidOperationException(L10n.T("比赛会话已结束。"));
         var offerId = RewardRerollRules.OfferId(session.LocalId, rewardKey, route);
-        if (!CanRefresh(offerId)) throw new RuleException("这份候选奖励没有可用的刷新次数。");
+        if (!CanRefresh(offerId)) throw new RuleException(L10n.T("这份候选奖励没有可用的刷新次数。"));
         await session.Submit(session.New(RewardRerollRules.OfferCommand, rewardKey, route: route));
         // Offer.Candidates and the usage counter are already in the synchronized
         // Core state; this checkpoint makes the generation durable before UI reopen.

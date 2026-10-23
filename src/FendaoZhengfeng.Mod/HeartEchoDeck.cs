@@ -20,11 +20,11 @@ internal sealed class HeartEchoDeck
         if (Active || RaceSession.Current is not { } session || RaceRuntime.State is not { } run) return;
         var donors = session.Engine.State.Racers.Values.Where(r => r.Id != session.LocalId && !r.Eliminated && !r.Finished && !r.ResetPending && r.PublicPacket.Length > 0)
             .OrderBy(r => r.Id, StringComparer.Ordinal).ToList();
-        if (donors.Count == 0) { RaceUi.Notify("众生回响：没有可复制的对手牌组，本次跳过。"); return; }
+        if (donors.Count == 0) { RaceUi.Notify(L10n.T("众生回响：没有可复制的对手牌组，本次跳过。")); return; }
         var rng = new StableRandom(run.Rng.Seed + ":heart-copy:" + session.LocalId + ":" + session.Me.ResetCount);
         var donor = donors[(int)(rng.Next() * donors.Count)];
         var source = PublicProfiles.Read(donor);
-        if (source == null || source.Deck.Cards.Count == 0) { RaceUi.Notify("众生回响：对手牌组为空，本次跳过。"); return; }
+        if (source == null || source.Deck.Cards.Count == 0) { RaceUi.Notify(L10n.T("众生回响：对手牌组为空，本次跳过。")); return; }
         // Decode into this run BEFORE touching the local combat piles. The source is read-only.
         var player = run.Players.Single();
         var templates = source.Deck.Cards.Select(card => NativeCheckpoint.DecodeCard(NativeCheckpoint.EncodeCard(card), run, player)).ToList();
@@ -32,14 +32,14 @@ internal sealed class HeartEchoDeck
         foreach (var template in templates) template.RemoveFromState();
         for (int i = deck.Count - 1; i > 0; i--) { int j = (int)(rng.Next() * (i + 1)); (deck[i], deck[j]) = (deck[j], deck[i]); }
         await PowerCmd.Apply<HeartEchoPower>(new MegaCrit.Sts2.Core.GameActions.Multiplayer.ThrowingPlayerChoiceContext(), player.Creature, 2, heart.Creature, null);
-        if (!player.Creature.HasPower<HeartEchoPower>()) { RaceUi.Notify("众生回响被人工制品抵挡。"); foreach (var card in deck) card.RemoveFromState(); return; }
+        if (!player.Creature.HasPower<HeartEchoPower>()) { RaceUi.Notify(L10n.T("众生回响被人工制品抵挡。")); foreach (var card in deck) card.RemoveFromState(); return; }
         foreach (var type in piles) original[type] = type.GetPile(player).Cards.ToList();
         // Detach only from visible piles, never from CombatState. Restore these exact instances
         // without treating them as newly entered cards or retriggering their opening hooks.
         RemoveHandVisuals(player, original[PileType.Hand]);
         foreach (var card in original.Values.SelectMany(cards => cards)) card.RemoveFromCurrentPile();
         foreach (var card in deck) { card.DeckVersion = null; copies.Add(card); await CardPileCmd.Add(card, PileType.Draw, skipVisuals: true); }
-        DonorName = donor.Name;
+        DonorName = L10n.RacerName(donor);
         HeartPresentation.CopyNotice(DonorName);
     }
     internal async Task Restore(Player player)
@@ -66,7 +66,7 @@ internal sealed class HeartEchoDeck
         }
         original.Clear(); copies.Clear(); DonorName = "";
         await PowerCmd.Remove<HeartEchoPower>(player.Creature);
-        RaceUi.Notify("众生回响结束：已恢复自己的战斗牌组。");
+        RaceUi.Notify(L10n.T("众生回响结束：已恢复自己的战斗牌组。"));
     }
     private static void RemoveHandVisuals(Player player, IEnumerable<CardModel> cards)
     {

@@ -23,13 +23,13 @@ internal static class CampRecovery
     internal static SavedCamp Capture(RestSiteRoom room)
     {
         var records = Records(RunManager.Instance.RestSiteSynchronizer);
-        if (records.Count != 1) throw new InvalidDataException("营地尚未完成初始化。");
+        if (records.Count != 1) throw new InvalidDataException(L10n.T("营地尚未完成初始化。"));
         object record = records[0]!; var type = record.GetType();
         var completion = (TaskCompletionSource)AccessTools.Field(type, "completionTaskSource").GetValue(record)!;
         var options = room.Options.Select(option =>
         {
             if (option.GetType().Assembly != typeof(RestSiteOption).Assembly && option is not RaceRestOption)
-                throw new InvalidDataException("尚不支持保存第三方营地选项：" + option.GetType().FullName);
+                throw new InvalidDataException(L10n.T("尚不支持保存第三方营地选项：") + option.GetType().FullName);
             return new SavedCampOption(option.OptionId, option is SmithRestSiteOption smith ? smith.SmithCount : 1);
         }).ToArray();
         return new(RaceRuntime.RoomKey, options, (uint?)AccessTools.Field(type, "lastChosenOptionIndex").GetValue(record), completion.Task.IsCompleted);
@@ -52,12 +52,12 @@ internal static class CampRecovery
         "LIFT" => new LiftRestSiteOption(player),
         "FDZF_CLEANSE" => new RaceRestOption(player),
         "FDZF_REPAIR" => new RaceRestOption(player, true),
-        _ => throw new InvalidDataException("不认识保存的营地选项：" + save.Id)
+        _ => throw new InvalidDataException(L10n.T("不认识保存的营地选项：") + save.Id)
     };
     internal static bool TryRestore(RestSiteSynchronizer synchronizer)
     {
         if (RaceRuntime.State is not { CurrentRoom: RestSiteRoom room } run || !pending.TryGetValue(room, out var save)) return false;
-        if (run.Players.Count != 1) throw new InvalidDataException("营地恢复必须使用独立单人进度。");
+        if (run.Players.Count != 1) throw new InvalidDataException(L10n.T("营地恢复必须使用独立单人进度。"));
         var records = Records(synchronizer);
         var type = AccessTools.Inner(typeof(RestSiteSynchronizer), "PlayerRestSite");
         var record = Activator.CreateInstance(type, nonPublic: true)!;

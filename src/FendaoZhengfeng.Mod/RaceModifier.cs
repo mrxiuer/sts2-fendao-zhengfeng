@@ -19,7 +19,7 @@ namespace FendaoZhengfeng.Mod;
 
 public sealed partial class RaceModifier : ModifierModel
 {
-    private RaceSession S => RaceSession.Current ?? throw new InvalidOperationException("分道争锋会话未初始化。");
+    private RaceSession S => RaceSession.Current ?? throw new InvalidOperationException(L10n.T("分道争锋会话未初始化。"));
     private Racer Me => S.Me;
     private Player Player => RunState.Players.Single();
     public static RaceModifier? Active => RaceRuntime.State?.Modifiers.OfType<RaceModifier>().FirstOrDefault();
@@ -77,7 +77,7 @@ public sealed partial class RaceModifier : ModifierModel
         await S.Submit(S.New("battle_start", key));
         await BeforeAdvancedCombat();
         await BeforePuppetCombat();
-        var state = Player.Creature.CombatState ?? throw new InvalidOperationException("战斗未创建。");
+        var state = Player.Creature.CombatState ?? throw new InvalidOperationException(L10n.T("战斗未创建。"));
         foreach (var enemy in state.Enemies) initialEnemies.Add(enemy);
         await Power<StrengthPower>(Player.Creature, -N("exhaustion"));
         await Power<DexterityPower>(Player.Creature, -N("imbalance"));
@@ -98,7 +98,7 @@ public sealed partial class RaceModifier : ModifierModel
             OpeningStatuses = StateJson.Serialize(Me.PendingStatuses);
             await S.Submit(opening);
         }
-        else if (!replayOpening) throw new RuleException("该战斗开场已经结算，不能重复进入。");
+        else if (!replayOpening) throw new RuleException(L10n.T("该战斗开场已经结算，不能重复进入。"));
     }
     private async Task Power<T>(Creature creature, int amount) where T : PowerModel
     { if (amount != 0) await CharmPowerCmd.Apply<T>(Context(), creature, amount, null, null); }

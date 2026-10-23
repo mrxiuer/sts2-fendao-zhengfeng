@@ -18,9 +18,9 @@ internal static class NativeClaimJournal
         while(true) {
             await NativeRewardGrant.WaitForEntry(session);
             if(!session.IsMock) {
-                if(!ReferenceEquals(RaceSession.Current,session) || !RaceRuntime.Live) throw new OperationCanceledException("比赛已结束。");
-                if(!session.IsHost && !session.Transport.IsConnected) throw new IOException("比赛通信已断开，领取记录保留待房主恢复。");
-                if(session.WaitingAtCheckpoint) throw new RuleException("个人进度已进入共同检查点。");
+                if(!ReferenceEquals(RaceSession.Current,session) || !RaceRuntime.Live) throw new OperationCanceledException(L10n.T("比赛已结束。"));
+                if(!session.IsHost && !session.Transport.IsConnected) throw new IOException(L10n.T("比赛通信已断开，领取记录保留待房主恢复。"));
+                if(session.WaitingAtCheckpoint) throw new RuleException(L10n.T("个人进度已进入共同检查点。"));
                 // Both messages use the same reliable ordered transport. Never
                 // let a confirmed claim outrun its already-granted inventory.
                 if(session.Recovery.SendSnapshot()==null) {await Task.Delay(20);continue;}

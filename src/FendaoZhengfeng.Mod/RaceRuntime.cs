@@ -137,11 +137,11 @@ public static class RaceRuntime
         {
             var s = RaceSession.Current!; var snapshot = s.Recovery.SendSnapshot();
             if (snapshot == null) return;
-            var bundle = new NativeCheckpoint.Bundle("0.5.0", s.Engine.State.Version, s.Engine.State.Revision,
+            var bundle = new NativeCheckpoint.Bundle("0.5.1", s.Engine.State.Version, s.Engine.State.Revision,
                 StateJson.Serialize(s.Engine.State), snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey, snapshot.Rewards);
             s.QueueSave("checkpoint.json", StateJson.Serialize(bundle));
         }
-        catch (Exception e) { RaceUi.Error("个人检查点保存失败：" + e.Message); }
+        catch (Exception e) { RaceUi.Error(L10n.T("个人检查点保存失败：") + L10n.T(e.Message)); }
     }
 }
 

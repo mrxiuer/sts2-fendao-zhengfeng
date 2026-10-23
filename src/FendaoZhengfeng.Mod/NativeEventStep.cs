@@ -25,7 +25,7 @@ internal sealed class NativeEventStep : IDisposable
     {
         long until=System.Environment.TickCount64+5000;
         while(IsApplying(session) || NativeRewardGrant.IsApplying(session)) {
-            if(System.Environment.TickCount64>=until) throw new IOException("事件或奖励仍在执行，未覆盖旧存档；请完成当前选择后重试。");
+            if(System.Environment.TickCount64>=until) throw new IOException(L10n.T("事件或奖励仍在执行，未覆盖旧存档；请完成当前选择后重试。"));
             await Task.Delay(10);
         }
         if(RaceRuntime.State?.CurrentRoom is EventRoom)
@@ -64,6 +64,6 @@ internal static class BlockNewEventChoiceDuringSavePatch
     {
         if(!RaceRuntime.Live || RaceSession.Current is not {} session || !session.Recovery.NativeGrantBlocked
             || NativeEventStep.HasEnclosingStep(session)) return true;
-        RaceUi.Notify("正在保存比赛，请稍候。");return false;
+        RaceUi.Notify(L10n.T("正在保存比赛，请稍候。"));return false;
     }
 }

@@ -134,7 +134,7 @@ internal static class NativeEventRecoveryVerification
                     "host waits for ongoing event callbacks before freezing its archive");
                 session.Transport.SendMessage(new RaceMessage {Kind="event_save_started"});await saving;
                 var archive=RaceRecovery.Read(session.LocalId);var remote=archive.Players["2"];
-                var rebuilt=NativeCheckpoint.Restore(new NativeCheckpoint.Bundle("0.5.0",archive.RulesVersion,0,archive.MatchJson,remote.NativePacket,remote.AppliedReceipts,remote.BattleKey,remote.Rewards));
+                var rebuilt=NativeCheckpoint.Restore(new NativeCheckpoint.Bundle("0.5.1",archive.RulesVersion,0,archive.MatchJson,remote.NativePacket,remote.AppliedReceipts,remote.BattleKey,remote.Rewards));
                 Check(rebuilt.Run.Players.Single().Gold==midGold && rebuilt.Run.Players.Single().Creature.CurrentHp==midHp
                     && rebuilt.Save.PreFinishedRoom!.EncounterState!.ContainsKey(EventRecovery.FinishedKey),
                     "actual mid-event save contains final native resources and the finished page together");

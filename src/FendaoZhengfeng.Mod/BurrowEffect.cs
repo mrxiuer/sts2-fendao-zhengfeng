@@ -34,17 +34,17 @@ internal static class BurrowEffect
     internal static async Task<int> Activate(bool endTurn)
     {
         if (!RaceRuntime.Live || RaceSession.Current is not { } session || RaceModifier.Active is not { } modifier)
-            throw new RuleException("地底庇护只能在分道争锋中使用。");
+            throw new RuleException(L10n.T("地底庇护只能在分道争锋中使用。"));
         var player = RaceRuntime.State?.Players.SingleOrDefault();
         if (player == null || !CombatManager.Instance.IsInProgress || CombatManager.Instance.IsEnding
             || !session.Me.InBattle || player.PlayerCombatState?.Phase != PlayerTurnPhase.Play
             || player.Creature.CombatState?.CurrentSide != CombatSide.Player)
-            throw new RuleException("地底庇护只能在自己的战斗回合使用。");
+            throw new RuleException(L10n.T("地底庇护只能在自己的战斗回合使用。"));
 
         var before = BurrowRules.Read(session.Me);
-        if (!session.Me.Has(BurrowRules.EffectId)) throw new RuleException("尚未取得地底庇护。");
-        if (before.Charges <= 0) throw new RuleException("地底庇护没有储存次数。");
-        if (before.Phase != BurrowRules.Phase.Ready) throw new RuleException("地底庇护仍在冷却中。");
+        if (!session.Me.Has(BurrowRules.EffectId)) throw new RuleException(L10n.T("尚未取得地底庇护。"));
+        if (before.Charges <= 0) throw new RuleException(L10n.T("地底庇护没有储存次数。"));
+        if (before.Phase != BurrowRules.Phase.Ready) throw new RuleException(L10n.T("地底庇护仍在冷却中。"));
 
         string battleKey = session.Me.BattleKey;
         await session.Submit(session.New("burrow_use", battleKey, amount: modifier.Turn));
@@ -52,7 +52,7 @@ internal static class BurrowEffect
         var applied = BurrowRules.Read(session.Me);
         if (applied.Phase != BurrowRules.Phase.Burrowed || applied.Charges != before.Charges - 1
             || session.Me.BattleKey != battleKey)
-            throw new RuleException("遁地指令未被比赛状态确认。");
+            throw new RuleException(L10n.T("遁地指令未被比赛状态确认。"));
 
         int block = 0;
         foreach (var body in TwinSlimeRuntime.BodiesOf(player.Creature).Where(body => body.IsAlive))

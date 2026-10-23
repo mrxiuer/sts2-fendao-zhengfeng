@@ -23,9 +23,9 @@ internal static class HeartPresentation
     internal static Texture2D Texture(string name)
     {
         if (textures.TryGetValue(name, out var texture)) return texture;
-        using var resource = typeof(HeartPresentation).Assembly.GetManifestResourceStream("FendaoZhengfeng.Heart." + name + ".png") ?? throw new IOException("缺少心脏资源：" + name);
+        using var resource = typeof(HeartPresentation).Assembly.GetManifestResourceStream("FendaoZhengfeng.Heart." + name + ".png") ?? throw new IOException(L10n.T("缺少心脏资源：") + name);
         using var bytes = new MemoryStream(); resource.CopyTo(bytes);
-        var image = new Image(); if (image.LoadPngFromBuffer(bytes.ToArray()) != Error.Ok) throw new IOException("心脏图片损坏。");
+        var image = new Image(); if (image.LoadPngFromBuffer(bytes.ToArray()) != Error.Ok) throw new IOException(L10n.T("心脏图片损坏。"));
         textures[name] = texture = ImageTexture.CreateFromImage(image); return texture;
     }
     internal static NCreatureVisuals CreateVisuals()
@@ -55,7 +55,7 @@ internal static class HeartPresentation
     internal static Task Attack(TowerHeart heart, bool heavy) { var motion = Motion(heart.Creature); motion?.CancelIntro(); motion?.Pulse(heavy ? 1 : 0.6f); return Task.CompletedTask; }
     internal static void Beat(Creature heart) => Motion(heart)?.Pulse(0.18f);
     internal static Task Overload(TowerHeart heart, int number) { var motion = Motion(heart.Creature); if (motion != null) { motion.Overloaded = number >= 2; motion.Pulse(1); } return Task.CompletedTask; }
-    internal static void CopyNotice(string donor) => RaceUi.Notify("众生回响：复制“" + donor + "”的牌组，第5、6回合使用，第7回合恢复。");
+    internal static void CopyNotice(string donor) => RaceUi.Notify(L10n.T("众生回响：复制“") + donor + L10n.T("”的牌组，第5、6回合使用，第7回合恢复。"));
     internal static HeartDeathVisual? CaptureDeath(TowerHeart heart)
         => Motion(heart.Creature) is { } motion ? new(motion.GlobalTransform, motion.Sprite.Transform, motion) : null;
     internal static void PlayDeath(HeartDeathVisual? snapshot)
@@ -76,11 +76,12 @@ internal sealed record HeartDeathVisual(Transform2D GlobalTransform, Transform2D
 [HarmonyPatch(typeof(LocManager), nameof(LocManager.GetTable))]
 internal static class HeartDirectLocalizationPatch
 {
-    private static readonly LocTable table = new(ModEntry.Id, HeartPresentation.Texts);
+    private static readonly LocTable chinese = new(ModEntry.Id, HeartPresentation.Texts);
+    private static readonly LocTable english = new(ModEntry.Id, L10n.Table(HeartPresentation.Texts));
     static bool Prefix(string __0, ref LocTable __result)
     {
         if (__0 != ModEntry.Id) return true;
-        __result = table;
+        __result = L10n.English ? english : chinese;
         return false;
     }
 }
@@ -142,11 +143,11 @@ internal partial class HeartMotion : Node2D
         Flash(new Color(1, 0.55f, 0.22f, 0.24f));
         Sprite.Modulate = new Color(0.3f, 0.3f, 0.3f, 0.15f);
         introTween = CreateTween(); introTween.TweenProperty(Sprite, "modulate", Colors.White, 2.5);
-        banner = new Label { Text = "高塔之心\n众生的回响，尽归于此", Position = new Vector2(-275, -640), MouseFilter = Control.MouseFilterEnum.Ignore };
+        banner = new Label { Text = L10n.T("高塔之心\n众生的回响，尽归于此"), Position = new Vector2(-275, -640), MouseFilter = Control.MouseFilterEnum.Ignore };
         banner.AddThemeFontSizeOverride("font_size", 30); banner.AddThemeColorOverride("font_color", new Color("efd8a2"));
         banner.AddThemeConstantOverride("outline_size", 7); AddChild(banner);
         // A local skip affects the artwork only; turn input never waits on the cinematic.
-        var skip = new Button { Text = "跳过演出", Position = new Vector2(160, -620) }; AddChild(skip); introSkip = skip;
+        var skip = new Button { Text = L10n.T("跳过演出"), Position = new Vector2(160, -620) }; AddChild(skip); introSkip = skip;
         skip.Pressed += CancelIntro;
         var timeout = GetTree().CreateTimer(8); timeout.Timeout += () => { if (GodotObject.IsInstanceValid(skip)) skip.QueueFree(); };
     }
@@ -203,10 +204,10 @@ internal partial class HeartMotion : Node2D
             tween.TweenProperty(piece, "modulate:a", 0, 2.4).SetDelay(0.8);
             tween.Finished += piece.QueueFree;
         }
-        var conclusion = new Label { Text = "高塔之心 · 终结", Position = new Vector2(-180, -370), ZIndex = 20, MouseFilter = Control.MouseFilterEnum.Ignore };
+        var conclusion = new Label { Text = L10n.T("高塔之心 · 终结"), Position = new Vector2(-180, -370), ZIndex = 20, MouseFilter = Control.MouseFilterEnum.Ignore };
         conclusion.AddThemeFontSizeOverride("font_size", 34); conclusion.AddThemeColorOverride("font_color", new Color("f1d7a5")); conclusion.AddThemeConstantOverride("outline_size", 6); AddChild(conclusion);
         var finishTween = conclusion.CreateTween(); finishTween.TweenProperty(conclusion, "modulate:a", 0, 2).SetDelay(3); finishTween.Finished += conclusion.QueueFree;
-        var skip = new Button { Text = "跳过演出", Position = new Vector2(160, -620) }; AddChild(skip);
+        var skip = new Button { Text = L10n.T("跳过演出"), Position = new Vector2(160, -620) }; AddChild(skip);
         skip.Pressed += () => { foreach (var piece in fragments.Where(GodotObject.IsInstanceValid)) piece.QueueFree(); if (GodotObject.IsInstanceValid(conclusion)) conclusion.QueueFree(); skip.QueueFree(); };
         GetTree().CreateTimer(5).Timeout += () => { if (GodotObject.IsInstanceValid(skip)) skip.QueueFree(); };
         QueueRedraw();

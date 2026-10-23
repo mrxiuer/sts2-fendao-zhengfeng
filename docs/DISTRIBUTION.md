@@ -1,5 +1,7 @@
 # 原生加载与 Steam 创意工坊发布
 
+0.5.1 中英文更新于2026-10-23更新原工坊条目 `3825045315`，保留好友可见性和BaseLib依赖；GitHub发布 `v0.5.1-preview`，保留0.5.0旧包。当前兼容基准为 `public-beta`，正式分支存在已确认的 API 差异，见 [API核验](API-COMPATIBILITY.md)。
+
 0.5.0已于2026-10-23上传[Steam创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)，仅好友可见。GitHub同步0.5.0源码及preview安装包；发行页见README。
 
 0.3.0 起清单使用对象式依赖 `{ "id": "BaseLib", "min_version": "3.4.7" }`，修复旧字符串依赖触发的原生清单迁移错误。`scripts/Package.ps1` 从已构建的 DLL/JSON 生成安装 ZIP 和 SHA256SUMS.txt，不包括第三方程序集或个人配置。
@@ -21,7 +23,7 @@
 
 ## 工坊准备
 
-`scripts/Prepare-Workshop.ps1` 创建 `artifacts/workshop`：content 包含两份运行文件，workshop.json 为官方上传器元数据，强制使用用户要求的好友可见性 `friends_only`。重复准备保留已有标题/描述及 mod_id.txt，并将旧工作区的可见性改为好友可见，不自动上传。
+`scripts/Prepare-Workshop.ps1` 创建 `artifacts/workshop`：content 包含两份运行文件，workshop.json 为官方上传器元数据，强制使用用户要求的好友可见性 `friends_only`。重复准备从仓库模板刷新标题、双语描述、更新说明及依赖，保留 mod_id.txt，并将旧工作区的可见性改为好友可见，不自动上传。
 
 作者沿用清单中的“分道争锋项目组”；预览复用本项目已有原创模式图标的显示纹理，小于1MB，发布说明见docs/releases/0.5.0.md。未添加未经用户授权的开源许可证。首次上传后保留 mod_id.txt，后续更新复用该条目。上传前通过独立订阅环境验证，当前本地加载成功不能替代工坊订阅加载验证。
 

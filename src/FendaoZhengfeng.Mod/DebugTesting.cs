@@ -9,13 +9,13 @@ internal static class DebugTesting
 
     public static async Task WinBattle()
     {
-        var session = RaceSession.Current ?? throw new InvalidOperationException("当前没有分道争锋比赛。");
-        if (!session.IsMock && !RaceConfig.DebugVisible) throw new InvalidOperationException("请先由房主开启调试模式。");
+        var session = RaceSession.Current ?? throw new InvalidOperationException(L10n.T("当前没有分道争锋比赛。"));
+        if (!session.IsMock && !RaceConfig.DebugVisible) throw new InvalidOperationException(L10n.T("请先由房主开启调试模式。"));
         if (settling) return;
         if (!RaceRuntime.Live || session.Paused || !session.Me.InBattle ||
             !CombatManager.Instance.IsInProgress || CombatManager.Instance.IsOverOrEnding ||
             RaceRuntime.State?.Players.Single().Creature.CombatState is not { } combat)
-            throw new InvalidOperationException("当前没有可以结算的战斗，请进入战斗后使用。");
+            throw new InvalidOperationException(L10n.T("当前没有可以结算的战斗，请进入战斗后使用。"));
         settling = true;
         RaceUi.ConcealPanel();
         try
@@ -31,17 +31,17 @@ internal static class DebugTesting
                 if (!session.Me.InBattle || CombatManager.Instance.IsOverOrEnding) return;
                 await Task.Delay(50);
             }
-            throw new InvalidOperationException("特殊敌人的阶段尚未结束，请手动完成战斗后继续测试。");
+            throw new InvalidOperationException(L10n.T("特殊敌人的阶段尚未结束，请手动完成战斗后继续测试。"));
         }
         finally { settling = false; RaceUi.Refresh(); }
     }
     public static async Task EnterHeart()
     {
-        var session = RaceSession.Current ?? throw new InvalidOperationException("当前没有比赛。");
-        if (!RaceConfig.DebugVisible || !RaceRuntime.Live) throw new InvalidOperationException("请开启调试模式。");
+        var session = RaceSession.Current ?? throw new InvalidOperationException(L10n.T("当前没有比赛。"));
+        if (!RaceConfig.DebugVisible || !RaceRuntime.Live) throw new InvalidOperationException(L10n.T("请开启调试模式。"));
         if (session.Me.InBattle || CombatManager.Instance.IsInProgress || session.Paused || session.WaitingAtCheckpoint)
-            throw new InvalidOperationException("请先结算战斗并继续比赛。");
-        if (session.Me.Finished || session.Me.Eliminated) throw new InvalidOperationException("请重新开启测试局。");
+            throw new InvalidOperationException(L10n.T("请先结算战斗并继续比赛。"));
+        if (session.Me.Finished || session.Me.Eliminated) throw new InvalidOperationException(L10n.T("请重新开启测试局。"));
         RaceUi.ConcealPanel();
         var run = RaceRuntime.State!;
         while (run.CurrentActIndex < 4)

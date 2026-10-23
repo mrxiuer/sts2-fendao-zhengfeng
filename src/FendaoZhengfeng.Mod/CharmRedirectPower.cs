@@ -39,7 +39,7 @@ internal static class CharmPowerHoverPatch
     static bool Prefix(PowerModel __instance, ref IEnumerable<IHoverTip> __result)
     {
         if (__instance is not CharmRedirectPower power) return true;
-        __result = [new HoverTip(CharmStrings.Text("power.title"), $"剩余{power.Amount}个敌方回合：攻击与负面状态转向其他敌人；无同伴则转向自身。增益转给玩家。", EffectIcons.Get("heartstrings_charm"))];
+        __result = [new HoverTip(CharmStrings.Text("power.title"), L10n.F($"剩余{power.Amount}个敌方回合：攻击与负面状态转向其他敌人；无同伴则转向自身。增益转给玩家。"), EffectIcons.Get("heartstrings_charm"))];
         return false;
     }
 }

@@ -53,7 +53,7 @@ internal static class NativeChoiceUi
         for (int i = 0; i <= choices.Count; i++)
         {
             int index = i == choices.Count ? -1 : i;
-            string text = index < 0 ? "返回" : choices[index];
+            string text = index < 0 ? L10n.T("返回") : choices[index];
             string[] parts = text.Split('\n', 2);
             var option = new UiOptionReward(RaceRuntime.State!.Players.Single(), parts[0], parts.Length > 1 ? parts[1] : parts[0],
                 index >= 0 && icons != null ? icons[index] : EffectIcons.Get("choice_reward"), () => Finish(index));
@@ -95,22 +95,22 @@ internal sealed class RaceActionReward(Player player, int kind) : Reward(player)
     internal bool Available => kind == 1 ? RaceModifier.Active?.CanRecoverSkill == true : RaceSession.Current?.Me.BossPrizes.Count > 0;
     protected override RewardType RewardType => (RewardType)SerializedType;
     public override int RewardsSetIndex => 4;
-    private string Label => kind == 1 ? "技艺封存 · 取回1张技能牌" : "Boss额外奖励 · 2选1";
+    private string Label => kind == 1 ? L10n.T("技艺封存 · 取回1张技能牌") : L10n.T("Boss额外奖励 · 2选1");
     public override LocString Description => NativeChoiceUi.Text(Label);
     public override bool IsPopulated => true;
     public override void Populate() { }
     public override void MarkContentAsSeen() { }
     public override Control CreateIcon() => NativeChoiceUi.Icon(EffectIcons.Get("choice_reward"));
     public override IEnumerable<IHoverTip> HoverTips => [new HoverTip(NativeChoiceUi.Text(Label), kind == 1
-        ? $"从技艺封存暂存的 {RaceModifier.Active?.VaultCount ?? 0} 张技能牌中任选1张取回；保留原升级与耐久。每场胜利最多1次。"
-        : "点击进入选择：首杀可选增益或1层诅咒护盾；非首杀可选净化或1层诅咒护盾。与遗物献祭独立。", EffectIcons.Get("choice_reward"))];
+        ? L10n.F($"从技艺封存暂存的 {RaceModifier.Active?.VaultCount ?? 0} 张技能牌中任选1张取回；保留原升级与耐久。每场胜利最多1次。")
+        : L10n.T("点击进入选择：首杀可选增益或1层诅咒护盾；非首杀可选净化或1层诅咒护盾。与遗物献祭独立。"), EffectIcons.Get("choice_reward"))];
     protected override async Task<bool> OnSelect()
     {
         if (kind == 1) return await RaceModifier.Active!.RecoverSkill();
         var session = RaceSession.Current!;
         var prize = session.Me.BossPrizes.FirstOrDefault(); if (prize == null) return true;
         bool first = prize.EndsWith(":first", StringComparison.Ordinal);
-        int action = await RaceUi.Choose("Boss额外奖励 · 2选1", [first ? "选择首杀增益\n从增益候选中选择1项；R键重置后始终使用首杀奖励。" : "净化1项效果\n选择移除一整项诅咒或双刃契约，包括全部强化。", "获得诅咒护盾\n抵挡下一次收到的诅咒攻击；不移除已有诅咒。"]);
+        int action = await RaceUi.Choose(L10n.T("Boss额外奖励 · 2选1"), [first ? L10n.T("选择首杀增益\n从增益候选中选择1项；R键重置后始终使用首杀奖励。") : L10n.T("净化1项效果\n选择移除一整项诅咒或双刃契约，包括全部强化。"), L10n.T("获得诅咒护盾\n抵挡下一次收到的诅咒攻击；不移除已有诅咒。")]);
         if (action < 0) return false;
         if (action == 1) await session.Submit(session.New("boss_shield", prize));
         else if (first) { if (!await RaceUi.ChooseEffect(prize, Route.FirstKill, true)) return false; }
@@ -144,7 +144,7 @@ internal static class SacrificeRewardHintPatch
     static void Postfix(Reward __instance, ref IEnumerable<IHoverTip> __result)
     {
         if (__instance is not RelicReward || !SacrificeRewardIconPatch.Eligible) return;
-        __result = __result.Append(new HoverTip(NativeChoiceUi.Text("领取或献祭 · 2选1"), "点击后可领取这份遗物，或献祭并从混合效果池中3选1。其他奖励保留。", EffectIcons.Get("choice_reward"))).ToList();
+        __result = __result.Append(new HoverTip(NativeChoiceUi.Text(L10n.T("领取或献祭 · 2选1")), L10n.T("点击后可领取这份遗物，或献祭并从混合效果池中3选1。其他奖励保留。"), EffectIcons.Get("choice_reward"))).ToList();
     }
 }
 [HarmonyPatch(typeof(CardModel), "get_IsRemovable")]

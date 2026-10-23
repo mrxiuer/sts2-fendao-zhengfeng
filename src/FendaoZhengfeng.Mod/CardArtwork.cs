@@ -12,10 +12,10 @@ internal static class CardArtwork
     {
         if (cache.TryGetValue(key, out var texture)) return texture;
         using var source = typeof(CardArtwork).Assembly.GetManifestResourceStream("FendaoZhengfeng.CardArt." + key + ".png")
-            ?? throw new IOException("缺少卡牌立绘：" + key);
+            ?? throw new IOException(L10n.T("缺少卡牌立绘：") + key);
         using var bytes = new MemoryStream(); source.CopyTo(bytes);
         using var image = new Image();
-        if (image.LoadPngFromBuffer(bytes.ToArray()) != Error.Ok) throw new IOException("卡牌立绘损坏：" + key);
+        if (image.LoadPngFromBuffer(bytes.ToArray()) != Error.Ok) throw new IOException(L10n.T("卡牌立绘损坏：") + key);
         image.Resize(768, 512, Image.Interpolation.Lanczos);
         texture = ImageTexture.CreateFromImage(image); texture.ResourceName = key;
         return cache[key] = texture;

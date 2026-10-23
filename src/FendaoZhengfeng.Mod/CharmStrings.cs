@@ -22,12 +22,13 @@ internal static class CharmStrings
 [HarmonyPatch(typeof(LocManager), nameof(LocManager.GetTable))]
 internal static class CharmLocTablePatch
 {
-    private static readonly LocTable table = new(CharmStrings.TableName, CharmStrings.Values);
+    private static readonly LocTable chinese = new(CharmStrings.TableName, CharmStrings.Values);
+    private static readonly LocTable english = new(CharmStrings.TableName, L10n.Table(CharmStrings.Values));
 
     private static bool Prefix(string __0, ref LocTable __result)
     {
         if (__0 != CharmStrings.TableName) return true;
-        __result = table;
+        __result = L10n.English ? english : chinese;
         return false;
     }
 }

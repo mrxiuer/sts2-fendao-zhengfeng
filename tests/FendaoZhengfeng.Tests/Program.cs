@@ -5,6 +5,53 @@ void Test(string name, Action test) { try { test(); passed++; Console.WriteLine(
 void Check(bool value, string message = "Assertion failed") { if (!value) throw new Exception(message); }
 Engine New() => new(new Match { Id = "test", Seed = "seed", Racers = new() { ["a"] = new() { Id = "a" }, ["b"] = new() { Id = "b" }, ["c"] = new() { Id = "c" } } });
 void Grant(Engine engine, string player, string id, int count = 1) { engine.State.Racers[player].Effects[id] = new() { Id = id, Grants = Enumerable.Range(0, count).Select(i => new Grant { EventId = i.ToString(), Source = "a", ActiveBattle = 1 }).ToList() }; }
+TranslationCatalog Translations()
+{
+ using var stream = System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("FDZF.Tests.eng.json")!;
+ return new TranslationCatalog(stream);
+}
+Test("English covers all 65 effect names and rules without changing their source data", () => {
+ var text=Translations(); Check(Catalog.All.Count==65);
+ string state=StateJson.Serialize(New().State);
+ foreach(var effect in Catalog.All) {
+  Check(text.English.ContainsKey(effect.Name) && text.English.ContainsKey(effect.Description),effect.Id);
+  Check(!System.Text.RegularExpressions.Regex.IsMatch(text.Text(effect.Name,true)+text.Text(effect.Description,true),@"[\p{IsCJKUnifiedIdeographs}]"),effect.Id);
+  Check(text.Text(effect.Name,false)==effect.Name && text.Text(effect.Description,false)==effect.Description);
+ }
+ Check(StateJson.Serialize(New().State)==state,"translations must not mutate rule state");
+ Check(Catalog.RulesVersion=="1.0.0-design.14");
+});
+Test("translation format placeholders preserve all variables and native named tokens", () => {
+ var text=Translations();
+ foreach(var (source,english) in text.English) {
+  string[] Tokens(string s)=>System.Text.RegularExpressions.Regex.Matches(s,@"\{[^{}]+\}").Select(m=>m.Value).Order(StringComparer.Ordinal).ToArray();
+  Check(Tokens(source).SequenceEqual(Tokens(english)),source);
+  if(Tokens(source).All(t=>char.IsDigit(t[1]))) {
+   var format=System.Text.CompositeFormat.Parse(english);
+   _=string.Format(System.Globalization.CultureInfo.InvariantCulture,format,Enumerable.Repeat<object>(5,format.MinimumArgumentCount).ToArray());
+  }
+  Check(!string.IsNullOrWhiteSpace(english),source);
+ }
+ Check(text.Text("unknown-key",true)=="unknown-key");
+});
+Test("game locale selection and native English tables remain independent of initial Chinese locale", () => {
+ var text=Translations();
+ foreach(var language in new string?[]{null,"zhs","zht","zh-CN","zh-TW"}) Check(!TranslationCatalog.UseEnglish(language));
+ foreach(var language in new[]{"eng","en","en-US","deu","jpn"}) Check(TranslationCatalog.UseEnglish(language));
+ var source=new Dictionary<string,string>{{"card.title","魅惑"},{"power.title","牵心丝"}};
+ var english=text.EnglishTable(source);
+ Check(english["card.title"]=="Charm" && english["power.title"]=="Heartstrings");
+ Check(source["card.title"]=="魅惑","native Chinese table must remain intact");
+});
+Test("localized dynamic numbers and repeated locale changes keep the Chinese fallback", () => {
+ var text=Translations();
+ for(int i=0;i<3;i++) {
+  Check(text.Format($"第{3}幕 · {12}层",true)=="Act 3 · Floor 12");
+  Check(text.Format($"第{3}幕 · {12}层",false)=="第3幕 · 12层");
+  Check(text.Format($"\n当前穿透 {0.25m:P0}。",true)=="\nCurrent piercing: 25%.");
+  Check(text.Text("接下来{Amount}个敌方回合，攻击与负面状态转向其他敌人；若没有其他敌人，则转向自身。它给自己施加的增益改由玩家获得。",true).Contains("{Amount}"));
+ }
+});
 Test("wire delta preserves full history additions removals array edits and nulls atomically",()=>{
  var engine=New(); for(int i=0;i<3000;i++) engine.State.ProcessedCommands.Add("history-"+i);
  Grant(engine,"a","sharpen");

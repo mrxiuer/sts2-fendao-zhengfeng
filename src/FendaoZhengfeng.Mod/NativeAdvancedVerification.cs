@@ -66,7 +66,7 @@ internal static class NativeAdvancedVerification
             var reader = new PacketReader(); reader.Reset(writer.Buffer.Take(writer.BytePosition).ToArray()); var decoded = new SerializableReward(); decoded.Deserialize(reader);
             Check(Reward.FromSerializable(decoded, player) is RaceActionReward, "custom N-choice reward survives native packet serialization");
 
-            Check(new MegaCrit.Sts2.Core.Localization.LocString(ModEntry.Id, "action.remove.title").GetFormattedText().Contains("3点最大生命"), "small-and-light native card-selector title shows the actual three-max-HP price");
+            Check(new MegaCrit.Sts2.Core.Localization.LocString(ModEntry.Id, "action.remove.title").GetFormattedText().Contains(L10n.T("删除1张牌，失去3点最大生命")), "small-and-light native card-selector title shows the actual three-max-HP price");
             await MockTesting.GrantEffect("small_light");
             var toRemove = player.Deck.Cards.First(card => card.Type == CardType.Attack);
             int beforeCount = player.Deck.Cards.Count, beforeMax = player.Creature.MaxHp;

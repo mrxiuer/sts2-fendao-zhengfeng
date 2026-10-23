@@ -20,9 +20,14 @@ foreach($name in @('FendaoZhengfeng.dll','FendaoZhengfeng.json')) {
 }
 $metadata=Join-Path $workspace 'workshop.json'
 if(!(Test-Path -LiteralPath $metadata)) {Copy-Item -LiteralPath (Join-Path $repoRoot 'packaging\workshop.json') -Destination $metadata}
+$template=Get-Content -LiteralPath (Join-Path $repoRoot 'packaging\workshop.json') -Raw | ConvertFrom-Json
 # The user requested friends-only testing; preserved workspaces may still carry
-# an older private/public setting. Preserve identity and text, enforce this scope.
+# an older private/public setting. Preserve identity and enforce this scope.
 $workshopInfo=Get-Content -LiteralPath $metadata -Raw | ConvertFrom-Json
+# Refresh release text and dependencies while retaining the published item identity.
+foreach($field in @('title','description','changeNote','tags','dependencies','contentDescriptors')) {
+  $workshopInfo | Add-Member -NotePropertyName $field -NotePropertyValue $template.$field -Force
+}
 $workshopInfo | Add-Member -NotePropertyName visibility -NotePropertyValue 'friends_only' -Force
 [IO.File]::WriteAllText($metadata,($workshopInfo | ConvertTo-Json -Depth 16))
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\DISTRIBUTION.md') -Destination (Join-Path $workspace 'README.md') -Force

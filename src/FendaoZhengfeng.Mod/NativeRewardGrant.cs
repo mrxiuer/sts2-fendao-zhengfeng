@@ -30,7 +30,7 @@ internal sealed class NativeRewardGrant : IDisposable
         while(session.Recovery.NativeGrantBlocked && !( !session.Recovery.Frozen
             && (current.Value is {disposed:false,applying:true} parent && ReferenceEquals(parent.session,session)
                 || NativeEventStep.HasEnclosingStep(session)))) {
-            if(!ReferenceEquals(RaceSession.Current,session)) throw new OperationCanceledException("比赛已结束。");
+            if(!ReferenceEquals(RaceSession.Current,session)) throw new OperationCanceledException(L10n.T("比赛已结束。"));
             await Task.Delay(20);
         }
     }
@@ -38,7 +38,7 @@ internal sealed class NativeRewardGrant : IDisposable
     {
         long until=System.Environment.TickCount64+5000;
         while(IsApplying(session)) {
-            if(System.Environment.TickCount64>=until) throw new IOException("奖励仍在发放，未覆盖旧存档；请完成当前选择后重试。");
+            if(System.Environment.TickCount64>=until) throw new IOException(L10n.T("奖励仍在发放，未覆盖旧存档；请完成当前选择后重试。"));
             await Task.Delay(10);
         }
     }

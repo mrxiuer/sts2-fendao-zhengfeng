@@ -46,7 +46,7 @@ internal static class CharmCardGrant
     internal static async Task<bool> AddToDeck(RunState run, Player player, string receiptId)
     {
         if (string.IsNullOrWhiteSpace(receiptId))
-            throw new ArgumentException("牵心丝卡牌收据缺少稳定标识。", nameof(receiptId));
+            throw new ArgumentException(L10n.T("牵心丝卡牌收据缺少稳定标识。"), nameof(receiptId));
 
         if (player.Deck.Cards.OfType<CharmCard>().Any(card => card.GrantReceiptId == receiptId))
             return false;
@@ -67,7 +67,7 @@ internal static class CharmCardGrant
         if (!player.Deck.Cards.Contains(card))
         {
             card.RemoveFromState();
-            throw new InvalidOperationException("魅惑没有加入永久牌组，收据应保留待重试。");
+            throw new InvalidOperationException(L10n.T("魅惑没有加入永久牌组，收据应保留待重试。"));
         }
         return true;
     }

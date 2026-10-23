@@ -34,7 +34,7 @@ internal sealed class RaceRecovery(RaceSession session)
     internal bool IsDraining => draining;
     internal int BackupCount => players.Count;
     internal static string ArchivePath(string host) => Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") == "1"
-        ? Path.Combine(Environment.GetEnvironmentVariable("FDZF_REPORT_DIR") ?? throw new InvalidOperationException("未指定验证目录。"), "recovery", host + ".json")
+        ? Path.Combine(Environment.GetEnvironmentVariable("FDZF_REPORT_DIR") ?? throw new InvalidOperationException(L10n.T("未指定验证目录。")), "recovery", host + ".json")
         : ProjectSettings.GlobalizePath("user://FendaoZhengfeng/recovery/" + host + ".json");
 
     internal void ObserveReceipts()
@@ -48,8 +48,8 @@ internal sealed class RaceRecovery(RaceSession session)
     }
     internal static RecoverySnapshot Capture(RaceSession session)
     {
-        if(NativeRewardGrant.IsApplying(session) || NativeEventStep.IsApplying(session)) throw new InvalidOperationException("事件或奖励执行过程中不能采集恢复快照。");
-        var run = RaceRuntime.State ?? throw new InvalidOperationException("当前没有比赛。");
+        if(NativeRewardGrant.IsApplying(session) || NativeEventStep.IsApplying(session)) throw new InvalidOperationException(L10n.T("事件或奖励执行过程中不能采集恢复快照。"));
+        var run = RaceRuntime.State ?? throw new InvalidOperationException(L10n.T("当前没有比赛。"));
         var save = RunManager.Instance.ToSave(null);
         if (run.CurrentRoom is CombatRoom combat)
         {
@@ -104,29 +104,29 @@ internal sealed class RaceRecovery(RaceSession session)
     }
     internal void Accept(RecoverySnapshot snapshot, string sender)
     {
-        if (!session.IsHost || snapshot.Player != sender || !session.Engine.State.Racers.ContainsKey(sender)) throw new RuleException("恢复备份身份不匹配。");
-        if (snapshot.NativePacket.Length is < 1 or > 2500000 || snapshot.AppliedReceipts.Length > 100000 || snapshot.AppliedTrades.Length > 10000) throw new RuleException("恢复备份超出限制。");
+        if (!session.IsHost || snapshot.Player != sender || !session.Engine.State.Racers.ContainsKey(sender)) throw new RuleException(L10n.T("恢复备份身份不匹配。"));
+        if (snapshot.NativePacket.Length is < 1 or > 2500000 || snapshot.AppliedReceipts.Length > 100000 || snapshot.AppliedTrades.Length > 10000) throw new RuleException(L10n.T("恢复备份超出限制。"));
         // Validate the binary save before replacing the last usable snapshot.
         var reader = new PacketReader(); reader.Reset(Convert.FromBase64String(snapshot.NativePacket));
         var save = new MegaCrit.Sts2.Core.Saves.SerializableRun(); save.Deserialize(reader);
-        if (save.Players.Count != 1) throw new RuleException("恢复备份必须是独立单人进度。");
+        if (save.Players.Count != 1) throw new RuleException(L10n.T("恢复备份必须是独立单人进度。"));
         if (snapshot.CompletedClaims is { } claims && (claims.Length > 1000
             || claims.Any(c => c.Actor != sender || c.Kind != "claim" || c.Amount < 0)))
-            throw new RuleException("原生奖励完成凭证无效。");
+            throw new RuleException(L10n.T("原生奖励完成凭证无效。"));
         players[sender] = snapshot;
         if (journal.TryGetValue(sender, out var receipts)) foreach (string id in snapshot.AppliedReceipts) receipts.Remove(id);
     }
     internal void RequireNativeClaimBackup(Command claim,string sender)
     {
-        if(claim.Actor!=sender || claim.Kind!="claim") throw new RuleException("原生奖励领取身份不匹配。");
+        if(claim.Actor!=sender || claim.Kind!="claim") throw new RuleException(L10n.T("原生奖励领取身份不匹配。"));
         if(session.Engine.State.ProcessedCommands.Contains(claim.Id)) return;
         if(!players.TryGetValue(sender,out var snapshot) || snapshot.CompletedClaims?.Contains(claim)!=true)
-            throw new RuleException("尚未收到这次原生奖励的完成备份，领取未确认。");
+            throw new RuleException(L10n.T("尚未收到这次原生奖励的完成备份，领取未确认。"));
     }
     internal async Task SaveHost(bool keepPaused = false)
     {
-        if (!session.IsHost || session.IsMock) throw new RuleException("比赛存档由房主保存。");
-        if (saving) throw new RuleException("正在保存比赛。");
+        if (!session.IsHost || session.IsMock) throw new RuleException(L10n.T("比赛存档由房主保存。"));
+        if (saving) throw new RuleException(L10n.T("正在保存比赛。"));
         saving = true; draining = true; bool wasPaused = RunManager.Instance.IsPaused; bool saved = false;
         try
         {
@@ -147,11 +147,11 @@ internal sealed class RaceRecovery(RaceSession session)
             }
             if(session.Transport is MegaCrit.Sts2.Core.Multiplayer.NetHostGameService liveHost
                 && liveHost.ConnectedPeers.Any(peer=>!readyPlayers.Contains(peer.peerId.ToString(System.Globalization.CultureInfo.InvariantCulture))))
-                throw new IOException("在线玩家尚未完成奖励发放，未覆盖旧存档，请稍后重试。");
+                throw new IOException(L10n.T("在线玩家尚未完成奖励发放，未覆盖旧存档，请稍后重试。"));
             draining=false;RunManager.Instance.IsPaused=true;
             Accept(Capture(session), session.LocalId);
             var missing = session.Engine.State.Racers.Keys.Where(id => !players.ContainsKey(id)).ToList();
-            if (missing.Count > 0) throw new RuleException("尚未收到这些玩家的房间备份，未覆盖旧存档：" + string.Join("、", missing));
+            if (missing.Count > 0) throw new RuleException(L10n.T("尚未收到这些玩家的房间备份，未覆盖旧存档：") + string.Join("、", missing));
             var match = StateJson.Deserialize<Match>(StateJson.Serialize(session.Engine.State));
             foreach (var snapshot in players.Values)
                 match = RewardClaimRecovery.Merge(match, snapshot.Player, snapshot.CompletedClaims ?? []);
@@ -199,7 +199,7 @@ internal sealed class RaceRecovery(RaceSession session)
             if(SendSnapshot()!=null) session.Transport.SendMessage(new RaceMessage {Kind="recovery_ready",Content=request},session.HostId);
         } catch(Exception error) {
             if(generation==holdGeneration) remoteDraining=false;
-            RaceUi.Error("无法采集本次保存快照："+error.Message);
+            RaceUi.Error(L10n.T("无法采集本次保存快照：")+L10n.T(error.Message));
         }
     }
     internal void Release()
@@ -210,7 +210,7 @@ internal sealed class RaceRecovery(RaceSession session)
     internal static RecoveryArchive Read(string host)
     {
         var archive = StateJson.Deserialize<RecoveryArchive>(File.ReadAllText(ArchivePath(host)));
-        if (archive.Host != host) throw new InvalidDataException("比赛存档房主不匹配。");
+        if (archive.Host != host) throw new InvalidDataException(L10n.T("比赛存档房主不匹配。"));
         var match = MatchCompatibility.Read(archive.RulesVersion, archive.MatchJson);
         return archive with { RulesVersion = Catalog.RulesVersion, MatchJson = StateJson.Serialize(match) };
     }

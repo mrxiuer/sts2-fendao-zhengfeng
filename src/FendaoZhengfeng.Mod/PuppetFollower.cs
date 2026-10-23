@@ -41,8 +41,8 @@ internal static class PuppetFollower
         => props.HasFlag(MegaCrit.Sts2.Core.ValueProps.ValueProp.Move) ? Guard(owner) : null;
     internal static async Task<Creature> Spawn(Player player, int maxHp, int currentHp)
     {
-        if (maxHp < 1 || currentHp < 1 || currentHp > maxHp) throw new RuleException("傀儡生命无效。");
-        if (Find(player) != null) throw new RuleException("已有存活的替身傀儡。");
+        if (maxHp < 1 || currentHp < 1 || currentHp > maxHp) throw new RuleException(L10n.T("傀儡生命无效。"));
+        if (Find(player) != null) throw new RuleException(L10n.T("已有存活的替身傀儡。"));
         var creature = await PlayerCmd.AddPet<SubstitutePuppet>(player);
         await CreatureCmd.SetMaxAndCurrentHp(creature, maxHp);
         await CreatureCmd.SetCurrentHp(creature, currentHp);

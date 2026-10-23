@@ -18,7 +18,7 @@ public sealed class ExtraTimelineCard : CardModel
 
     internal bool IsTimelineCopy { get; set; }
 
-    public override string Title => "额外时间线";
+    public override string Title => L10n.T("额外时间线");
     public override CardPoolModel Pool => ModelDb.Card<Dazed>().Pool;
     public override int MaxUpgradeLevel => 0;
 

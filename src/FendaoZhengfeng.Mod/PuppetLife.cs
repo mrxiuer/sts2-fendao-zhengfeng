@@ -29,7 +29,7 @@ public sealed partial class RaceModifier
         {
             CapturePuppetVitals();
             return puppetVitals is { } saved
-                ? $"\n傀儡生命 {saved.CurrentHp}/{saved.MaxHp}；每次强化增加{(int)Math.Ceiling(saved.InitialMaxHp * 0.25m)}最大生命并恢复等量生命。"
+                ? L10n.F($"\n傀儡生命 {saved.CurrentHp}/{saved.MaxHp}；每次强化增加{(int)Math.Ceiling(saved.InitialMaxHp * 0.25m)}最大生命并恢复等量生命。")
                 : "";
         }
     }
@@ -55,7 +55,7 @@ public sealed partial class RaceModifier
         }
         else
         {
-            if (puppetVitals?.Generation != generation) throw new RuleException("傀儡初始状态尚未恢复。");
+            if (puppetVitals?.Generation != generation) throw new RuleException(L10n.T("傀儡初始状态尚未恢复。"));
             puppetVitals = puppetVitals with { MaxHp = checked(puppetVitals.MaxHp + receipt.Amount),
                 CurrentHp = checked(puppetVitals.CurrentHp + receipt.Amount) };
         }
@@ -88,7 +88,7 @@ public sealed partial class RaceModifier
         await ApplyReceipts(Context(), true, puppetOnly: true);
         if (!Me.Effects.TryGetValue(PuppetRules.Id, out var holding)) { puppetVitals = null; return; }
         if (puppetVitals == null || puppetVitals.Generation != PuppetRules.Generation(holding))
-            throw new RuleException("傀儡存档与取得记录不一致。");
+            throw new RuleException(L10n.T("傀儡存档与取得记录不一致。"));
         if (puppetVitals.CurrentHp <= 0)
         { await S.Submit(S.New("puppet_destroyed", puppetVitals.Generation.ToString(CultureInfo.InvariantCulture))); puppetVitals = null; return; }
         var live = PuppetFollower.Find(Player) ?? await PuppetFollower.Spawn(Player, puppetVitals.MaxHp, puppetVitals.CurrentHp);

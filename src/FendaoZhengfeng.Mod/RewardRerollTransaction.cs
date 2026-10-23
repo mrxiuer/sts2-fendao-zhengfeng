@@ -34,7 +34,7 @@ internal static class RewardRerollTransaction
         string token = Token(session, rewardKey);
         lock (gate)
         {
-            if (!inFlight.Add(token)) throw new RuleException("这份奖励正在刷新，请稍候。");
+            if (!inFlight.Add(token)) throw new RuleException(L10n.T("这份奖励正在刷新，请稍候。"));
         }
         return new Lease(token);
     }
@@ -59,10 +59,10 @@ internal static class RewardRerollTransaction
     {
         string key = RaceRuntime.RewardKey(reward);
         if (receipt.Kind != "reroll_native" || receipt.Value != key)
-            throw new InvalidDataException("原生奖励刷新收据与奖励身份不匹配。");
+            throw new InvalidDataException(L10n.T("原生奖励刷新收据与奖励身份不匹配。"));
         if (session.ReceiptApplied(receipt.Id)) return;
         if (reward.SuccessfullySelected || session.Engine.State.ConsumedRewards.Contains(session.LocalId + ":" + key))
-            throw new RuleException("奖励已领取，不能应用尚未完成的刷新。");
+            throw new RuleException(L10n.T("奖励已领取，不能应用尚未完成的刷新。"));
 
         RewardRerollEffect.ApplyNativeReroll(reward);
         session.MarkReceiptApplied(receipt.Id);
@@ -129,7 +129,7 @@ internal static class RewardRerollTransaction
             RaceUi.Run(async () =>
             {
                 try { await AcknowledgeAsync(session, receipt, receiptSet); }
-                catch (Exception error) { RaceUi.Error("奖励刷新已保存，收据确认将在恢复后重试：" + error.Message); }
+                catch (Exception error) { RaceUi.Error(L10n.T("奖励刷新已保存，收据确认将在恢复后重试：") + L10n.T(error.Message)); }
             });
         return acknowledgements.Select(item => item.Receipt.Id).ToArray();
     }
@@ -139,7 +139,7 @@ internal static class RewardRerollTransaction
         string id = session.Engine.State.Id + ":" + session.LocalId + ":" + receipt.Id;
         lock (gate)
             if (!loggedConsumedInconsistencies.Add(id)) return;
-        Godot.GD.PushWarning($"[分道争锋] 原生奖励已领取，但刷新收据 {receipt.Id} 没有已应用标记；保留收据且不会重复刷新。");
+        Godot.GD.PushWarning(L10n.F($"[分道争锋] 原生奖励已领取，但刷新收据 {receipt.Id} 没有已应用标记；保留收据且不会重复刷新。"));
     }
 
     internal static async Task AcknowledgeAsync(RaceSession session, Receipt receipt, RewardsSet? set)

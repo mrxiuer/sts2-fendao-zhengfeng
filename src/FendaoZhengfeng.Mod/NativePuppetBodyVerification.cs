@@ -32,7 +32,7 @@ internal static class NativePuppetBodyVerification
         check(puppet.IsPet && puppet.PetOwner == player && puppet.Side == CombatSide.Player && state.Allies.Contains(puppet)
             && puppet.MaxHp == 80 && puppet.CurrentHp == 77 && puppet.GetPowerAmount<BarricadePower>() == 1,
             "actual native follower owns separate health and a real barricade power");
-        check(puppet.Monster!.Title.GetFormattedText() == "替身傀儡", "native follower title resolves through the mod localization table");
+        check(puppet.Monster!.Title.GetFormattedText() == L10n.T("替身傀儡"), "native follower title resolves through the mod localization table");
         bool rejected = false; try { await PuppetFollower.Spawn(player, 80, 80); } catch (RuleException) { rejected = true; }
         check(rejected && state.Allies.Count(creature => creature.Monster is SubstitutePuppet && creature.IsAlive) == 1,
             "a second living substitute cannot be spawned for the same owner");

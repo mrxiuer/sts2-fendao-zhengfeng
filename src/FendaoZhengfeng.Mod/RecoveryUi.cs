@@ -27,21 +27,21 @@ internal static class RecoveryUi
             var source = parent.GetNode<NMainMenuTextButton>("MultiplayerButton");
             button = (NMainMenuTextButton)source.Duplicate((int)(Node.DuplicateFlags.Scripts | Node.DuplicateFlags.Groups));
             button.Name = ButtonName; parent.AddChild(button); parent.MoveChild(button, source.GetIndex() + 1);
-            AccessTools.Field(typeof(NMainMenuTextButton), "_locString").SetValue(button, NativeChoiceUi.Text("继续分道争锋"));
+            AccessTools.Field(typeof(NMainMenuTextButton), "_locString").SetValue(button, NativeChoiceUi.Text(L10n.T("继续分道争锋")));
             AccessTools.Method(typeof(NMainMenuTextButton), "RefreshLabel").Invoke(button, null);
             button.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>(_ =>
             {
-                try { RaceRecovery.Read(LocalHost); } catch (Exception error) { RaceUi.Error("无法恢复比赛：" + error.Message); return; }
+                try { RaceRecovery.Read(LocalHost); } catch (Exception error) { RaceUi.Error(L10n.T("无法恢复比赛：") + L10n.T(error.Message)); return; }
                 var submenu = menu.OpenMultiplayerSubmenu(); RaceRuntime.ResumeRequested = true; RaceRuntime.ResumeFromHostArchive = true;
                 submenu.FastHost(GameMode.Standard);
-                RaceUi.Notify("已选择恢复比赛：邀请原来的玩家，并选择原来的角色后开始。");
+                RaceUi.Notify(L10n.T("已选择恢复比赛：邀请原来的玩家，并选择原来的角色后开始。"));
             }));
         }
         if (button != null) { button.Visible = available; button.SetEnabled(available); }
     }
     internal static async Task SaveAndQuit()
     {
-        var session = RaceSession.Current ?? throw new InvalidOperationException("比赛已结束。");
+        var session = RaceSession.Current ?? throw new InvalidOperationException(L10n.T("比赛已结束。"));
         try
         {
             await session.Recovery.SaveHost(true);
@@ -50,7 +50,7 @@ internal static class RecoveryUi
             RaceRuntime.ResumeFromHostArchive = true;
             await NGame.Instance!.ReturnToMainMenu();
         }
-        catch (Exception error) { RaceUi.Error("保存失败，仍留在当前比赛：" + error.Message); }
+        catch (Exception error) { RaceUi.Error(L10n.T("保存失败，仍留在当前比赛：") + L10n.T(error.Message)); }
     }
 }
 
@@ -79,7 +79,7 @@ internal static class RacePauseButtonsPatch
 internal static class ShowRaceContinuePatch
 {
     static void Postfix(NMainMenu __instance)
-    { try { RecoveryUi.Refresh(__instance); } catch (Exception error) { RaceUi.Error("读取比赛恢复入口失败：" + error.Message); } }
+    { try { RecoveryUi.Refresh(__instance); } catch (Exception error) { RaceUi.Error(L10n.T("读取比赛恢复入口失败：") + L10n.T(error.Message)); } }
 }
 [HarmonyPatch(typeof(NMainMenu), nameof(NMainMenu.OpenMultiplayerSubmenu), new Type[0])]
 internal static class NewRaceFromMenuPatch

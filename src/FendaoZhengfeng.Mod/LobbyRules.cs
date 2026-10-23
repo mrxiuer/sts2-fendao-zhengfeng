@@ -22,9 +22,9 @@ internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, Hash
             if (archive == null) return agreed!;
             string playerId = id.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var match = StateJson.Deserialize<Match>(archive.MatchJson);
-            if (!expected.Select(peer => peer.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToHashSet().SetEquals(match.Racers.Keys)) throw new RuleException("恢复比赛需要原来的玩家名单。");
-            if (!archive.Players.TryGetValue(playerId, out var snapshot)) throw new RuleException("缺少该玩家的恢复备份。");
-            var bundle = new NativeCheckpoint.Bundle("0.5.0", archive.RulesVersion, match.Revision, archive.MatchJson, snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey, snapshot.Rewards);
+            if (!expected.Select(peer => peer.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToHashSet().SetEquals(match.Racers.Keys)) throw new RuleException(L10n.T("恢复比赛需要原来的玩家名单。"));
+            if (!archive.Players.TryGetValue(playerId, out var snapshot)) throw new RuleException(L10n.T("缺少该玩家的恢复备份。"));
+            var bundle = new NativeCheckpoint.Bundle("0.5.1", archive.RulesVersion, match.Revision, archive.MatchJson, snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey, snapshot.Rewards);
             return agreed! with { Enabled = true, Debug = match.DebugMode, Effects = match.EnabledEffects, ResumeBundle = RaceMessage.Compress(StateJson.Serialize(bundle)) };
         }
         string? error = null; bool committed = false;
@@ -40,14 +40,14 @@ internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, Hash
                 else if (message.Kind == "rules" && !host && sender == hostId)
                 {
                     var rules = StateJson.Deserialize<LobbyRules>(message.Content);
-                    if (rules.Version != Catalog.RulesVersion || rules.Effects.Any(id => !Catalog.IsKnown(id))) throw new RuleException("房主规则与本机模组版本不兼容。");
+                    if (rules.Version != Catalog.RulesVersion || rules.Effects.Any(id => !Catalog.IsKnown(id))) throw new RuleException(L10n.T("房主规则与本机模组版本不兼容。"));
                     agreed = rules;
                     transport.SendMessage(new RaceMessage { Kind = "rules_ready", Content = rules.Version }, hostId);
                 }
                 else if (message.Kind == "rules_ready" && host && message.Content == Catalog.RulesVersion) ready.Add(sender);
                 else if (message.Kind == "rules_commit" && !host && sender == hostId && agreed != null) committed = true;
             }
-            catch (Exception exception) { error = exception.Message; }
+            catch (Exception exception) { error = L10n.T(exception.Message); }
         }
         transport.RegisterMessageHandler<RaceMessage>(Receive);
         try
@@ -56,7 +56,7 @@ internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, Hash
             while (!committed)
             {
                 if (error != null) throw new RuleException(error);
-                if (Environment.TickCount64 > deadline) throw new RuleException("房主配置同步超时，请确认所有玩家安装并启用了同版本分道争锋。");
+                if (Environment.TickCount64 > deadline) throw new RuleException(L10n.T("房主配置同步超时，请确认所有玩家安装并启用了同版本分道争锋。"));
                 transport.Update();
                 if (host)
                 {

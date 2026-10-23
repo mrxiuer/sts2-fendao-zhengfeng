@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
   <ItemGroup><ProjectReference Include="../../src/FendaoZhengfeng.Core/FendaoZhengfeng.Core.csproj" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="../../src/FendaoZhengfeng.Mod/Localization/eng.json" LogicalName="FDZF.Tests.eng.json" /></ItemGroup>
 </Project>

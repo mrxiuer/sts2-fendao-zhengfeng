@@ -19,12 +19,12 @@ internal static class TimelineLocalizationPatch
         string prefix = ModelDb.Card<ExtraTimelineCard>().Id.Entry + ".";
         if (__instance.LocEntryKey == prefix + "title")
         {
-            __result = "额外时间线";
+            __result = L10n.T("额外时间线");
             return false;
         }
         if (__instance.LocEntryKey == prefix + "description")
         {
-            __result = "选择对手牌组中1张牌，免费打出其副本。不能选择「额外时间线」。";
+            __result = L10n.T("选择对手牌组中1张牌，免费打出其副本。不能选择「额外时间线」。");
             return false;
         }
         return true;

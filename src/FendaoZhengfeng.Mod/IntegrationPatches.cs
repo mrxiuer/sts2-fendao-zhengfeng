@@ -117,7 +117,7 @@ internal static class RewardChoicePatch
             var type = RaceRuntime.State!.CurrentRoom?.RoomType.ToString();
             if (reward is RelicReward relic && type is "Elite" or "Boss")
             {
-                int action = await RaceUi.Choose("遗物奖励 · 2选1", ["领取遗物 · " + relic.Relic!.Title.GetFormattedText() + "\n" + relic.Relic.DynamicDescription.GetFormattedText(), "献祭遗物 · 混合3选1\n放弃当前这份遗物奖励，从诅咒、双刃契约、增益的混合池中选择1项。卡牌、金币、药水等其他奖励保留。"], [relic.Relic.BigIcon, EffectIcons.Get("choice_reward")]);
+                int action = await RaceUi.Choose(L10n.T("遗物奖励 · 2选1"), [L10n.T("领取遗物 · ") + relic.Relic!.Title.GetFormattedText() + "\n" + relic.Relic.DynamicDescription.GetFormattedText(), L10n.T("献祭遗物 · 混合3选1\n放弃当前这份遗物奖励，从诅咒、双刃契约、增益的混合池中选择1项。卡牌、金币、药水等其他奖励保留。")], [relic.Relic.BigIcon, EffectIcons.Get("choice_reward")]);
                 if (action < 0) return false;
                 if (action > 0)
                 {
@@ -133,7 +133,7 @@ internal static class RewardChoicePatch
             }
             if (reward is CardReward && s.Me.Has("siphon") && !s.Me.UsedServices.Contains("siphon:" + s.Me.BattleKey))
             {
-                int action = await RaceUi.Choose("卡牌奖励", ["查看并选择卡牌", $"汲取：放弃本次选牌，获得{10 + 2 * s.Me.Effects["siphon"].Rank}金币及下场首回合2能量"]);
+                int action = await RaceUi.Choose(L10n.T("卡牌奖励"), [L10n.T("查看并选择卡牌"), L10n.F($"汲取：放弃本次选牌，获得{10 + 2 * s.Me.Effects["siphon"].Rank}金币及下场首回合2能量")]);
                 if (action < 0) return false;
                 if (action == 1)
                 {
@@ -276,39 +276,39 @@ internal static class LocalizationPatch
     }
     static bool Prefix(LocString __instance, ref string __result)
     {
-        if (__instance.LocTable == "encounters" && __instance.LocEntryKey.StartsWith("TOWER_HEART_ENCOUNTER.", StringComparison.Ordinal)) { __result = "高塔之心"; return false; }
+        if (__instance.LocTable == "encounters" && __instance.LocEntryKey.StartsWith("TOWER_HEART_ENCOUNTER.", StringComparison.Ordinal)) { __result = L10n.T("高塔之心"); return false; }
         if (__instance.LocTable == ModEntry.Id)
         {
-            if (HeartPresentation.Texts.TryGetValue(__instance.LocEntryKey, out var heartText)) { __result = heartText; return false; }
+            if (HeartPresentation.Texts.TryGetValue(__instance.LocEntryKey, out var heartText)) { __result = L10n.T(heartText); return false; }
             if (NativeChoiceUi.Texts.TryGetValue(__instance.LocEntryKey, out var text)) { __result = text; return false; }
             if (__instance.LocEntryKey.StartsWith("display.", StringComparison.Ordinal))
-            { var parts = __instance.LocEntryKey.Split('.'); __result = parts[^1] == "title" ? Catalog.Get(parts[1]).Name : EffectDetails.Describe(parts[1]); return false; }
+            { var parts = __instance.LocEntryKey.Split('.'); __result = parts[^1] == "title" ? L10n.T(Catalog.Get(parts[1]).Name) : EffectDetails.Describe(parts[1]); return false; }
 
             if (__instance.LocEntryKey.StartsWith("effect.", StringComparison.Ordinal) && __instance.LocEntryKey.EndsWith(".title", StringComparison.Ordinal))
             {
-                __result = Catalog.Get(__instance.LocEntryKey[7..^6]).Name;
+                __result = L10n.T(Catalog.Get(__instance.LocEntryKey[7..^6]).Name);
                 return false;
             }
             __result = __instance.LocEntryKey switch
             {
-                "action.recover.title" => "取回1张暂存技能牌",
-                "action.remove.title" => "删除1张牌，失去3点最大生命",
-                "action.buy.title" => "选择要购买的卡牌",
-                "reward.sacrifice" => "遗物奖励 · 领取或献祭",
-                "repair.title" => "恢复耐久",
-                "repair.description" => "恢复所有卡牌的耐久并解除枯萎。占用本次营地行动，不净化契约。",
-                "cleanse.title" => "净化诅咒",
-                "cleanse.description" => "移除一个普通档诅咒或双刃契约，包括全部强化。占用本次营地行动。",
-                "mode.title" => "分道争锋",
-                "mode.description" => "共享地图、独立推进的五幕竞速模式。第四、第五幕各有两场Boss。",
+                "action.recover.title" => L10n.T("取回1张暂存技能牌"),
+                "action.remove.title" => L10n.T("删除1张牌，失去3点最大生命"),
+                "action.buy.title" => L10n.T("选择要购买的卡牌"),
+                "reward.sacrifice" => L10n.T("遗物奖励 · 领取或献祭"),
+                "repair.title" => L10n.T("恢复耐久"),
+                "repair.description" => L10n.T("恢复所有卡牌的耐久并解除枯萎。占用本次营地行动，不净化契约。"),
+                "cleanse.title" => L10n.T("净化诅咒"),
+                "cleanse.description" => L10n.T("移除一个普通档诅咒或双刃契约，包括全部强化。占用本次营地行动。"),
+                "mode.title" => L10n.T("分道争锋"),
+                "mode.description" => L10n.T("共享地图、独立推进的五幕竞速模式。第四、第五幕各有两场Boss。"),
                 _ => __instance.LocEntryKey
             }; return false;
         }
         if (__instance.LocTable == "cards")
         {
             var key = __instance.LocEntryKey;
-            if (key.StartsWith(ModelDb.Card<ClutterCard>().Id.Entry + ".", StringComparison.Ordinal)) { __result = key.EndsWith(".title", StringComparison.Ordinal) ? "杂念" : "不能打出。回合结束时消耗。"; return false; }
-            if (key.StartsWith(ModelDb.Card<WitheredCard>().Id.Entry + ".", StringComparison.Ordinal)) { __result = key.EndsWith(".title", StringComparison.Ordinal) ? "枯萎的卡牌" : "抽1张牌。消耗。可在营地恢复为原卡。"; return false; }
+            if (key.StartsWith(ModelDb.Card<ClutterCard>().Id.Entry + ".", StringComparison.Ordinal)) { __result = key.EndsWith(".title", StringComparison.Ordinal) ? L10n.T("杂念") : L10n.T("不能打出。回合结束时消耗。"); return false; }
+            if (key.StartsWith(ModelDb.Card<WitheredCard>().Id.Entry + ".", StringComparison.Ordinal)) { __result = key.EndsWith(".title", StringComparison.Ordinal) ? L10n.T("枯萎的卡牌") : L10n.T("抽1张牌。消耗。可在营地恢复为原卡。"); return false; }
         }
         return true;
     }

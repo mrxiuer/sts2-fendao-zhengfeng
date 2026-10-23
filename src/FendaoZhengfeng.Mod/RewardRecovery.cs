@@ -47,7 +47,7 @@ internal static class RewardRecovery
         if (reward is CardReward cards)
         {
             var options = (CardCreationOptions)AccessTools.PropertyGetter(typeof(CardReward), "RerollOptions").Invoke(cards, null)!;
-            if (options.CardPoolFilter != null) throw new InvalidOperationException("此卡牌奖励使用不可保存的自定义筛选器。");
+            if (options.CardPoolFilter != null) throw new InvalidOperationException(L10n.T("此卡牌奖励使用不可保存的自定义筛选器。"));
             var save = new SerializableReward { RewardType = RewardType.Card, Source = options.Source, RarityOdds = options.RarityOdds,
                 CardPoolIds = options.CardPools.Select(pool => pool.Id).ToList(), OptionCount = cards.Cards.Count() };
             return new(key, Pack(save), cards.Cards.Select(NativeCheckpoint.EncodeCard).ToArray(), CanSkip: cards.CanSkip,
@@ -61,7 +61,7 @@ internal static class RewardRecovery
     }
     internal static RewardsSet Restore(SavedCombatRewards save, Player player, CombatRoom room)
     {
-        if (save.RoomKey != RaceRuntime.RoomKey) throw new InvalidDataException("剩余奖励与恢复房间不匹配。");
+        if (save.RoomKey != RaceRuntime.RoomKey) throw new InvalidDataException(L10n.T("剩余奖励与恢复房间不匹配。"));
         var set = new RewardsSet(player).EmptyForRoom(room);
         if (save.DisallowSkipping) set.WithSkippingDisallowed();
         set.Rewards.AddRange(save.Rewards.Select(entry => RestoreReward(entry, player)));

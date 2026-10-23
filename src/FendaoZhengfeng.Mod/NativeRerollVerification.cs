@@ -202,7 +202,7 @@ internal static class NativeRerollVerification
             Check(receipt.Amount == 1 && !session.ReceiptApplied(receipt.Id),
                 "native command commits usage and a pending receipt before changing the reward");
 
-            var beforeApplyBundle = new NativeCheckpoint.Bundle("0.5.0", Catalog.RulesVersion,
+            var beforeApplyBundle = new NativeCheckpoint.Bundle("0.5.1", Catalog.RulesVersion,
                 session.Engine.State.Revision, StateJson.Serialize(session.Engine.State), nativePacket,
                 session.AppliedReceiptIds(), roomKey, new SavedCombatRewards(roomKey, [preApplyReward], false));
             beforeApplyBundle = StateJson.Deserialize<NativeCheckpoint.Bundle>(StateJson.Serialize(beforeApplyBundle));
@@ -220,7 +220,7 @@ internal static class NativeRerollVerification
 
             var postApplyReward = (SavedRewardContent?)AccessTools.Method(typeof(RewardRecovery), "CaptureReward")!.Invoke(null, [replayedPotion])
                 ?? throw new InvalidOperationException("无法捕获刷新后的原生药水奖励。");
-            var afterApplyBundle = new NativeCheckpoint.Bundle("0.5.0", Catalog.RulesVersion,
+            var afterApplyBundle = new NativeCheckpoint.Bundle("0.5.1", Catalog.RulesVersion,
                 session.Engine.State.Revision, StateJson.Serialize(session.Engine.State), nativePacket,
                 session.AppliedReceiptIds(), roomKey, new SavedCombatRewards(roomKey, [postApplyReward], false));
             afterApplyBundle = StateJson.Deserialize<NativeCheckpoint.Bundle>(StateJson.Serialize(afterApplyBundle));

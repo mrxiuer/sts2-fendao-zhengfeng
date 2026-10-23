@@ -1,12 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AssemblyName>FendaoZhengfeng</AssemblyName>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
     <BaseLibPath Condition="'$(BaseLibPath)' == ''">$(GameRoot)/../../workshop/content/2868840/3737335127/BaseLib/BaseLib.dll</BaseLibPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../FendaoZhengfeng.Core/*.cs" Link="Core/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Localization/*.json" LogicalName="FendaoZhengfeng.Localization.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Assets/heart/*" LogicalName="FendaoZhengfeng.Heart.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Assets/cards/*.png" LogicalName="FendaoZhengfeng.CardArt.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Assets/followers/*.png" LogicalName="FendaoZhengfeng.Followers.%(Filename)%(Extension)" />

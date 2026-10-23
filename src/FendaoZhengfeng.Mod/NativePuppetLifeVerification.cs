@@ -77,7 +77,7 @@ internal static class NativePuppetLifeVerification
         check(puppet.MaxHp == 100 && puppet.CurrentHp == 85, "replaying an applied reinforcement receipt cannot grow or heal twice");
         await NativeAcceptanceVisuals.Capture("puppet-life-01-guard-block-status");
         var save = RunManager.Instance.ToSave(null); var writer = new PacketWriter(); save.Serialize(writer);
-        var bundle = new NativeCheckpoint.Bundle("0.5.0", Catalog.RulesVersion, session.Engine.State.Revision,
+        var bundle = new NativeCheckpoint.Bundle("0.5.1", Catalog.RulesVersion, session.Engine.State.Revision,
             StateJson.Serialize(session.Engine.State), Convert.ToBase64String(writer.Buffer,0,writer.BytePosition));
         var loaded = NativeCheckpoint.Restore(bundle).Run.Modifiers.OfType<RaceModifier>().Single();
         var loadedVitals = StateJson.Deserialize<PuppetVitals>(loaded.PuppetVitalsJson);

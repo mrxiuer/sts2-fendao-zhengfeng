@@ -20,6 +20,7 @@ try {
     [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,(Join-Path $packageRoot $name),"FendaoZhengfeng/$name",[IO.Compression.CompressionLevel]::Optimal) | Out-Null
   }
   [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$readmePath,'README.md') | Out-Null
+  [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,(Join-Path $repoRoot 'README.en.md'),'README.en.md') | Out-Null
   [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive,$mockPath,'模拟测试说明.md') | Out-Null
   Get-ChildItem -LiteralPath (Join-Path $repoRoot 'docs') -File -Recurse | ForEach-Object {
     $entryName=[IO.Path]::GetRelativePath($repoRoot,$_.FullName).Replace('\','/')

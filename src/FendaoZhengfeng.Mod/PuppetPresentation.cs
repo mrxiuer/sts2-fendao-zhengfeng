@@ -13,10 +13,10 @@ internal static class PuppetPresentation
     {
         if (texture != null) return texture;
         using var source = typeof(PuppetPresentation).Assembly.GetManifestResourceStream("FendaoZhengfeng.Followers.puppet.png")
-            ?? throw new IOException("缺少傀儡立绘。");
+            ?? throw new IOException(L10n.T("缺少傀儡立绘。"));
         using var bytes = new MemoryStream(); source.CopyTo(bytes);
         var image = new Image();
-        if (image.LoadPngFromBuffer(bytes.ToArray()) != Error.Ok) throw new IOException("傀儡立绘损坏。");
+        if (image.LoadPngFromBuffer(bytes.ToArray()) != Error.Ok) throw new IOException(L10n.T("傀儡立绘损坏。"));
         image.Resize(512, 512, Image.Interpolation.Lanczos);
         return texture = ImageTexture.CreateFromImage(image);
     }

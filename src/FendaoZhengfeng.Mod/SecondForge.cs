@@ -88,7 +88,7 @@ internal static class SecondForgeLoadPatch
     {
         __state = save.Props?.ints?.FirstOrDefault(value => value.name == SecondForge.SaveKey).value ?? 0;
         if (__state <= 0) return;
-        if (save.CurrentUpgradeLevel != 2 || __state > 1000000) throw new InvalidDataException("二次强化存档数值无效。");
+        if (save.CurrentUpgradeLevel != 2 || __state > 1000000) throw new InvalidDataException(L10n.T("二次强化存档数值无效。"));
         var props = save.Props!;
         save = new SerializableCard
         {

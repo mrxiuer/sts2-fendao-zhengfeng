@@ -103,7 +103,7 @@ public sealed class TowerHeart : MonsterModel
     public override async Task BeforeHandDraw(MegaCrit.Sts2.Core.Entities.Players.Player player, PlayerChoiceContext context, ICombatState combatState)
     {
         if (combatState.RoundNumber == HeartRules.CopyAtRound - 1)
-            RaceUi.Notify("众生回响预警：心脏将在第4回合结束时复制另一名玩家的牌组，供你在第5、6回合使用；人工制品可以抵挡。");
+            RaceUi.Notify(L10n.T("众生回响预警：心脏将在第4回合结束时复制另一名玩家的牌组，供你在第5、6回合使用；人工制品可以抵挡。"));
         if (combatState.RoundNumber >= HeartRules.RestoreAtRound) await EchoDeck.Restore(player);
         else if (EchoDeck.Active && player.Creature.GetPower<HeartEchoPower>() is { } marker) marker.SetAmount(HeartRules.RestoreAtRound - combatState.RoundNumber);
     }

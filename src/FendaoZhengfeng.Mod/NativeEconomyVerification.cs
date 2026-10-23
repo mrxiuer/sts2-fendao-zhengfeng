@@ -50,13 +50,13 @@ internal static class NativeEconomyVerification
             await MockTesting.GrantEffect("iron_curtain"); await MockTesting.GrantEffect("iron_curtain");
             await MockTesting.GrantEffect("carapace"); await MockTesting.GrantEffect("hard_shell");
             await Battle(); Check(Stats(3), "three acquisitions grant exactly three native attributes in the next battle without carrying prior combat powers");
-            Check(EffectDetails.Describe("war_feeds_war").Contains("当前 3/3 层"), "hover description exposes current stack cap and attributes");
+            Check(EffectDetails.Describe("war_feeds_war").Contains(L10n.F($"\n当前 {3}/3 层。")), "hover description exposes current stack cap and attributes");
             await Win(); await MockTesting.EnterService(RoomType.RestSite);
             int before = player.Gold;
             await session.Submit(session.New("camp_cleanse", RaceRuntime.RoomKey, "iron_curtain"));
             await RaceModifier.Active!.ApplyReceipts(new ThrowingPlayerChoiceContext(), false);
             Check(player.Gold == before && session.Me.Effects["adversity_profit"].Used == 9, "victory pays nine gold for three curse tiers and camp cleansing pays no extra gold");
-            Check(EffectDetails.Describe("adversity_profit").Contains("9/800") && !EffectDetails.Describe("adversity_profit").Contains("下一次幕Boss击杀"), "adversity tooltip shows lifetime eight-hundred-gold cap without act expiry");
+            Check(EffectDetails.Describe("adversity_profit").Contains("9/800") && !EffectDetails.Describe("adversity_profit").Contains(L10n.T("\n持续至自己的下一次幕Boss击杀。")), "adversity tooltip shows lifetime eight-hundred-gold cap without act expiry");
             await RunManager.Instance.EnterAct(1, false);
             Check(session.Me.Has("adversity_profit") && session.Me.Effects["adversity_profit"].Used == 9, "native act transition preserves adversity and its claimed total");
             GD.Print("[FDZF ECONOMY COMPLETE] Native effect checks passed."); game.GetTree().Quit(0);

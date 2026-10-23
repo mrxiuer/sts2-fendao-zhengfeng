@@ -1,8 +1,12 @@
 # 杀戮尖塔2：分道争锋
 
+[English installation and gameplay guide](README.en.md)
+
 独立选路、独立战斗、遗物献祭的多人竞速 MOD。共享一张地图，各自推进；固定5幕，率先击败第五幕最终Boss的玩家获胜。
 
-**0.5.0 好友测试版。** 基于 Windows 游戏 **v0.111.0**、**BaseLib 3.4.7** 验证。包含65项模式效果、五幕竞速、独立进度保存恢复及奖励性能优化。[Steam创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)（仅上传账号的Steam好友可访问）；[GitHub安装包](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.0-preview)与工坊使用相同的运行文件。
+**0.5.1 好友测试版。** 新增中英文游戏文本与双语工坊说明。**需要 `public-beta` 测试分支**；正式分支的 API 不兼容，不能仅删除版本门槛。兼容基准为游戏 **v0.111.0 public-beta**、**BaseLib 3.4.7**。本轮程序集对照见 [API核验](docs/API-COMPATIBILITY.md)，英文说明见 [0.5.1更新](docs/releases/0.5.1.md)。
+
+包含65项模式效果、五幕竞速、独立进度保存恢复及奖励性能优化。[Steam创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)（仅上传账号的Steam好友可访问）；[GitHub安装包](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.1-preview)与工坊使用相同的运行文件。
 
 本轮新增傀儡、双生史莱姆、遁地、巨人化、额外时间线、魅惑卡与奖励刷新。主要更新见 [0.5.0说明](docs/releases/0.5.0.md)，测试范围见 [验证记录](docs/VERIFICATION.md)。
 
@@ -10,9 +14,9 @@
 
 ## 安装与更新
 
-1. 所有参与者使用相同游戏版本，安装并启用 **BaseLib 3.4.7 或更新版本**。目前只验证了 3.4.7，更新版本仍需兼容核验。本包不附带 BaseLib 或游戏程序集。
+1. 在 Steam → 游戏属性 → Game Versions & Betas 中选择 **`public-beta`**。所有参与者使用相同游戏版本，安装并启用 **BaseLib 3.4.7 或更新版本**。目前只验证了 3.4.7，更新版本仍需兼容核验。本包不附带 BaseLib 或游戏程序集。
 2. **工坊安装：** 退出游戏，删除旧的 `mods/FendaoZhengfeng` 文件夹（只删本模组），然后[订阅分道争锋](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)，等待Steam下载完成；BaseLib也须安装并启用。无需将工坊文件复制到mods。仅上传账号的Steam好友可访问此条目。
-3. **手动安装：** 从[0.5.0发行页](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.0-preview)下载 `FendaoZhengfeng-0.5.0-preview.zip`，不要下载自动生成的 `Source code` 作为安装包。
+3. **手动安装：** 从[0.5.1发行页](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.1-preview)下载 `FendaoZhengfeng-0.5.1-preview.zip`，不要下载自动生成的 `Source code` 作为安装包。
    退出游戏，将 ZIP 中的 `FendaoZhengfeng` 文件夹放入游戏的 `mods` 目录。可在 Steam → 游戏 → 管理 → 浏览本地文件找到游戏目录。
 
 ```text
@@ -27,6 +31,10 @@ Slay the Spire 2/
 5. 房主开启模式、勾选允许的效果，再通过原版多人房间开局。房主和所有客户端均须安装、启用相同版本的本模组。
 
 更新时退出游戏，覆盖上述两份文件，所有人一起更新并新开比赛。不要保留同 ID 的多份安装。发行页同时提供 `SHA256SUMS.txt`，可以用 `Get-FileHash <安装包路径> -Algorithm SHA256` 核对下载文件。
+
+## 语言
+
+游戏内文本跟随游戏语言：中文使用原有中文，英文及其他语言回退到英文。包含65项效果、配置、奖励、状态说明、恢复与调试界面。切换语言后重新打开配置或选择界面；已打开的临时弹窗可能保留创建时语言。语言只影响显示，规则ID与联机协议不变，双方可以使用不同界面语言。
 
 ## 五幕竞速
 

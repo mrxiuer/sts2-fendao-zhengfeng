@@ -731,9 +731,9 @@ internal static class TwinSlimeNamePatch
         if (__instance.Player is not { } player || !TwinSlimeRuntime.ShouldLookLikeSlime(player))
             return;
         if (TwinSlimeRuntime.Find(__instance) is { } pair)
-            __result = __instance == pair.First ? "双生黏液 1" : "双生黏液 2";
+            __result = __instance == pair.First ? L10n.T("双生黏液 1") : L10n.T("双生黏液 2");
         else
-            __result = "黏液";
+            __result = L10n.T("黏液");
     }
 }
 

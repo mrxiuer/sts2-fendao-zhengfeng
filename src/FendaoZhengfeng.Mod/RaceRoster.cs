@@ -47,7 +47,7 @@ internal static class RaceRoster
         {
             foreach (var node in root.GetChildren()) { root.RemoveChild(node); node.QueueFree(); }
             rows.Clear(); sessionId = session.Engine.State.Id;
-            var actions = new Button { Text = "比赛操作", TooltipText = "Boss额外奖励、净化与共同检查点", CustomMinimumSize = new Vector2(275, 32) };
+            var actions = new Button { Text = L10n.T("比赛操作"), TooltipText = L10n.T("Boss额外奖励、净化与共同检查点"), CustomMinimumSize = new Vector2(275, 32) };
             actions.Pressed += RaceUi.TogglePanel; root.AddChild(actions);
         }
         int slot = 0;
@@ -71,11 +71,11 @@ internal static class RaceRoster
                 button.Pressed += () => RaceUi.Run(() => OpenPlayer(id)); root.AddChild(button);
                 row = new(button, portrait, text, hp); rows[id] = row;
             }
-            string state = racer.Eliminated ? "已淘汰" : racer.Finished ? "已完赛" : $"第{racer.Act + 1}幕 · {racer.Floor}层";
-            row.Text.Text = racer.Name + "\n" + state; row.Text.Modulate = color;
+            string state = racer.Eliminated ? L10n.T("已淘汰") : racer.Finished ? L10n.T("已完赛") : L10n.F($"第{racer.Act + 1}幕 · {racer.Floor}层");
+            row.Text.Text = L10n.RacerName(racer) + "\n" + state; row.Text.Modulate = color;
             row.Hp.MaxValue = Math.Max(1, racer.MaxHealth); row.Hp.Value = racer.Health;
             row.Hp.GetNode<Label>("HpText").Text = $"{racer.Health}/{racer.MaxHealth}";
-            row.Button.TooltipText = $"{racer.Name}\n{state} · {racer.Room}\n诅咒护盾 {racer.Shields} · 替死鬼 {racer.Ghosts}\n" + string.Join("、", racer.Effects.Values.Select(h => Catalog.Get(h.Id).Name + (h.Grants.Count > 1 ? "+" + (h.Grants.Count - 1) : ""))) + "\n点击查看原生牌组、遗物和药水详情。";
+            row.Button.TooltipText = L10n.F($"{L10n.RacerName(racer)}\n{state} · {racer.Room}\n诅咒护盾 {racer.Shields} · 替死鬼 {racer.Ghosts}\n") + string.Join("、", racer.Effects.Values.Select(h => L10n.T(Catalog.Get(h.Id).Name) + (h.Grants.Count > 1 ? "+" + (h.Grants.Count - 1) : ""))) + L10n.T("\n点击查看原生牌组、遗物和药水详情。");
             if (racer.PublicPacket.Length > 0) row.Portrait.Texture = PublicProfiles.Read(racer)?.Character.IconTexture;
         }
         Tick();
@@ -83,10 +83,10 @@ internal static class RaceRoster
     internal static Task OpenPlayer(string id)
     {
         var racer = RaceSession.Current!.Engine.State.Racers[id];
-        var player = PublicProfiles.Read(racer) ?? throw new InvalidOperationException("正在等待该玩家的公开资料，请稍后再试。");
+        var player = PublicProfiles.Read(racer) ?? throw new InvalidOperationException(L10n.T("正在等待该玩家的公开资料，请稍后再试。"));
         var screen = NMultiplayerPlayerExpandedState.Create(player);
         NCapstoneContainer.Instance!.Open(screen);
-        screen.GetNode<MegaRichTextLabel>("%PlayerNameLabel").Text = racer.Name + $" · {racer.Health}/{racer.MaxHealth}";
+        screen.GetNode<MegaRichTextLabel>("%PlayerNameLabel").Text = L10n.RacerName(racer) + $" · {racer.Health}/{racer.MaxHealth}";
         return Task.CompletedTask;
     }
 }

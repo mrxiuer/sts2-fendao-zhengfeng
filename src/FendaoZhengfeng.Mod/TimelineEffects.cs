@@ -22,7 +22,7 @@ internal static class TimelineEffects
     {
         if (!CombatManager.Instance.IsInProgress || RaceSession.Current is not { } session || RaceRuntime.State is not { } run)
         {
-            RaceUi.Notify("额外时间线只能在战斗中使用。");
+            RaceUi.Notify(L10n.T("额外时间线只能在战斗中使用。"));
             return;
         }
 
@@ -31,7 +31,7 @@ internal static class TimelineEffects
         var snapshots = TimelineRules.OpponentSnapshots(session.Engine.State, session.LocalId);
         if (snapshots.Count == 0)
         {
-            RaceUi.Notify("对手的牌组尚未同步，暂时无法复制。");
+            RaceUi.Notify(L10n.T("对手的牌组尚未同步，暂时无法复制。"));
             return;
         }
 
@@ -44,15 +44,15 @@ internal static class TimelineEffects
         else
         {
             int selectedIndex = await RaceUi.Choose(
-                "额外时间线 · 选择一名对手",
+                L10n.T("额外时间线 · 选择一名对手"),
                 snapshots.Select(snapshot =>
-                    $"{DisplayName(snapshot)}\n牌组：{snapshot.Cards.Count}张")
+                    L10n.F($"{DisplayName(snapshot)}\n牌组：{snapshot.Cards.Count}张"))
                     .ToArray());
             if (selectedIndex < 0 || selectedIndex >= snapshots.Count) return;
             source = snapshots[selectedIndex];
         }
 
-        var owner = source ?? throw new InvalidOperationException("所选公开牌组快照已失效。");
+        var owner = source ?? throw new InvalidOperationException(L10n.T("所选公开牌组快照已失效。"));
         var previews = new List<CardModel>(owner.Cards.Count);
         try
         {
@@ -67,13 +67,13 @@ internal static class TimelineEffects
                 }
                 catch (Exception error)
                 {
-                    GD.PushWarning($"[分道争锋] 额外时间线跳过无法解码的公开卡牌 {stored.Id}：{error.Message}");
+                    GD.PushWarning(L10n.F($"[分道争锋] 额外时间线跳过无法解码的公开卡牌 {stored.Id}：{L10n.T(error.Message)}"));
                 }
             }
 
             if (previews.Count == 0)
             {
-                RaceUi.Notify("这名对手没有可复制的卡牌。");
+                RaceUi.Notify(L10n.T("这名对手没有可复制的卡牌。"));
                 return;
             }
 
@@ -84,7 +84,7 @@ internal static class TimelineEffects
                 new CardSelectorPrefs(new LocString("cards", ModelDb.Card<ExtraTimelineCard>().Id.Entry + ".title"), 1)
                 { Cancelable = true })).FirstOrDefault();
             if (selected == null) return;
-            if (!previews.Contains(selected)) throw new InvalidOperationException("选择的卡牌不属于这份公开快照。");
+            if (!previews.Contains(selected)) throw new InvalidOperationException(L10n.T("选择的卡牌不属于这份公开快照。"));
 
             var combat = player.Creature.CombatState;
             if (combat == null) return;
@@ -163,7 +163,8 @@ internal static class TimelineEffects
     }
 
     private static string DisplayName(TimelineOpponentSnapshot snapshot) =>
-        string.IsNullOrWhiteSpace(snapshot.Name) ? snapshot.Id : snapshot.Name;
+        RaceSession.Current?.Engine.State.Racers.TryGetValue(snapshot.Id, out var racer) == true
+            ? L10n.RacerName(racer) : string.IsNullOrWhiteSpace(snapshot.Name) ? snapshot.Id : L10n.T(snapshot.Name);
 }
 
 public sealed partial class RaceModifier
@@ -181,7 +182,7 @@ public sealed partial class RaceModifier
     {
         if (receipt.Kind != "timeline_card") return;
         if (string.IsNullOrWhiteSpace(receipt.Id) || string.IsNullOrWhiteSpace(receipt.Value))
-            throw new InvalidOperationException("额外时间线收据缺少稳定的授予事件标识。");
+            throw new InvalidOperationException(L10n.T("额外时间线收据缺少稳定的授予事件标识。"));
         if (appliedTimelineReceipts.Contains(receipt.Id)) return;
 
         // The card's saved marker closes the crash window between the native deck add and the
@@ -213,7 +214,7 @@ public sealed partial class RaceModifier
         if (!Player.Deck.Cards.Contains(granted))
         {
             granted.RemoveFromState();
-            throw new InvalidOperationException("额外时间线卡牌没有加入永久牌组，收据将保留待重试。");
+            throw new InvalidOperationException(L10n.T("额外时间线卡牌没有加入永久牌组，收据将保留待重试。"));
         }
         appliedTimelineReceipts.Add(receipt.Id);
     }

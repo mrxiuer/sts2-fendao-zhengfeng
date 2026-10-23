@@ -59,7 +59,7 @@ internal static class MerchantRecovery
     {
         inventory = null!;
         if (player.RunState.CurrentRoom is not MerchantRoom room || !pending.TryGetValue(room, out var save)) return false;
-        if (player.RunState is not RunState run || run.Players.Count != 1) throw new InvalidDataException("商店恢复必须使用独立单人进度。");
+        if (player.RunState is not RunState run || run.Players.Count != 1) throw new InvalidDataException(L10n.T("商店恢复必须使用独立单人进度。"));
         inventory = new MerchantInventory(player); var target = inventory;
         void Wire(MerchantEntry entry, int cost)
         {
@@ -74,7 +74,7 @@ internal static class MerchantRecovery
             foreach (var saved in entries)
             {
                 var entry = saved.Type is { } type ? new MerchantCardEntry(player, target, cards, (CardType)type)
-                    : new MerchantCardEntry(player, target, cards, (CardRarity)(saved.Rarity ?? throw new InvalidDataException("缺少商店卡牌筛选条件。")));
+                    : new MerchantCardEntry(player, target, cards, (CardRarity)(saved.Rarity ?? throw new InvalidDataException(L10n.T("缺少商店卡牌筛选条件。"))));
                 if (saved.Original != null)
                 {
                     var result = new CardCreationResult(NativeCheckpoint.DecodeCard(saved.Original, run, player));
@@ -84,7 +84,7 @@ internal static class MerchantRecovery
                         if (saved.Modifiers.Length == 0) result.ModifyCard(modified);
                         foreach (int index in saved.Modifiers)
                         {
-                            if (index < 0 || index >= player.Relics.Count) throw new InvalidDataException("商店卡牌的遗物修饰来源不匹配。");
+                            if (index < 0 || index >= player.Relics.Count) throw new InvalidDataException(L10n.T("商店卡牌的遗物修饰来源不匹配。"));
                             result.ModifyCard(modified, player.Relics[index]);
                         }
                     }

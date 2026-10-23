@@ -12,21 +12,21 @@ namespace FendaoZhengfeng.Mod;
 /// <summary>Explicit local simulation. It uses native gameplay and the same rules reducer, without a network peer.</summary>
 internal static class MockTesting
 {
-    private static RaceSession Session => RaceSession.Current is { IsMock: true } session ? session : throw new InvalidOperationException("这些工具仅可在本地模拟模式使用。");
+    private static RaceSession Session => RaceSession.Current is { IsMock: true } session ? session : throw new InvalidOperationException(L10n.T("这些工具仅可在本地模拟模式使用。"));
     public static async Task Start()
     {
-        var game = NGame.Instance ?? throw new InvalidOperationException("游戏尚未就绪。");
-        if (RaceRuntime.State != null) throw new InvalidOperationException("请先返回主菜单，再开启本地模拟。");
+        var game = NGame.Instance ?? throw new InvalidOperationException(L10n.T("游戏尚未就绪。"));
+        if (RaceRuntime.State != null) throw new InvalidOperationException(L10n.T("请先返回主菜单，再开启本地模拟。"));
         var characters = ModelDb.AllCharacters.ToList();
-        int selected = await RaceUi.Choose("本地模拟 · 选择角色（不需要好友）", characters.Select(c => c.Title.GetFormattedText()).ToList());
+        int selected = await RaceUi.Choose(L10n.T("本地模拟 · 选择角色（不需要好友）"), characters.Select(c => c.Title.GetFormattedText()).ToList());
         if (selected < 0) return;
         await StartWithCharacter(characters[selected], "FDZFMOCK" + DateTime.UtcNow.Ticks);
-        RaceUi.Error("本地模拟已开始：默认没有诅咒。测试工具位于“分道争锋”面板，效果图标在遗物区常驻。");
+        RaceUi.Error(L10n.T("本地模拟已开始：默认没有诅咒。测试工具位于“分道争锋”面板，效果图标在遗物区常驻。"));
         RaceUi.Refresh();
     }
     internal static async Task<RunState> StartWithCharacter(CharacterModel character, string seed)
     {
-        var game = NGame.Instance ?? throw new InvalidOperationException("游戏尚未就绪。");
+        var game = NGame.Instance ?? throw new InvalidOperationException(L10n.T("游戏尚未就绪。"));
         var session = RaceSession.CreateMock(seed);
         RaceRuntime.ResumeRequested = false;
         try
@@ -39,7 +39,7 @@ internal static class MockTesting
     {
         _ = Session;
         var effects = Catalog.All.Where(e => e.Kind == kind && Session.Engine.State.EnabledEffects.Contains(e.Id)).ToList();
-        int selected = await RaceUi.Choose(kind == EffectKind.Curse ? "模拟对手献祭 · 给自己施加诅咒" : "本地测试 · 取得自身效果", effects.Select(e => e.Name + " · " + RaceUi.TierName(e.Tier) + "\n" + e.Description).ToList(), effects.Select(e => EffectIcons.Get(e.Id)).ToList());
+        int selected = await RaceUi.Choose(kind == EffectKind.Curse ? L10n.T("模拟对手献祭 · 给自己施加诅咒") : L10n.T("本地测试 · 取得自身效果"), effects.Select(e => L10n.T(e.Name) + " · " + RaceUi.TierName(e.Tier) + "\n" + L10n.T(e.Description)).ToList(), effects.Select(e => EffectIcons.Get(e.Id)).ToList());
         if (selected >= 0) await GrantEffect(effects[selected].Id);
     }
     internal static async Task GrantEffect(string id)
@@ -67,23 +67,23 @@ internal static class MockTesting
     public static async Task NextAct()
     {
         _ = Session; var run = RaceRuntime.State!;
-        if (Session.Me.InBattle || CombatManager.Instance.IsInProgress) throw new InvalidOperationException("请先结算当前战斗。");
-        if (run.CurrentActIndex >= 4) throw new InvalidOperationException("第五幕已是最后一幕。");
+        if (Session.Me.InBattle || CombatManager.Instance.IsInProgress) throw new InvalidOperationException(L10n.T("请先结算当前战斗。"));
+        if (run.CurrentActIndex >= 4) throw new InvalidOperationException(L10n.T("第五幕已是最后一幕。"));
         await RunManager.Instance.EnterAct(run.CurrentActIndex + 1, false);
     }
     public static async Task SelectCampaignBoss()
     {
         _ = Session; var run = RaceRuntime.State!;
-        if (Session.Me.InBattle || CombatManager.Instance.IsInProgress) throw new InvalidOperationException("请先结算当前战斗。");
+        if (Session.Me.InBattle || CombatManager.Instance.IsInProgress) throw new InvalidOperationException(L10n.T("请先结算当前战斗。"));
         var points = new[] { run.Map.BossMapPoint, run.Map.SecondBossMapPoint }.Where(point => point != null).ToList();
-        int index = await RaceUi.Choose("进入本幕Boss节点", points.Select((point, i) => $"第{i + 1}个Boss" + (i == points.Count - 1 ? " · 本幕最终Boss" : "")).ToList());
+        int index = await RaceUi.Choose(L10n.T("进入本幕Boss节点"), points.Select((point, i) => L10n.F($"第{i + 1}个Boss") + (i == points.Count - 1 ? L10n.T(" · 本幕最终Boss") : "")).ToList());
         if (index >= 0) await RunManager.Instance.EnterMapCoord(points[index]!.coord);
     }
     public static async Task EnterBattle()
     {
         _ = Session;
-        if (CombatManager.Instance.IsInProgress) throw new InvalidOperationException("请先结算当前测试战斗。");
-        int selected = await RaceUi.Choose("进入原生测试战斗", ["普通怪物", "精英", "Boss"]);
+        if (CombatManager.Instance.IsInProgress) throw new InvalidOperationException(L10n.T("请先结算当前测试战斗。"));
+        int selected = await RaceUi.Choose(L10n.T("进入原生测试战斗"), [L10n.T("普通怪物"), L10n.T("精英"), "Boss"]);
         if (selected < 0) return;
         await RunManager.Instance.EnterRoomDebug(selected switch { 0 => RoomType.Monster, 1 => RoomType.Elite, _ => RoomType.Boss });
     }
@@ -95,14 +95,14 @@ internal static class MockTesting
     public static async Task SelectService()
     {
         _ = Session;
-        int selected = await RaceUi.Choose("进入净化测试节点", ["商店（可使用测试金币）", "营地"]);
+        int selected = await RaceUi.Choose(L10n.T("进入净化测试节点"), [L10n.T("商店（可使用测试金币）"), L10n.T("营地")]);
         if (selected >= 0) await EnterService(selected == 0 ? RoomType.Shop : RoomType.RestSite);
     }
     internal static async Task EnterService(RoomType type)
     {
         _ = Session;
-        if (CombatManager.Instance.IsInProgress) throw new InvalidOperationException("请先结算当前测试战斗。");
-        if (type is not (RoomType.Shop or RoomType.RestSite)) throw new InvalidOperationException("不是可用的测试服务节点。");
+        if (CombatManager.Instance.IsInProgress) throw new InvalidOperationException(L10n.T("请先结算当前测试战斗。"));
+        if (type is not (RoomType.Shop or RoomType.RestSite)) throw new InvalidOperationException(L10n.T("不是可用的测试服务节点。"));
         await RunManager.Instance.EnterRoomDebug(type);
     }
     public static async Task OpponentBoss()
@@ -110,7 +110,7 @@ internal static class MockTesting
         var session = Session;
         int act = RaceRuntime.State!.CurrentActIndex;
         var peer = session.Engine.State.Racers["2"];
-        if (peer.Act > act) throw new InvalidOperationException("模拟对手已经领先当前幕。");
+        if (peer.Act > act) throw new InvalidOperationException(L10n.T("模拟对手已经领先当前幕。"));
         while (peer.Act < act)
         {
             await session.Submit(session.New("progress", amount: 80, value: "Boss") with { Actor = "2", Act = peer.Act + 1 });

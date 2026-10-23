@@ -18,7 +18,7 @@ internal static class FiveActCampaign
     internal static IReadOnlyList<ActModel> Expand(IReadOnlyList<ActModel> acts)
     {
         if (acts.Count == ActCount) return acts;
-        if (acts.Count != 3) throw new RuleException("分道争锋需要三个原生基础幕来生成五幕比赛。");
+        if (acts.Count != 3) throw new RuleException(L10n.T("分道争锋需要三个原生基础幕来生成五幕比赛。"));
         return [acts[0], acts[1], acts[2], acts[1], acts[2]];
     }
     internal static decimal ExtraMonsterMultiplier(int act, int resets) => 1 + Math.Max(0, act - 2) * 0.2m + resets * 0.2m;
@@ -29,7 +29,7 @@ internal static class FiveActCampaign
         {
             var act = run.Acts[index];
             var bosses = act.AllBossEncounters.OrderBy(boss => boss.Id.ToString(), StringComparer.Ordinal).ToList();
-            if (bosses.Count < 2) throw new RuleException("新增幕需要至少两种原生Boss遭遇。");
+            if (bosses.Count < 2) throw new RuleException(L10n.T("新增幕需要至少两种原生Boss遭遇。"));
             var random = new StableRandom(run.Rng.Seed + ":race-bosses:" + index);
             int first = (int)(random.Next() * bosses.Count);
             int second = (first + 1 + (int)(random.Next() * (bosses.Count - 1))) % bosses.Count;

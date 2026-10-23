@@ -36,17 +36,17 @@ internal static class NativeCardRewardRefresh
         reward.CanReroll = state.NativeCanReroll;
         var choices = result.ToList();
         int index = choices.FindIndex(choice => choice.OptionId.Equals("REROLL",StringComparison.OrdinalIgnoreCase));
-        if (index < 0) throw new InvalidOperationException("原生卡牌奖励没有创建刷新选项。");
+        if (index < 0) throw new InvalidOperationException(L10n.T("原生卡牌奖励没有创建刷新选项。"));
         var alternative = new CardRewardAlternative("REROLL", async () =>
         {
             // Preserve Driftwood's independent native refresh before spending a mode charge.
             if (reward.CanReroll) { reward.Reroll(); RaceRuntime.Checkpoint(); return; }
             if (RaceSession.Current is not { } session || Remaining(reward) <= 0)
-                throw new RuleException("这份卡牌奖励没有可用的刷新次数。");
+                throw new RuleException(L10n.T("这份卡牌奖励没有可用的刷新次数。"));
             var set = RaceRuntime.CombatRewards;
             if (set == null || !RewardRerollEffect.IsTrackedReward(set,reward))
                 set = RewardRerollPersistence.CurrentSetFor(reward);
-            if (set == null) throw new RuleException("当前卡牌奖励集已关闭，不能刷新。");
+            if (set == null) throw new RuleException(L10n.T("当前卡牌奖励集已关闭，不能刷新。"));
             await RewardRerollEffect.RefreshAsync(null,reward,set);
         }, PostAlternateCardRewardAction.DoNothing);
         owners.Add(alternative,new(reward)); choices[index] = alternative; result = choices;
@@ -85,6 +85,6 @@ internal static class NativeModeCardRefreshTextPatch
     static bool Prefix(LocString __instance,ref string __result)
     {
         if (__instance.LocTable != "fdzf_encore" || !__instance.LocEntryKey.StartsWith("refresh.",StringComparison.Ordinal)) return true;
-        __result = "刷新卡牌（剩余" + __instance.LocEntryKey["refresh.".Length..] + "次）"; return false;
+        __result = L10n.T("刷新卡牌（剩余") + __instance.LocEntryKey["refresh.".Length..] + L10n.T("次）"); return false;
     }
 }

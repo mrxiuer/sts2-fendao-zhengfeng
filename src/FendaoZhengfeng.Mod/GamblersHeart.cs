@@ -47,7 +47,7 @@ public sealed partial class RaceModifier
     private void ShowCriticalHit(Creature attacker)
     {
         if (attacker.GetCreatureNode() is not { } visual) return;
-        var label = new Label { Name = "FdzfCriticalHit", Text = "暴击！", Position = Vector2.Zero,
+        var label = new Label { Name = "FdzfCriticalHit", Text = L10n.T("暴击！"), Position = Vector2.Zero,
             MouseFilter = Control.MouseFilterEnum.Ignore, ZIndex = 15 };
         label.AddThemeFontSizeOverride("font_size", 34);
         label.AddThemeColorOverride("font_color", new Color("ffd078"));

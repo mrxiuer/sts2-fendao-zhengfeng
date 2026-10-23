@@ -1,9 +1,9 @@
 {
   "id": "FendaoZhengfeng",
-  "name": "杀戮尖塔2：分道争锋",
+  "name": "杀戮尖塔2：分道争锋 / Separate Paths",
   "author": "分道争锋项目组",
-  "description": "独立路线、独立战斗、遗物献祭与诅咒交锋的多人竞速模式。开发预览版本。",
-  "version": "0.5.0",
+  "description": "五幕多人竞速：独立路线、遗物献祭与诅咒交锋。需要 public-beta；支持中文和英文。 / A five-act multiplayer race with independent paths, relic sacrifices, and Curses. Requires public-beta. Chinese and English supported.",
+  "version": "0.5.1",
   "has_pck": false,
   "has_dll": true,
   "affects_gameplay": true,
