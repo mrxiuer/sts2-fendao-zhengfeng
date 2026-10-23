@@ -100,6 +100,7 @@ internal static class RewardChoicePatch
 {
     private static readonly HashSet<Reward> originalCalls = [];
     private static readonly HashSet<Reward> selecting = [];
+    internal static bool IsSelecting => selecting.Count != 0;
     static bool Prefix(Reward __instance, ref Task<bool> __result)
     {
         if (!RaceRuntime.Live || originalCalls.Contains(__instance)) return true;
@@ -110,16 +111,23 @@ internal static class RewardChoicePatch
     {
         try
         {
-            var s = RaceSession.Current!; var type = RaceRuntime.State!.CurrentRoom?.RoomType.ToString();
+            var s = RaceSession.Current!;
+            var key = RaceRuntime.RewardKey(reward);
+            if (s.Engine.State.ConsumedRewards.Contains(s.LocalId + ":" + key)) return false;
+            var type = RaceRuntime.State!.CurrentRoom?.RoomType.ToString();
             if (reward is RelicReward relic && type is "Elite" or "Boss")
             {
                 int action = await RaceUi.Choose("遗物奖励 · 2选1", ["领取遗物 · " + relic.Relic!.Title.GetFormattedText() + "\n" + relic.Relic.DynamicDescription.GetFormattedText(), "献祭遗物 · 混合3选1\n放弃当前这份遗物奖励，从诅咒、双刃契约、增益的混合池中选择1项。卡牌、金币、药水等其他奖励保留。"], [relic.Relic.BigIcon, EffectIcons.Get("choice_reward")]);
                 if (action < 0) return false;
                 if (action > 0)
                 {
+                    await NativeRewardGrant.WaitForEntry(s);
+                    using var sacrificeGrant = new NativeRewardGrant(s, reward, modeOnly:true);
                     var route = Route.Mixed;
                     bool done = await RaceUi.ChooseEffect(RaceRuntime.RewardKey(reward), route, type == "Boss");
                     if (done) { reward.OnSkipped(); AccessTools.PropertySetter(typeof(Reward), nameof(Reward.SuccessfullySelected)).Invoke(reward, [true]); }
+                    sacrificeGrant.Dispose();
+                    if(done) RaceRuntime.Checkpoint();
                     return done;
                 }
             }
@@ -129,15 +137,37 @@ internal static class RewardChoicePatch
                 if (action < 0) return false;
                 if (action == 1)
                 {
+                    await NativeRewardGrant.WaitForEntry(s);
+                    using var siphonGrant = new NativeRewardGrant(s, reward, modeOnly:true);
                     await s.Submit(s.New("siphon", s.Me.BattleKey)); await RaceModifier.Active!.ApplyReceipts(new MegaCrit.Sts2.Core.GameActions.Multiplayer.ThrowingPlayerChoiceContext(), false);
-                    reward.OnSkipped(); AccessTools.PropertySetter(typeof(Reward), nameof(Reward.SuccessfullySelected)).Invoke(reward, [true]); RaceRuntime.Checkpoint(); return true;
+                    reward.OnSkipped(); AccessTools.PropertySetter(typeof(Reward), nameof(Reward.SuccessfullySelected)).Invoke(reward, [true]); siphonGrant.Dispose(); RaceRuntime.Checkpoint(); return true;
                 }
             }
-            var key = RaceRuntime.RewardKey(reward);
-            if (s.Engine.State.ConsumedRewards.Contains(s.LocalId + ":" + key)) return false;
+            await NativeRewardGrant.WaitForEntry(s);
+            using var income = new RewardIncomeBatch(s, reward);
+            using var nativeGrant = new NativeRewardGrant(s, reward);
             originalCalls.Add(reward); bool success;
-            try { success = await reward.SelectUnsynchronized(); } finally { originalCalls.Remove(reward); }
-            if (success) { await s.Submit(s.New("claim", key)); RaceRuntime.Checkpoint(); }
+            try { success = await reward.SelectUnsynchronized(); }
+            catch { if (income.Income > 0) await s.Submit(s.New("gold", amount: income.Income)); throw; }
+            finally { originalCalls.Remove(reward); }
+            if (success)
+            {
+                var claim = s.New("claim", key, amount: income.Income);
+                NativeClaimJournal.Record(s, claim);
+                nativeGrant.Dispose();
+                // A reward hook may grant another native reward. Its enclosing
+                // grant must finish before either snapshot is safe to publish.
+                if(NativeRewardGrant.HasEnclosingGrant(s) || NativeEventStep.HasEnclosingStep(s)) return true;
+                if (System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") == "1") NativeClaimJournal.AfterRecordForVerification?.Invoke(s, claim);
+                if (System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") == "1"
+                    && NativeClaimJournal.BeforeSubmitForVerification is { } beforeSubmit) await beforeSubmit(s, claim);
+                await NativeClaimJournal.SubmitWhenReady(s, claim);
+                if (System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") == "1"
+                    && NativeClaimJournal.AfterSubmitForVerification is { } afterSubmit) await afterSubmit(s, claim);
+                NativeClaimJournal.Confirm(s, claim.Id);
+                RaceRuntime.Checkpoint();
+            }
+            else if (income.Income > 0) await s.Submit(s.New("gold", amount: income.Income));
             return success;
         }
         finally { selecting.Remove(reward); }
@@ -155,7 +185,14 @@ internal static class GoldIncomePatch
     }
     static void Postfix(ref Task __result, int __state)
     { if (__state > 0) __result = After(__result, __state); }
-    static async Task After(Task original, int income) { await original; if (RaceSession.Current is { } s) await s.Submit(s.New("gold", amount: income)); }
+    static async Task After(Task original, int income)
+    {
+        await original;
+        if(RaceSession.Current is not {} s)return;
+        if(System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY")=="1" && NativeEventStep.HasEnclosingStep(s)
+            && NativeEventStep.AfterGoldForVerification is {} hook) await hook(s);
+        if(!RewardIncomeBatch.Capture(s,income)) await s.Submit(s.New("gold",amount:income));
+    }
 }
 
 [HarmonyPatch(typeof(CardRarityOdds), nameof(CardRarityOdds.RollWithoutChangingFutureOdds), [typeof(CardRarityOddsType), typeof(float)])]
@@ -206,7 +243,7 @@ public sealed class RaceRestOption(Player owner, bool repair = false) : RestSite
         var s = RaceSession.Current!;
         if (repair) await s.Submit(s.New("repair", RaceRuntime.RoomKey));
         else { var id = await RaceUi.ChooseCleanse(CleanseAt.Camp); if (id == null) return false; await s.Submit(s.New("camp_cleanse", RaceRuntime.RoomKey, id)); }
-        await RaceModifier.Active!.ApplyReceipts(new MegaCrit.Sts2.Core.GameActions.Multiplayer.ThrowingPlayerChoiceContext(), false); RaceRuntime.Checkpoint(); RaceUi.Refresh(); return true;
+        await RaceModifier.Active!.ApplyReceipts(new MegaCrit.Sts2.Core.GameActions.Multiplayer.ThrowingPlayerChoiceContext(), false); RaceUi.Refresh(); return true;
     }
 }
 

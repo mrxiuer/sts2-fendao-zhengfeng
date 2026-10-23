@@ -57,15 +57,18 @@ internal static class PuppetOwnBlockPatch
 {
     static bool Prefix(Creature __instance, decimal amount, ValueProp props, ref decimal __result)
     {
-        if (PuppetDamageScope.Current.Value?.Target is not { } puppet || puppet.PetOwner?.Creature != __instance) return true;
-        if (PuppetDamageScope.Current.Value!.Guarding && !puppet.IsAlive)
+        var frame = PuppetDamageScope.Current.Value;
+        var puppet = frame?.Target is { } receiving && receiving.PetOwner?.Creature == __instance
+            ? receiving : PuppetFollower.Guard(__instance);
+        if (puppet == null) return true;
+        if (frame?.Guarding == true && !puppet.IsAlive)
         {
-            PuppetDamageScope.Current.Value.Target = null;
-            PuppetDamageScope.Current.Value.Guarding = false;
+            frame.Target = null;
+            frame.Guarding = false;
             return true;
         }
         __result = puppet.DamageBlockInternal(amount, props);
-        PuppetDamageScope.Current.Value!.Blocked = (int)__result;
+        if (frame?.Target == puppet) frame.Blocked = (int)__result;
         return false;
     }
 }

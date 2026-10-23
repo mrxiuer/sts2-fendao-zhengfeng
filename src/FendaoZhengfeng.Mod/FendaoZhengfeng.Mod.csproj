@@ -8,8 +8,9 @@
   <ItemGroup>
     <Compile Include="../FendaoZhengfeng.Core/*.cs" Link="Core/%(Filename)%(Extension)" />
     <EmbeddedResource Include="Assets/heart/*" LogicalName="FendaoZhengfeng.Heart.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Assets/cards/*.png" LogicalName="FendaoZhengfeng.CardArt.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Assets/followers/*.png" LogicalName="FendaoZhengfeng.Followers.%(Filename)%(Extension)" />
-    <EmbeddedResource Include="Assets/icons/*.png" LogicalName="FendaoZhengfeng.Assets.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Assets/icon-textures/*.png" LogicalName="FendaoZhengfeng.Assets.%(Filename)%(Extension)" />
     <Reference Include="BaseLib"><HintPath>$(BaseLibPath)</HintPath><Private>false</Private></Reference>
     <Reference Include="sts2"><HintPath>$(GameData)/sts2.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="0Harmony"><HintPath>$(GameData)/0Harmony.dll</HintPath><Private>false</Private></Reference>

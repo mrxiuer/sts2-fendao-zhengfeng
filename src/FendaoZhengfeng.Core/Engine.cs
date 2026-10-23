@@ -1,4 +1,4 @@
-namespace FendaoZhengfeng.Core;
+﻿namespace FendaoZhengfeng.Core;
 
 public sealed record Command(string Id, string Actor, string Kind, string Key = "", string Effect = "", int Amount = 0,
     int Act = 0, int Floor = 0, string Value = "", bool Boss = false, Route Route = Route.Disrupt, int MaxHealth = 0, string Profile = "");
@@ -20,7 +20,7 @@ public sealed class Engine(Match state)
     private static void Apply(Match m, Command c)
     {
         var p = m.Racers[c.Actor];
-        if (p.Eliminated && c.Kind is not ("ack" or "progress")) throw new RuleException("已淘汰玩家不能执行此操作。");
+        if (p.Eliminated && c.Kind is not ("ack" or "progress" or "puppet_destroyed" or "burrow_cleanup")) throw new RuleException("已淘汰玩家不能执行此操作。");
         switch (c.Kind)
         {
             case "profile":
@@ -48,7 +48,7 @@ public sealed class Engine(Match state)
                 p.Act = c.Act; p.Floor = c.Floor; p.Room = c.Value; p.Health = Math.Max(0, c.Amount); p.MaxHealth = Math.Max(0, c.MaxHealth); break;
             case "battle_start":
                 if (p.InBattle) { if (p.BattleKey == c.Key) break; throw new RuleException("上一场尚未结束。"); }
-                p.Battle++; p.BattleKey = c.Key; p.InBattle = true; p.BurdenSnapshot = p.Burden;
+                p.Battle++; p.BattleKey = c.Key; p.InBattle = true; p.BurdenSnapshot = p.Burden; BurrowRules.BeginBattle(p);
                 p.AdversityGoldSnapshot = p.Has("adversity_profit") ? p.Effects.Keys.Select(Catalog.Get)
                     .Where(e => e.Kind == EffectKind.Curse && p.Has(e.Id)).Sum(e => Balance.AdversityGoldPerKind(e.Tier)) : 0;
                 break;
@@ -57,6 +57,7 @@ public sealed class Engine(Match state)
                 p.InBattle = false;
                 if (!p.WonBattles.Add(c.Key)) break;
                 p.VictoryCount++;
+                BurrowRules.RecordVictory(p, c.Key); BurrowRules.CleanupBattle(p, c.Key);
                 if (p.Effects.TryGetValue("adversity_profit", out var profit))
                 {
                     int gold = Math.Min(p.AdversityGoldSnapshot, Math.Max(0, Balance.AdversityGoldCap(profit.Rank) - profit.Used));
@@ -80,6 +81,17 @@ public sealed class Engine(Match state)
                 if (!p.ExpeditionRewards.Remove(c.Key)) throw new RuleException("悬赏奖励已处理。"); break;
             case "defeat": p.Eliminated = true; p.InBattle = false; break;
             case "revive": p.RevivalCount++; break;
+            case "puppet_destroyed": PuppetRules.Destroyed(p, c.Key); break;
+            case "burrow_use": BurrowRules.Use(p, c.Key, c.Amount); break;
+            case "burrow_emerge": BurrowRules.Emerge(p, c.Key, c.Amount); break;
+            case "burrow_ready": BurrowRules.FinishStun(p, c.Key, c.Amount); break;
+            case "burrow_block_broken": BurrowRules.MarkBlockBroken(p, c.Key); break;
+            case "burrow_replay": BurrowRules.ResetForNativeReplay(p, c.Key); break;
+            case "burrow_cleanup": BurrowRules.CleanupBattle(p, c.Key); break;
+            case "reward_reroll":
+                RewardRerollRules.CommitNative(m, p, c.Key);
+                p.Receipts.Add(new(c.Id + ":reroll", "reroll_native", c.Key, RewardRerollRules.NativeUsage(p, c.Key).Used)); break;
+            case "offer_reroll": RewardRerollRules.RefreshOffer(m, p, c.Key, c.Route); break;
             case "heart_finish":
                 if (!p.InBattle || p.Act != 4 || p.Room != "Boss" || c.Key != p.BattleKey) throw new RuleException("心脏击杀记录不匹配。");
                 if (!p.Finished) { p.Finished = true; m.FinishOrder.Add(p.Id); }
@@ -115,13 +127,14 @@ public sealed class Engine(Match state)
                 {
                     foreach (var other in m.Racers.Values.Where(r => (r.Id != p.Id || effect.Id == "farewell_upgrades") && !r.Eliminated && !r.Finished)) Attack(m, p, other, effect, c.Id);
                 }
-                else Give(m, p, effect, c.Id);
+                else Give(m, p, effect, c.Id, c.MaxHealth);
                 m.ConsumedRewards.Add(token); offer.Resolved = true;
                 if (offer.Route == Route.FirstKill) p.BossPrizes.Remove(offer.RewardKey);
                 p.Receipts.Add(new(c.Id + ":choice", "choice", offer.RewardKey));
                 break;
             case "claim":
-                if (!m.ConsumedRewards.Add(p.Id + ":" + c.Key)) throw new RuleException("奖励已处理。"); break;
+                if (!m.ConsumedRewards.Add(p.Id + ":" + c.Key)) throw new RuleException("奖励已处理。");
+                RecordIncome(m, p, c.Amount); break;
             case "boss_shield":
                 if (!p.BossPrizes.Remove(c.Key)) throw new RuleException("额外奖励已处理。"); m.ConsumedRewards.Add(p.Id + ":" + c.Key); p.Shields++; break;
             case "boss_cleanse":
@@ -145,8 +158,7 @@ public sealed class Engine(Match state)
                 foreach (var other in m.Racers.Values.Where(r => r.Id != p.Id && !r.Eliminated && !r.Finished))
                     for (int i = 0; i < c.Amount && other.PendingStatuses.Count < 5; i++) other.PendingStatuses.Add(c.Value); break;
             case "gold":
-                if (c.Amount is < 0 or > 100000) throw new RuleException("金币收入无效。");
-                foreach (var other in m.Racers.Values.Where(r => r.Id != p.Id && r.Has("shared_fortune"))) other.FortuneIncome[p.Id] = other.FortuneIncome.GetValueOrDefault(p.Id) + c.Amount; break;
+                RecordIncome(m, p, c.Amount); break;
             case "node_end":
                 Service(p, c.Key, "node");
                 if (p.Has("shared_fortune"))
@@ -206,12 +218,20 @@ public sealed class Engine(Match state)
             if (used < 2 + r.Rank) { r.Counters[source.Id] = used + 1; source.Receipts.Add(new(eventId + ":retaliation:" + target.Id, "curse_card")); }
         }
     }
-    private static void Give(Match m, Racer p, Effect e, string eventId)
+    private static void RecordIncome(Match m, Racer player, int amount)
+    {
+        if (amount is < 0 or > 100000) throw new RuleException("金币收入无效。");
+        if (amount == 0) return;
+        foreach (var other in m.Racers.Values.Where(r => r.Id != player.Id && r.Has("shared_fortune")))
+            other.FortuneIncome[player.Id] = other.FortuneIncome.GetValueOrDefault(player.Id) + amount;
+    }
+    private static void Give(Match m, Racer p, Effect e, string eventId, int maxHealth)
     {
         if (e.Id is "small_light" or "good_connections" or "tail_refill" && p.Has(e.Id)) throw new RuleException("此常驻主动增益不能重复持有。");
         if (e.Id == "war_feeds_war" && Balance.WarFeedsWarStacks(p.Effects.GetValueOrDefault(e.Id)) >= 3) throw new RuleException("以战养战已达到3层上限。");
         if (e.Id == "flight_wings" && p.Has(e.Id) && p.Effects[e.Id].Rank >= Balance.FlightMaxRank) throw new RuleException("凌空之翼已达到80%减伤上限。");
         if (e.Id == "gamblers_heart" && p.Has(e.Id) && p.Effects[e.Id].Rank >= Balance.CriticalMaxRank) throw new RuleException("狂赌之心已达到50%暴击率上限。");
+        if (Balance.AtAcquisitionCap(p, e.Id)) throw new RuleException(e.Name + "已达到强化上限。");
         p.History[e.Id] = p.History.GetValueOrDefault(e.Id) + 1;
         if (e.Id == "r_key") p.ResetCharges++;
         if (e.Id == "expedition" && p.Has(e.Id)) AdvanceExpedition(p, eventId);
@@ -231,6 +251,9 @@ public sealed class Engine(Match state)
             h = new Holding { Id = e.Id }; p.Effects[e.Id] = h;
             if (e.Id == "catch_up") h.Used = m.Racers.Values.Any(r => r.Act > p.Act) ? 2 : 1;
         }
+        if (e.Id == "extra_timeline") p.Receipts.Add(new(eventId + ":timeline", "timeline_card", eventId));
+        if (e.Id == "heartstrings_charm") p.Receipts.Add(new(eventId + ":charm", "charm_card", eventId));
+        if (e.Id == PuppetRules.Id) PuppetRules.Granted(p, h, eventId, maxHealth > 0 ? maxHealth : p.MaxHealth);
         h.ExpiresAfterAct = e.Permanent || e.Id == "catch_up" ? -1 : p.Act + (p.KilledBossActs.Contains(p.Act) ? 1 : 0);
     }
     public static int ExpeditionGoal(int act) => act < 2 ? 3 : act < 4 ? 2 : 1;

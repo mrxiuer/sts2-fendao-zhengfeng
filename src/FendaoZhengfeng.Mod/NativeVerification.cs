@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
@@ -26,13 +26,15 @@ internal static class NativeVerification
     {
         if (started || System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY") != "1") return;
         started = true;
-        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "mechanics" or "flight" or "gambler" or "puppet_body") _ = NativeMechanicsVerification.Run(game);
+        if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "mechanics" or "flight" or "gambler" or "puppet_body" or "puppet_life" or "giant" or "charm" or "burrow" or "reroll" or "twin_slime" or "formation" or "combinations") _ = NativeMechanicsVerification.Run(game);
+        else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "reward_performance") _ = NativeRewardPerformanceVerification.Run(game);
+        else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "timeline") _ = NativeTimelineVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "economy") _ = NativeEconomyVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "heart") _ = NativeHeartVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "campaign") _ = NativeCampaignVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "revival") _ = NativeRevivalVerification.Run(game);
         else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "advanced") _ = NativeAdvancedVerification.Run(game);
-        else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "host" or "client") _ = NativeNetworkVerification.Run(game);
+        else if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") is "host" or "client" or "peer3" or "peer4") _ = NativeNetworkVerification.Run(game);
         else _ = Verify(game);
     }
     private static void Check(bool condition, string name)
@@ -64,6 +66,14 @@ internal static class NativeVerification
             HarmonyLib.AccessTools.Method(typeof(BaseLib.Config.UI.NModConfigSubmenu), "LoadModConfig").Invoke(configPage, [RaceConfig.Instance]);
             await Task.Delay(200);
             Check(configPage.FindChildren("*", "", true, false).OfType<BaseLib.Config.UI.NConfigTickbox>().Count() == Catalog.All.Count + 2, "config renders mode and debug toggles plus all effect checkboxes");
+            foreach (string id in new[] { "substitute_puppet", "burrow_sanctuary", "giant_form", "extra_timeline", "heartstrings_charm", "twin_slime", "encore_rewards" })
+            {
+                var property = typeof(RaceConfig).GetProperty("Effect_" + id)!;
+                property.SetValue(null, false);
+                Check(!RaceConfig.EnabledIds().Contains(id), "config disables new effect " + id);
+                property.SetValue(null, true);
+                Check(RaceConfig.EnabledIds().Contains(id), "config restores new effect " + id);
+            }
             RaceConfig.Effect_exhaustion = false;
             Check(!RaceConfig.EnabledIds().Contains("exhaustion"), "effect checkbox updates next-match whitelist");
             RaceConfig.Effect_exhaustion = true;

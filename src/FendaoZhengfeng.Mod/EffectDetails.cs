@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 
 namespace FendaoZhengfeng.Mod;
 
@@ -48,6 +48,11 @@ internal static class EffectDetails
             "evil_echo" => $"\n当前负面效果倍率 {Balance.EvilEchoMultiplier(holding.Rank)}。",
             "flight_wings" => $"\n当前攻击减伤 {1 - Balance.FlightReceivedRatio(holding.Rank):P0}；最高生命相同时按敌人站位顺序锁定。",
             "gamblers_heart" => $"\n当前暴击率 {Balance.CriticalChance(holding.Rank):P0}。暴击只在实际攻击时判定。",
+            "substitute_puppet" => modifier?.PuppetStatusText ?? "",
+            "twin_slime" => $"\n分裂后每个身体的最大生命为自身的{TwinSlimeRules.SplitPercent(holding.Rank + 1)}%。",
+            "giant_form" => $"\n当前斩杀阈值：自身生命的{100 + 10 * holding.Rank}%；敌方最大生命须严格低于阈值。",
+            "encore_rewards" => $"\n每份奖励最多重掷{RewardRerollRules.Limit(racer)}次；金币奖励不能刷新。",
+            "burrow_sanctuary" => $"\n储存 {BurrowRules.Read(racer).Charges}/2 次；充能 {BurrowRules.Read(racer).Progress}/{BurrowRules.Read(racer).WinsPerCharge} 胜。" + (BurrowRules.Read(racer).Phase switch { BurrowRules.Phase.Burrowed => BurrowRules.Read(racer).BlockBroken ? "\n遁地中；格挡已破，下回合眩晕。" : "\n遁地中；下回合出土。", BurrowRules.Phase.Stunned => "\n眩晕：跳过本回合。", _ => "\n战斗中点击图标遁地。" }),
             "tail_refill" => racer.TailSpent ? "\n蜥蜴尾巴已消耗；点击补充。" : "\n当前无需补充。",
             _ => ""
         };

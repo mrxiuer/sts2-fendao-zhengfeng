@@ -1,4 +1,4 @@
-using Godot;
+﻿using Godot;
 using FendaoZhengfeng.Core;
 using MegaCrit.Sts2.Core.Nodes;
 
@@ -30,6 +30,11 @@ public static class RaceUi
         list = new VBoxContainer { CustomMinimumSize = new Vector2(675, 0) }; list.AddThemeConstantOverride("separation", 16); scroll.AddChild(list);
         notice = new Label { Text = "", Position = new Vector2(800, 100), AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(1000, 0), Theme = uiTheme }; layer.AddChild(notice);
         toggle.Pressed += TogglePanel;
+        game.GetTree().ProcessFrame += () =>
+        {
+            try { RaceSession.Current?.PumpNetwork(); }
+            catch (Exception e) { Error(e.Message); }
+        };
         timer = new Godot.Timer { WaitTime = 0.05, Autostart = true, ProcessMode = Node.ProcessModeEnum.Always };
         timer.Timeout += () =>
         {
@@ -163,11 +168,24 @@ public static class RaceUi
     {
         var s = RaceSession.Current ?? throw new InvalidOperationException("会话已结束。");
         await s.Submit(s.New("offer", reward, boss: boss, route: route));
-        var offer = s.Engine.State.Offers[s.LocalId + ":" + reward + ":" + route];
-        int index = await Choose("选择效果 · " + (route == Route.Mixed ? "混合三选一" : route == Route.Disrupt ? "施加给所有对手" : "施加给自己"), offer.Candidates.Select(id => { var e = Catalog.Get(id); return e.Name + "\n" + TierName(e.Tier) + " · " + (e.Kind == EffectKind.Curse ? "诅咒 · 所有对手" : e.Kind == EffectKind.Contract ? "双刃契约 · 自己" : "增益 · 自己") + "\n" + e.Description; }).ToList(), offer.Candidates.Select(EffectIcons.Get).ToList());
-        if (index < 0) return false;
-        await s.Submit(s.New("choose", offer.Id, offer.Candidates[index])); await Apply(); RaceRuntime.Checkpoint(); Refresh(); return true;
+        while (ReferenceEquals(RaceSession.Current, s))
+        {
+            var offer = s.Engine.State.Offers[s.LocalId + ":" + reward + ":" + route];
+            var candidates = offer.Candidates.ToArray();
+            var labels = candidates.Select(id => { var e = Catalog.Get(id); return e.Name + "\n" + TierName(e.Tier) + " · " + (e.Kind == EffectKind.Curse ? "诅咒 · 所有对手" : e.Kind == EffectKind.Contract ? "双刃契约 · 自己" : "增益 · 自己") + "\n" + e.Description; }).ToList();
+            var icons = candidates.Select(EffectIcons.Get).ToList();
+            var usage = RewardRerollRules.OfferUsage(s.Me, offer.Id);
+            bool canReroll = usage.CanRefresh;
+            if (canReroll) { labels.Add($"刷新候选 · 剩余{usage.Remaining}次\n为这份奖励重新生成一组效果。"); icons.Add(EffectIcons.Get("encore_rewards")); }
+            int index = await Choose("选择效果 · " + (route == Route.Mixed ? "混合三选一" : route == Route.Disrupt ? "施加给所有对手" : "施加给自己"), labels, icons);
+            if (index < 0 || !ReferenceEquals(RaceSession.Current, s)) return false;
+            if (canReroll && index == candidates.Length)
+            { await s.Submit(s.New("offer_reroll", reward, route: route)); continue; }
+            await s.Submit(s.New("choose", offer.Id, candidates[index]) with { MaxHealth = RaceRuntime.State!.Players.Single().Creature.MaxHp }); await Apply(); RaceRuntime.Checkpoint(); Refresh(); return true;
+        }
+        return false;
     }
+
     public static async Task<string?> ChooseCleanse(CleanseAt place)
     {
         if (place == CleanseAt.Shop) { Error("商店不提供模式效果净化。"); return null; }

@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
@@ -25,7 +25,7 @@ internal static class NativePuppetBodyVerification
         var enemy = state.Enemies.First(creature => creature.IsAlive);
         session.Me.Effects.Clear(); hero.LoseBlockInternal(hero.Block);
         foreach (var power in hero.Powers.ToArray()) await PowerCmd.Remove(power);
-        check(Catalog.All.All(effect => effect.Id != "substitute_puppet"), "unfinished puppet item is absent from every live reward and config pool");
+        check(Catalog.All.Any(effect => effect.Id == "substitute_puppet" && effect.BossPool && effect.FirstKillPool), "puppet item is available through boss sacrifices and first-kill rewards");
         check(EffectIcons.Get("substitute_puppet").GetWidth() == 128 && PuppetPresentation.Texture().GetHeight() == 512,
             "painted puppet icon and actual body artwork load from packaged transparent resources");
         var puppet = await PuppetFollower.Spawn(player, 80, 77);

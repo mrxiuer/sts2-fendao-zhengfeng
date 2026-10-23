@@ -1,4 +1,4 @@
-using BaseLib.Config;
+﻿using BaseLib.Config;
 namespace FendaoZhengfeng.Mod;
 public sealed partial class RaceConfig
 {
@@ -60,4 +60,11 @@ public sealed partial class RaceConfig
     [ConfigIgnore] public static bool Effect_evil_echo { get => EnabledIds().Contains("evil_echo"); set => SetEffect("evil_echo", value); }
     [ConfigIgnore] public static bool Effect_flight_wings { get => EnabledIds().Contains("flight_wings"); set => SetEffect("flight_wings", value); }
     [ConfigIgnore] public static bool Effect_gamblers_heart { get => EnabledIds().Contains("gamblers_heart"); set => SetEffect("gamblers_heart", value); }
+    [ConfigIgnore] public static bool Effect_substitute_puppet { get => EnabledIds().Contains("substitute_puppet"); set => SetEffect("substitute_puppet", value); }
+    [ConfigIgnore] public static bool Effect_burrow_sanctuary { get => EnabledIds().Contains("burrow_sanctuary"); set => SetEffect("burrow_sanctuary", value); }
+    [ConfigIgnore] public static bool Effect_giant_form { get => EnabledIds().Contains("giant_form"); set => SetEffect("giant_form", value); }
+    [ConfigIgnore] public static bool Effect_extra_timeline { get => EnabledIds().Contains("extra_timeline"); set => SetEffect("extra_timeline", value); }
+    [ConfigIgnore] public static bool Effect_heartstrings_charm { get => EnabledIds().Contains("heartstrings_charm"); set => SetEffect("heartstrings_charm", value); }
+    [ConfigIgnore] public static bool Effect_twin_slime { get => EnabledIds().Contains("twin_slime"); set => SetEffect("twin_slime", value); }
+    [ConfigIgnore] public static bool Effect_encore_rewards { get => EnabledIds().Contains("encore_rewards"); set => SetEffect("encore_rewards", value); }
 }

@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
@@ -55,7 +55,7 @@ internal static class NativeCampaignVerification
             var session = RaceSession.Current!; var player = run.Players.Single(); var modifier = RaceModifier.Active!;
             Check(run.Acts.Count == 5 && !ReferenceEquals(run.Acts[1], run.Acts[3]) && !ReferenceEquals(run.Acts[2], run.Acts[4]), "five native mutable acts have independent room state");
             Check(run.Acts.Skip(3).All(act => act.HasSecondBoss && act.BossEncounter.Id != act.SecondBossEncounter!.Id), "both extra acts have two distinct preselected bosses");
-            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == EffectIcons.TextureSize), "all fifty effect PNG resources load");
+            Check(Catalog.All.All(effect => EffectIcons.Get(effect.Id).GetWidth() == EffectIcons.TextureSize), "all enabled catalog effect PNG resources load");
             foreach (var effect in Catalog.All)
             {
                 var marker = (RaceDisplayPower)ModelDb.Power<RaceDisplayPower>().ToMutable(); marker.EffectId = effect.Id;
@@ -136,6 +136,9 @@ internal static class NativeCampaignVerification
                     await MockTesting.GrantEffect("expedition"); await Battle(RoomType.Elite); await Win();
                     Check(RaceRuntime.CombatRewards!.Rewards.OfType<RelicReward>().Count() == 2 && session.Me.ExpeditionRewards.Count == 0, "fifth-act expedition needs one elite and emits exactly one extra native relic reward");
                     var relic = RaceRuntime.CombatRewards.Rewards.OfType<RelicReward>().First(reward => RaceRuntime.RewardKey(reward).Contains("expedition:"));
+                    string originalKey = RaceRuntime.RewardKey(relic);
+                    RewardRerollPersistence.BindRewardKeys(RaceRuntime.CombatRewards);
+                    Check(RaceRuntime.RewardKey(relic) == originalKey && originalKey.Contains("expedition:"), "reward screen binding preserves the original expedition ticket identity");
                     string key = RaceRuntime.RewardKey(relic); await session.Submit(session.New("offer", key, boss: false, route: Route.Mixed));
                     Check(session.Engine.State.Offers.Values.Last().Candidates.All(id => Catalog.Get(id).Tier != Tier.Boss), "expedition elite relic can be sacrificed using the elite mixed pool");
                     run.Map = FiveActCampaign.CreateLateMap(run);

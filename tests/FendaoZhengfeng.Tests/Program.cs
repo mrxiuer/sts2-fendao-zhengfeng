@@ -5,6 +5,78 @@ void Test(string name, Action test) { try { test(); passed++; Console.WriteLine(
 void Check(bool value, string message = "Assertion failed") { if (!value) throw new Exception(message); }
 Engine New() => new(new Match { Id = "test", Seed = "seed", Racers = new() { ["a"] = new() { Id = "a" }, ["b"] = new() { Id = "b" }, ["c"] = new() { Id = "c" } } });
 void Grant(Engine engine, string player, string id, int count = 1) { engine.State.Racers[player].Effects[id] = new() { Id = id, Grants = Enumerable.Range(0, count).Select(i => new Grant { EventId = i.ToString(), Source = "a", ActiveBattle = 1 }).ToList() }; }
+Test("wire delta preserves full history additions removals array edits and nulls atomically",()=>{
+ var engine=New(); for(int i=0;i<3000;i++) engine.State.ProcessedCommands.Add("history-"+i);
+ Grant(engine,"a","sharpen");
+ string previous=StateDelta.Normalize(StateJson.Serialize(engine.State));
+ engine.Execute(new("delta-claim","a","claim","reward-1"));
+ engine.State.Racers["a"].Effects.Remove("sharpen");
+ engine.State.Offers["special/path~name"]=new(){Id="offer",Player="a",Candidates=["sharpen","light_step"]};
+ string next=StateDelta.Normalize(StateJson.Serialize(engine.State));
+ var patch=StateJson.Deserialize<StateDelta>(StateJson.Serialize(StateDelta.Create(previous,next)));
+ Check(StateJson.Serialize(patch).Length<next.Length/5,"history must not be resent");
+ Check(patch.TryApply(previous,out var reconstructed) && reconstructed==next);
+ Check(!patch.TryApply(next,out var unchanged) && unchanged==next,"wrong baseline must remain untouched");
+ var corrupt=patch with {ResultHash="corrupt"};
+ Check(!corrupt.TryApply(previous,out unchanged) && unchanged==previous);
+ engine.Execute(new("delta-claim-2","b","claim","reward-2"));
+ engine.State.Offers.Clear(); engine.State.FinishOrder.Add("b"); engine.State.Racers["a"].Position=null;
+ string last=StateDelta.Normalize(StateJson.Serialize(engine.State));
+ Check(StateDelta.Create(next,last).TryApply(next,out reconstructed) && reconstructed==last);
+ Check(StateJson.Deserialize<Match>(reconstructed).ProcessedCommands.Count==3002);
+});
+Test("wire normalization preserves semantic JSON and deterministic object order",()=>{
+ string a="{\"z\":null,\"a\":[1,{\"y\":true,\"x\":\"\u4e2d\u6587\"}]}";
+ string b="{\"a\":[1,{\"x\":\"\u4e2d\u6587\",\"y\":true}],\"z\":null}";
+ Check(StateDelta.Normalize(a)==StateDelta.Normalize(b));
+ Check(System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(a),System.Text.Json.Nodes.JsonNode.Parse(StateDelta.Normalize(a))));
+});
+Test("wire patches follow a long mutation stream without losing nulls arrays or removed dictionaries",()=>{
+ var e=New(); string received=StateDelta.Normalize(StateJson.Serialize(e.State));
+ for(int i=0;i<80;i++) {
+  e.Execute(new("wire-sequence-"+i,"a","claim","reward:"+i));
+  var racer=e.State.Racers["b"]; racer.Name="玩家"+i;
+  racer.Position=i%2==0 ? new RouteStep(0,i,1) : null;
+  e.State.Offers["offer:"+i]=new(){Id="o"+i,Player="a",Candidates=["sharpen","light_step"]};
+  if(i%3==0) e.State.Offers.Clear();
+  if(i%4==0) e.State.FinishOrder.Clear(); else e.State.FinishOrder.Insert(0,"entry:"+i);
+  string expected=StateDelta.Normalize(StateJson.Serialize(e.State));
+  var patch=StateDelta.Create(received,expected);
+  Check(patch.TryApply(received,out var actual) && expected==actual,"mutation "+i);
+  received=actual;
+ }
+});
+Test("wire delta rejects malformed operations and changed identity without applying partial state",()=>{
+ var e=New(); string before=StateDelta.Normalize(StateJson.Serialize(e.State));
+ e.Execute(new("wire-bad","a","claim","reward"));
+ string target=StateDelta.Normalize(StateJson.Serialize(e.State)); var valid=StateDelta.Create(before,target);
+ var malformed = new[] {
+  valid with {Changes=[new([],false,false,null)]},
+  valid with {Changes=[new(["unknown"],true,false,null)]},
+  valid with {Changes=[new(["Revision"],false,true,System.Text.Json.Nodes.JsonNode.Parse("[1]"))]},
+  valid with {Changes=[new(["Racers","missing","Name"],false,false,System.Text.Json.Nodes.JsonValue.Create("x"))]},
+  valid with {MatchId="another-match"}, valid with {BaseRevision=900}, valid with {Revision=0},
+  valid with {ResultHash="bad"}
+ };
+ foreach(var patch in malformed) Check(!patch.TryApply(before,out var actual) && actual==before);
+ Check(valid.TryApply(before,out var good) && good==target);
+});
+Test("wire delta round trips decimal scale changes without silently changing values",()=>{
+ string old=StateDelta.Normalize("{\"Id\":\"test\",\"Version\":\"v\",\"Revision\":0,\"Value\":1.0}");
+ string next=StateDelta.Normalize("{\"Id\":\"test\",\"Version\":\"v\",\"Revision\":1,\"Value\":1.00}");
+ Check(StateDelta.Create(old,next).TryApply(old,out var value) && value==next);
+});
+Test("completed native claim recovery accounts income once without changing the live match",()=>{
+ var e=New();Grant(e,"b","shared_fortune");string original=StateJson.Serialize(e.State);
+ var claim=new Command("native-completed","a","claim","battle|reward",Amount:37);
+ var recovered=RewardClaimRecovery.Merge(e.State,"a",[claim]);
+ Check(StateJson.Serialize(e.State)==original && recovered.ConsumedRewards.Contains("a:battle|reward"));
+ Check(recovered.Racers["b"].FortuneIncome["a"]==37);
+ var twice=RewardClaimRecovery.Merge(recovered,"a",[claim,claim]);
+ Check(StateJson.Serialize(twice)==StateJson.Serialize(recovered));
+ bool rejected=false;try {RewardClaimRecovery.Merge(e.State,"b",[claim]);} catch(RuleException){rejected=true;}
+ Check(rejected && StateJson.Serialize(e.State)==original);
+});
 Test("owned permanent actives leave every pool and stale grants are atomic", () => {
     var e = New(); Grant(e, "a", "small_light"); Grant(e, "a", "good_connections"); Grant(e, "a", "tail_refill");
     foreach (var route in new[] { Route.Mixed, Route.Grow, Route.FirstKill })
@@ -24,7 +96,19 @@ Test("small and light is a rare boss boon with no elite sacrifice access", () =>
     Check(effect.Tier == Tier.Boss && effect.Rarity == Rarity.Rare && !effect.ElitePool && effect.BossPool && effect.FirstKillPool);
     Check(effect.Description.Contains("失去3最大生命"));
 });
-Test("catalog has 58 unique effects", () => { Check(Catalog.All.Count == 58); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 58); });
+Test("gold income and reward receipt commit atomically without duplicate fortune",()=>{
+ var e=New();Grant(e,"b","shared_fortune");
+ e.Execute(new("gold-claim","a","claim","battle|0",Amount:37));
+ Check(e.State.ConsumedRewards.Contains("a:battle|0") && e.State.Racers["b"].FortuneIncome["a"]==37);
+ var before=StateJson.Serialize(e.State);bool rejected=false;
+ try{e.Execute(new("duplicate-gold-claim","a","claim","battle|0",Amount:37));}catch(RuleException){rejected=true;}
+ Check(rejected && StateJson.Serialize(e.State)==before);
+ foreach(int amount in new[]{-1,100001}) {
+  rejected=false;try{e.Execute(new("bad-gold-"+amount,"a","claim","battle|bad",Amount:amount));}catch(RuleException){rejected=true;}
+  Check(rejected && StateJson.Serialize(e.State)==before);
+ }
+});
+Test("catalog has 65 unique effects", () => { Check(Catalog.All.Count == 65); Check(Catalog.All.Select(e => e.Id).Distinct().Count() == 65); });
 Test("cleanse prices", () => { Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 1) == 60); Check(Balance.CleansePrice(Catalog.Get("exhaustion"), 3) == 80); Check(Balance.CleansePrice(Catalog.Get("carapace"), 3) == 195); Check(Balance.CleansePrice(Catalog.Get("hard_shell"), 1) == null); });
 Test("repeat weight floor", () => { Check(Balance.RepeatWeight(0) == 1); Check(Balance.RepeatWeight(1) == 0.4); Check(Math.Abs(Balance.RepeatWeight(2) - 0.16) < 1e-10); Check(Balance.RepeatWeight(10) == 0.1); });
 Test("burden saturates monotonically", () => { Check(Balance.RareMultiplier(0, false) == 1); Check(Balance.RareMultiplier(8, false) == 2); Check(Balance.RareMultiplier(100000, false) < 3); Check(Balance.RareMultiplier(32, false) > Balance.RareMultiplier(8, false)); });
@@ -433,5 +517,142 @@ Test("critical chance caps and fully reinforced offers cannot be claimed twice",
  string before=StateJson.Serialize(e.State); bool rejected=false;
  try{e.Execute(new("stale-critical-pick","a","choose","stale-critical","gamblers_heart"));}catch(RuleException){rejected=true;}
  Check(rejected && StateJson.Serialize(e.State)==before);
+});
+Test("new effects enter enabled boss and first kill pools and obey disabled whitelist", () => {
+ foreach(var id in new[]{"substitute_puppet","giant_form","burrow_sanctuary","extra_timeline","heartstrings_charm","twin_slime","encore_rewards"}) {
+  var e=New(); var effect=Catalog.Get(id);
+  Check(Catalog.IsKnown(id) && !Catalog.IsKnown("not-an-installed-effect") && Catalog.All.Contains(effect) && e.State.EnabledEffects.Contains(id));
+  Check(effect.Tier==Tier.Boss && effect.Rarity==Rarity.Rare && effect.Permanent && !effect.ElitePool && effect.BossPool && effect.FirstKillPool);
+  e.State.EnabledEffects=[id];
+  foreach(var route in new[]{Route.Mixed,Route.Grow,Route.FirstKill}) Check(Candidates.Generate(e.State,e.State.Racers["a"],"only-"+route,route,true).SequenceEqual(new[]{id}));
+  e.State.EnabledEffects.Remove(id);
+  foreach(var route in new[]{Route.Mixed,Route.Grow,Route.FirstKill}) {
+   var before=StateJson.Serialize(e.State);bool rejected=false;
+   try{Candidates.Generate(e.State,e.State.Racers["a"],"disabled-"+route,route,true);}catch(RuleException){rejected=true;}
+   Check(rejected && StateJson.Serialize(e.State)==before);
+  }
+ }
+});
+Test("new boons use normal offer and choice transactions with one-time reward consumption",()=>{
+ foreach(var id in new[]{"substitute_puppet","giant_form","burrow_sanctuary","extra_timeline","heartstrings_charm","twin_slime","encore_rewards"})
+  foreach(var route in new[]{Route.Mixed,Route.Grow,Route.FirstKill}) {
+   var e=New();e.State.EnabledEffects=[id];
+   e.Execute(new("start","a","battle_start","boss"));e.Execute(new("victory","a","victory","boss",Boss:true));
+   var reward=route==Route.FirstKill?"0:first":"boss|0";
+   e.Execute(new("offer","a","offer",reward,Boss:true,Route:route));
+   string offer="a:"+reward+":"+route;
+   Check(e.State.Offers[offer].Candidates.SequenceEqual(new[]{id}));
+   e.Execute(new("pick","a","choose",offer,id,MaxHealth:81));
+   Check(e.State.Racers["a"].Has(id) && e.State.ConsumedRewards.Contains("a:"+reward) && e.State.Offers[offer].Resolved);
+   var before=StateJson.Serialize(e.State);bool rejected=false;
+   try{e.Execute(new("second-pick","a","choose",offer,id,MaxHealth:81));}catch(RuleException){rejected=true;}
+   Check(rejected && before==StateJson.Serialize(e.State));
+  }
+});
+Test("design thirteen save migration preserves whitelist state and receipts without enabling new items",()=>{
+ var e=New();e.State.EnabledEffects=["sharpen","encore_rewards"];ReadyReward(e);Grant(e,"a","encore_rewards");
+ e.State.Racers["a"].Effects["encore_rewards"].Rank=7;e.State.Racers["a"].Receipts.Add(new("old","gold",Amount:5));
+ e.State.Version="1.0.0-design.13";var json=StateJson.Serialize(e.State);
+ var upgraded=MatchCompatibility.Read("1.0.0-design.13",json);Check(upgraded.Version==Catalog.RulesVersion);
+ upgraded.Version="1.0.0-design.13";Check(StateJson.Serialize(upgraded)==json);
+ foreach(var version in new[]{"1.0.0-design.12",Catalog.RulesVersion}) {
+  bool rejected=false;try{MatchCompatibility.Read(version,json);}catch(InvalidDataException){rejected=true;}Check(rejected);
+ }
+ e.State.EnabledEffects.Add("unknown-effect");bool unknown=false;
+ try{MatchCompatibility.Read("1.0.0-design.13",StateJson.Serialize(e.State));}catch(InvalidDataException){unknown=true;}Check(unknown);
+});
+Test("maxed new boons cannot waste a reward even from stale offers",()=>{
+ foreach(var id in new[]{"burrow_sanctuary","encore_rewards","twin_slime"}) {
+  var e=New();Grant(e,"a",id);e.State.Racers["a"].Effects[id].Rank=Balance.AcquisitionMaxRank(id)!.Value;
+  foreach(var route in new[]{Route.Mixed,Route.Grow,Route.FirstKill}) for(int i=0;i<20;i++)
+   Check(!Candidates.Generate(e.State,e.State.Racers["a"],"capped-new"+i,route,true).Contains(id));
+  e.State.Offers["stale-new"]=new(){Id="stale-new",Player="a",RewardKey="stale-new",Route=Route.Grow,Candidates=[id]};
+  string before=StateJson.Serialize(e.State);bool rejected=false;
+  try{e.Execute(new("stale-new-pick","a","choose","stale-new",id));}catch(RuleException){rejected=true;}
+  Check(rejected && StateJson.Serialize(e.State)==before);
+ }
+});
+void PuppetGrant(Engine e,string token,int hp) {
+ e.State.EnabledEffects.Add(PuppetRules.Id);
+ e.State.Offers[token]=new(){Id=token,Player="a",RewardKey=token,Route=Route.Grow,Candidates=[PuppetRules.Id]};
+ e.Execute(new(token+":choose","a","choose",token,PuppetRules.Id,MaxHealth:hp));
+}
+Test("puppet acquisition snapshots actual max HP and repeat growth uses the original base",()=>{
+ var e=New(); PuppetGrant(e,"puppet-one",81); PuppetGrant(e,"puppet-two",200); PuppetGrant(e,"puppet-three",300);
+ var p=e.State.Racers["a"]; var h=p.Effects[PuppetRules.Id];
+ Check(h.Rank==2 && h.Counters["initial_hp"]==81 && PuppetRules.Generation(h)==1);
+ var receipts=p.Receipts.Where(r=>r.Kind.StartsWith("puppet_")).ToArray();
+ Check(receipts.Select(r=>r.Kind).SequenceEqual(new[]{"puppet_create","puppet_reinforce","puppet_reinforce"}));
+ Check(receipts.Select(r=>r.Amount).SequenceEqual(new[]{81,21,21}) && receipts.All(r=>r.Value=="1"));
+});
+Test("old puppet death cannot remove a later acquisition and death can finish cleanup after elimination",()=>{
+ var e=New(); PuppetGrant(e,"puppet-before",80);
+ e.Execute(new("death-one","a","puppet_destroyed","1")); Check(!e.State.Racers["a"].Has(PuppetRules.Id));
+ PuppetGrant(e,"puppet-after",100); Check(PuppetRules.Generation(e.State.Racers["a"].Effects[PuppetRules.Id])==2);
+ e.Execute(new("late-death-one","a","puppet_destroyed","1")); Check(e.State.Racers["a"].Has(PuppetRules.Id));
+ e.Execute(new("eliminate","a","defeat")); e.Execute(new("death-two","a","puppet_destroyed","2"));
+ Check(!e.State.Racers["a"].Has(PuppetRules.Id));
+});
+Test("invalid initial puppet HP leaves the reward and whole state untouched",()=>{
+ var e=New(); e.State.EnabledEffects.Add(PuppetRules.Id);
+ e.State.Offers["bad-puppet"]=new(){Id="bad-puppet",Player="a",RewardKey="bad-puppet",Route=Route.Grow,Candidates=[PuppetRules.Id]};
+ var before=StateJson.Serialize(e.State); bool rejected=false;
+ try{e.Execute(new("bad-puppet-pick","a","choose","bad-puppet",PuppetRules.Id));}catch(RuleException){rejected=true;}
+ Check(rejected && StateJson.Serialize(e.State)==before);
+});
+Test("puppet pending receipts and acquisition generations survive serialization",()=>{
+ var e=New(); PuppetGrant(e,"puppet-save",89); PuppetGrant(e,"puppet-save-repeat",150);
+ var saved=StateJson.Serialize(e.State); var restored=new Engine(StateJson.Deserialize<Match>(saved));
+ Check(StateJson.Serialize(restored.State)==saved && restored.State.Racers["a"].Receipts.Last(r=>r.Kind=="puppet_reinforce").Amount==23);
+ Check(!restored.Execute(new("puppet-save-repeat:choose","a","choose","puppet-save-repeat",PuppetRules.Id,MaxHealth:150)));
+});
+Test("burrow engine charges once per victory and replay refunds only the current unfinished use",()=>{
+ var e=New(); Grant(e,"a",BurrowRules.EffectId);
+ for(int i=1;i<=3;i++){e.Execute(new("burrow-start"+i,"a","battle_start","b"+i));e.Execute(new("burrow-win"+i,"a","victory","b"+i));}
+ var p=e.State.Racers["a"]; Check(BurrowRules.Read(p).Charges==1 && BurrowRules.Read(p).Progress==0);
+ Check(!e.Execute(new("burrow-win3","a","victory","b3")) && BurrowRules.Read(e.State.Racers["a"]).Charges==1);
+ e.Execute(new("burrow-start4","a","battle_start","b4")); e.Execute(new("burrow-use4","a","burrow_use","b4",Amount:1));
+ p=e.State.Racers["a"]; Check(BurrowRules.Read(p).Charges==0 && BurrowRules.Read(p).Phase==BurrowRules.Phase.Burrowed);
+ var reload=new Engine(StateJson.Deserialize<Match>(StateJson.Serialize(e.State)));
+ reload.Execute(new("burrow-replay","a","burrow_replay","b4")); reload.Execute(new("burrow-replay-again","a","burrow_replay","b4"));
+ Check(BurrowRules.Read(reload.State.Racers["a"]).Charges==1 && BurrowRules.Read(reload.State.Racers["a"]).Phase==BurrowRules.Phase.Ready);
+});
+Test("burrow stale commands cannot affect a later battle and broken shield skips one turn",()=>{
+ var e=New(); Grant(e,"a",BurrowRules.EffectId); var p=e.State.Racers["a"]; p.Effects[BurrowRules.EffectId].Rank=2;
+ e.Execute(new("charge-start","a","battle_start","old")); e.Execute(new("charge-win","a","victory","old"));
+ e.Execute(new("use-start","a","battle_start","new")); e.Execute(new("use","a","burrow_use","new",Amount:2));
+ e.Execute(new("break","a","burrow_block_broken","new")); e.Execute(new("emerge","a","burrow_emerge","new",Amount:3));
+ p=e.State.Racers["a"]; Check(BurrowRules.Read(p).Phase==BurrowRules.Phase.Stunned);
+ string before=StateJson.Serialize(e.State); bool bad=false;
+ try{e.Execute(new("early-ready","a","burrow_ready","new",Amount:3));}catch(RuleException){bad=true;}
+ Check(bad && StateJson.Serialize(e.State)==before); e.Execute(new("ready","a","burrow_ready","new",Amount:4));
+ before=StateJson.Serialize(e.State); bad=false;
+ try{e.Execute(new("stale","a","burrow_block_broken","old"));}catch(RuleException){bad=true;}
+ Check(bad && StateJson.Serialize(e.State)==before && BurrowRules.Read(e.State.Racers["a"]).Phase==BurrowRules.Phase.Ready);
+});
+Test("charm and timeline distinct acquisitions issue one stable card receipt per event",()=>{
+ var e=New();
+ foreach(var id in new[]{"heartstrings_charm","extra_timeline"}) {
+  e.State.EnabledEffects.Add(id);
+  for(int i=0;i<2;i++){string key=id+i;e.State.Offers[key]=new(){Id=key,Player="a",RewardKey=key,Route=Route.Grow,Candidates=[id]};e.Execute(new(key+":choose","a","choose",key,id));}
+ }
+ var receipts=e.State.Racers["a"].Receipts.Where(r=>r.Kind is "charm_card" or "timeline_card").ToArray();
+ Check(receipts.Length==4 && receipts.Select(r=>r.Id).Distinct().Count()==4 && receipts.All(r=>r.Value.Length>0));
+});
+Test("reward refresh engine persists generations atomically and rejects exhausted or consumed rewards",()=>{
+ var e=New(); Grant(e,"a",RewardRerollRules.EffectId); var p=e.State.Racers["a"];p.WonBattles.Add("rrbattle");
+ e.Execute(new("offer-rr","a","offer","rrbattle|1",Route:Route.Mixed));
+ e.Execute(new("reroll-rr","a","offer_reroll","rrbattle|1",Route:Route.Mixed));
+ string offerId=RewardRerollRules.OfferId("a","rrbattle|1",Route.Mixed);
+ var reloaded=new Engine(StateJson.Deserialize<Match>(StateJson.Serialize(e.State)));
+ Check(RewardRerollRules.OfferUsage(reloaded.State.Racers["a"],offerId).Used==1 && reloaded.State.Offers[offerId].Candidates.SequenceEqual(e.State.Offers[offerId].Candidates));
+ string before=StateJson.Serialize(reloaded.State);bool bad=false;
+ try{reloaded.Execute(new("exhaust-rr","a","offer_reroll","rrbattle|1",Route:Route.Mixed));}catch(RuleException){bad=true;}
+ Check(bad && before==StateJson.Serialize(reloaded.State));
+ reloaded.Execute(new("native-rr","a","reward_reroll","rrbattle|native"));
+ Check(!reloaded.Execute(new("native-rr","a","reward_reroll","rrbattle|native")));
+ reloaded.Execute(new("native-claim","a","claim","rrbattle|native"));before=StateJson.Serialize(reloaded.State);bad=false;
+ try{reloaded.Execute(new("native-repeat","a","reward_reroll","rrbattle|native"));}catch(RuleException){bad=true;}
+ Check(bad && before==StateJson.Serialize(reloaded.State));
 });
 Console.WriteLine($"{passed} checks passed");

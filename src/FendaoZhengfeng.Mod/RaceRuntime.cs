@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Godot;
 using HarmonyLib;
 using FendaoZhengfeng.Core;
@@ -21,18 +22,58 @@ public static class RaceRuntime
     public static bool Enabled { get => RaceConfig.ModeEnabled; set => RaceConfig.ModeEnabled = value; }
     public static bool ResumeRequested { get; set; }
     internal static bool ResumeFromHostArchive { get; set; }
+    internal static bool LoadingSavedRoom { get; private set; }
+    internal static bool RestoringCapturedRoom { get; private set; }
+    internal static bool RestoringParentEvent { get; set; }
     internal static string ReplayingBattleKey { get; set; } = "";
     public static CombatRoom? RewardRoom { get; set; }
     internal static RewardsSet? CombatRewards { get; set; }
     public static CardPlay? CurrentCardPlay { get; set; }
     public static RunState? State => RunManager.Instance.DebugOnlyGetState();
-    public static string RoomKey => State is { } s ? $"lap{RaceSession.Current?.Me.ResetCount ?? 0}:{s.CurrentActIndex}:{s.ActFloor}:{s.CurrentRoom?.Id}:{s.CurrentMapCoord}" : "";
+    private sealed record RestoredRoomIdentity(string Key);
+    private static readonly ConditionalWeakTable<AbstractRoom, RestoredRoomIdentity> restoredRoomKeys = new();
+    private static RunState? restoringRun;
+    private static string? restoringRoomKey;
+    private static MegaCrit.Sts2.Core.Models.ModelId? restoringEncounter;
+    public static string RoomKey
+    {
+        get
+        {
+            if (State is not { } state) return "";
+            if (state.CurrentRoom is { } room)
+            {
+                if (restoredRoomKeys.TryGetValue(room, out var identity)) return identity.Key;
+                // AbstractRoom.Id is reconstructed by native loading. Adopt the
+                // explicitly saved identity for this exact restored room only;
+                // its next room must receive a fresh native-derived identity.
+                if (ReferenceEquals(state, restoringRun) && restoringRoomKey is { } savedKey
+                    && room is CombatRoom combat && combat.Encounter.Id == restoringEncounter)
+                {
+                    restoredRoomKeys.Add(room, new(savedKey));
+                    restoringRun = null; restoringRoomKey = null; restoringEncounter = null;
+                    return savedKey;
+                }
+            }
+            string key = $"lap{RaceSession.Current?.Me.ResetCount ?? 0}:{state.CurrentActIndex}:{state.ActFloor}:{state.CurrentRoom?.Id}:{state.CurrentMapCoord}";
+            if (state.CurrentRoom is { } current && RaceSession.Current is { } session)
+            {
+                // After restoring a later room, a native counter can reuse its
+                // old numeric Id. Never alias a later battle to a settled one.
+                if (session.Me.WonBattles.Contains(key)) key += ":visit" + (session.Me.Battle + 1);
+                restoredRoomKeys.Add(current, new(key));
+            }
+            return key;
+        }
+    }
+    internal static void BindRestoredRoom(AbstractRoom room, string key)
+    { restoredRoomKeys.Remove(room); restoredRoomKeys.Add(room, new(key)); }
     public static bool Live => RaceSession.Current != null && State?.Modifiers.Any(m => m is RaceModifier) == true;
     private static readonly Dictionary<Reward, string> rewardIds = [];
     private static int rewardSequence;
     private static string lastNode = "";
     internal static async Task<RunState> Start(NGame game, StartRunLobby lobby, IReadOnlyList<ActModel> acts, IReadOnlyList<ModifierModel> modifiers, string seed, int ascension, LobbyRules? rules = null)
     {
+        restoringRun = null; restoringRoomKey = null; restoringEncounter = null; restoredRoomKeys.Clear();
         rewardIds.Clear(); rewardSequence = 0; RewardRoom = null; CombatRewards = null; CurrentCardPlay = null; lastNode = "";
         RewardRecovery.Pending = null;
         var session = new RaceSession(lobby, seed, rules ?? LobbyRules.Local());
@@ -41,9 +82,14 @@ public static class RaceRuntime
             await session.WaitForHandshake();
             if (session.Restored is { } restored)
             {
+                restoringRun = restored.Run;
+                restoringRoomKey = session.Me.InBattle ? ReplayingBattleKey : RewardRecovery.Pending?.RoomKey;
+                restoringEncounter = restored.Save.PreFinishedRoom?.EncounterId;
                 await RunManager.Instance.SetUpSavedSingleplayer(restored.Run, restored.Save);
                 AccessTools.PropertySetter(typeof(RunManager), nameof(RunManager.ShouldSave)).Invoke(RunManager.Instance, [false]);
-                await game.LoadRun(restored.Run, restored.Save.PreFinishedRoom);
+                LoadingSavedRoom = true; RestoringCapturedRoom = restored.Save.PreFinishedRoom != null;
+                try { await game.LoadRun(restored.Run, restored.Save.PreFinishedRoom); }
+                finally { LoadingSavedRoom = false; RestoringCapturedRoom = false; RestoringParentEvent = false; }
                 return restored.Run;
             }
             var list = modifiers.Where(m => m is not RaceModifier).ToList(); list.Add(ModelDb.Modifier<RaceModifier>().ToMutable());
@@ -65,6 +111,7 @@ public static class RaceRuntime
         return await original;
     }
     internal static void BindRewardKey(Reward reward, string key) => rewardIds[reward] = key;
+    internal static void BindGeneratedRewardKey(Reward reward, string key) => rewardIds.TryAdd(reward, key);
     public static string RewardKey(Reward reward)
     {
         if (rewardIds.TryGetValue(reward, out var key)) return key;
@@ -113,6 +160,20 @@ internal static class SharedCheckpointBarrierPatch
         if (!RaceRuntime.Live || preFinishedRoom != null || RaceSession.Current is not { PauseRequested: true } s) return true;
         __result = s.ArriveAtCheckpoint(); return false;
     }
+    static void Postfix(AbstractRoom? preFinishedRoom, ref Task __result)
+    {
+        // Match native completed-room boundaries. Capture after MarkPreFinished
+        // and the native save task, rather than during AfterCombatVictory.
+        // Entry saves happen before room construction and keep the existing
+        // AfterRoomEntered checkpoint after entry effects have been applied.
+        if (RaceRuntime.Live && preFinishedRoom != null && RaceSession.Current?.IsMock != true)
+            __result = CaptureCompletedRoom(__result);
+    }
+    private static async Task CaptureCompletedRoom(Task original)
+    {
+        await original;
+        RaceRuntime.Checkpoint();
+    }
 }
 
 public static class NativeCheckpoint
@@ -130,8 +191,7 @@ public static class NativeCheckpoint
     }
     public static (Match Match, RunState Run, SerializableRun Save) Restore(Bundle b)
     {
-        if (b.RulesVersion != Catalog.RulesVersion) throw new InvalidDataException("检查点规则版本不兼容。");
-        var match = StateJson.Deserialize<Match>(b.MatchJson); var reader = new PacketReader(); reader.Reset(Convert.FromBase64String(b.NativePacket));
+        var match = MatchCompatibility.Read(b.RulesVersion, b.MatchJson); var reader = new PacketReader(); reader.Reset(Convert.FromBase64String(b.NativePacket));
         var save = new SerializableRun(); save.Deserialize(reader); return (match, RunState.FromSerializable(save), save);
     }
 }

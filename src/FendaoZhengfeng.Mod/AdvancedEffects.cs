@@ -154,7 +154,8 @@ internal static class AdvancedEffects
     internal static async Task Click(string id)
     {
         if (RaceSession.Current is not { } session || RaceModifier.Active is not { } modifier) return;
-        if (id == "small_light") await modifier.RemoveWithSmallLight();
+        if (id == BurrowRules.EffectId) await BurrowEffect.Click();
+        else if (id == "small_light") await modifier.RemoveWithSmallLight();
         else if (id == "good_connections") await BuyCard();
         else if (id == "tail_refill")
         {

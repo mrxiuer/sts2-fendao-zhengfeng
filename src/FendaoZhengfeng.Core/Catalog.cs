@@ -1,4 +1,4 @@
-namespace FendaoZhengfeng.Core;
+﻿namespace FendaoZhengfeng.Core;
 
 public enum EffectKind { Curse, Contract, Boon }
 public enum Tier { Ordinary, Elite, Boss }
@@ -13,9 +13,9 @@ public sealed record Effect(string Id, string Name, EffectKind Kind, Tier Tier, 
     public int Weight => Rarity switch { Rarity.Common => 100, Rarity.Uncommon => 50, _ => 20 };
 }
 
-public static class Catalog
+public static partial class Catalog
 {
-    public const string RulesVersion = "1.0.0-design.12";
+    public const string RulesVersion = "1.0.0-design.14";
     public static readonly IReadOnlyList<Effect> All = [
         C("exhaustion", "力竭", Tier.Ordinary, Rarity.Common, "开战失去1力量；每次强化再失去1。"),
         C("imbalance", "失衡", Tier.Ordinary, Rarity.Common, "开战失去1敏捷；每次强化再失去1。"),
@@ -74,9 +74,11 @@ public static class Catalog
         B("tail_refill", "续尾针线", Rarity.Rare, "非战斗时点击：支付350金币，恢复已消耗的蜥蜴尾巴。可重复使用。", true, false, true, true, Tier.Boss),
         B("evil_echo", "恶咒回响", Rarity.Rare, "你施加给敌人的负面效果变为2倍；每次强化再+1倍。不会放大净化或重复计算临时属性变化。", true, false, true, true, Tier.Boss),
         B("flight_wings", "凌空之翼", Rarity.Rare, "受到的攻击伤害−50%，每次强化再减5%，最多−80%。每一击锁定当前生命最高的敌人，群攻也只命中该目标。", true, false, true, true, Tier.Boss),
-        B("gamblers_heart", "狂赌之心", Rarity.Rare, "造成与受到的伤害+10%。攻击有20%概率暴击，造成150%伤害；每次强化暴击率+5%，最多50%。同一次攻击的群攻与连击共用判定。", true, true, true, true, Tier.Elite)
+        B("gamblers_heart", "狂赌之心", Rarity.Rare, "造成与受到的伤害+10%。攻击有20%概率暴击，造成150%伤害；每次强化暴击率+5%，最多50%。同一次攻击的群攻与连击共用判定。", true, true, true, true, Tier.Elite),
+        ..AdvancedDefinitions
     ];
     private static readonly IReadOnlyDictionary<string, Effect> byId = All.ToDictionary(effect => effect.Id, StringComparer.Ordinal);
+    public static bool IsKnown(string id) => byId.ContainsKey(id);
     public static Effect Get(string id) => byId.TryGetValue(id, out var effect) ? effect : throw new RuleException("未知效果：" + id);
     private static Effect C(string id, string n, Tier t, Rarity r, string d) => new(id, n, EffectKind.Curse, t, r, d);
     private static Effect D(string id, string n, Tier t, Rarity r, string d) => new(id, n, EffectKind.Contract, t, r, d);
@@ -87,6 +89,8 @@ public sealed class RuleException(string message) : Exception(message);
 
 public static class Balance
 {
+    public static int? AcquisitionMaxRank(string id) => id switch { "burrow_sanctuary" => 2, "encore_rewards" => 2, "twin_slime" => (TwinSlimeRules.MaximumSplitPercent - TwinSlimeRules.BaseSplitPercent) / TwinSlimeRules.SplitPercentPerExtraStack, _ => null };
+    public static bool AtAcquisitionCap(Racer racer, string id) => AcquisitionMaxRank(id) is { } cap && racer.Has(id) && racer.Effects[id].Rank >= cap;
     public const int TailRefillCost = 350;
     public static int EvilEchoMultiplier(int rank) => 2 + Math.Max(0, rank);
     public const int FlightMaxRank = 6;

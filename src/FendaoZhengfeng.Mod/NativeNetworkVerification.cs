@@ -29,6 +29,14 @@ internal static class NativeNetworkVerification
     public static async Task Run(NGame game)
     {
         bool host = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "host";
+        bool eventRecovery = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_EVENT_RECOVERY") == "1";
+        bool serviceRecovery = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_SERVICE_RECOVERY") == "1";
+        bool performance = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_NETWORK") == "1"
+            || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_CHOICES") == "1"
+            || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_REFRESH") == "1";
+        bool four = performance || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_FOUR_PLAYERS") == "1" || serviceRecovery
+            || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESET_NETWORK") == "1";
+        ulong localPeer = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") switch { "peer3" => 3UL, "peer4" => 4UL, _ => 2UL };
         bool heartNetwork = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_HEART_NETWORK") == "1";
         bool interactive = System.Environment.GetEnvironmentVariable("FDZF_INTERACTIVE_NETWORK") == "1";
         ushort port = interactive && ushort.TryParse(System.Environment.GetEnvironmentVariable("FDZF_LOCAL_PORT"), out var selectedPort) ? selectedPort : (ushort)39181;
@@ -47,21 +55,26 @@ internal static class NativeNetworkVerification
                 var service = new NetHostGameService(version); transport = service;
                 if (service.StartENetHost(port, 3) is { } error) throw new IOException(error.ToString());
                 Pump(service); GD.Print("[FDZF NETWORK] ENet host listening");
-                await Wait(() => service.ConnectedPeers.Count == 1, "client game handshake");
+                await Wait(() => service.ConnectedPeers.Count == (four ? 3 : 1), "client game handshake");
             }
             else
             {
                 await Task.Delay(2000);
                 var service = new NetClientGameService(version); transport = service; var client = new ENetClient(service); service.Initialize(client, PlatformType.None); Pump(service);
-                if (await client.ConnectToHost(2, "127.0.0.1", port) is { } error) throw new IOException(error.ToString());
+                if (await client.ConnectToHost(localPeer, "127.0.0.1", port) is { } error) throw new IOException(error.ToString());
                 await Wait(() => service.IsConnected, "game connection handshake");
             }
-            var listener = new Listener(); var lobby = new StartRunLobby(GameMode.Standard, transport, listener, 2);
+            var listener = new Listener(); var lobby = new StartRunLobby(GameMode.Standard, transport, listener, four ? 4 : 2);
             lobby.Players.Add(new() { id = 1, character = ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
-            lobby.Players.Add(new() { id = 2, character = heartNetwork ? ModelDb.Character<Defect>() : ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
+            lobby.Players.Add(new() { id = 2, character = four ? ModelDb.Character<Silent>() : heartNetwork ? ModelDb.Character<Defect>() : ModelDb.Character<Ironclad>(), unlockState = UnlockState.all.ToSerializable() });
+            if (four)
+            {
+                lobby.Players.Add(new() { id = 3, character = ModelDb.Character<Defect>(), unlockState = UnlockState.all.ToSerializable() });
+                lobby.Players.Add(new() { id = 4, character = ModelDb.Character<Necrobinder>(), unlockState = UnlockState.all.ToSerializable() });
+            }
             bool remoteDone = false, remoteSaved = false, remoteInteractiveReady = false, remoteFortuneDone = false; string? remoteCampaign = null; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "fortune_done") remoteFortuneDone = true; if (msg.Kind == "interactive_ready") remoteInteractiveReady = true; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; if (msg.Kind == "verification_campaign") remoteCampaign = msg.Content; });
             bool resume = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESUME") == "1"; RaceRuntime.ResumeRequested = resume;
-            RaceRuntime.ResumeFromHostArchive = resume && (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_RECOVERY") == "1");
+            RaceRuntime.ResumeFromHostArchive = resume && (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_NEW_EFFECTS") == "1" || four || eventRecovery);
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_VANILLA") == "1")
             {
                 RaceConfig.ModeEnabled = !host;
@@ -82,11 +95,18 @@ internal static class NativeNetworkVerification
             if (interactive) Check(run.ExtraFields.StartedWithNeow && run.CurrentRoom is EventRoom opening
                 && opening.LocalMutableEvent is MegaCrit.Sts2.Core.Models.Events.Neow && opening.LocalMutableEvent.CurrentOptions.Count == 3,
                 "interactive peers retain the native three-choice opening alongside Lizard Tail");
-            Check(session.Engine.State.Racers.Count == 2, "two real ENet peers share one match");
+            Check(session.Engine.State.Racers.Count == (four ? 4 : 2), "all real ENet peers share one match");
             Check(run.Players.Count == 1 && run.Players[0].NetId == 1, "gameplay remains isolated singleplayer on each process");
             await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
             string otherId = host ? "2" : "1";
             await Wait(() => session.Engine.State.Racers[otherId].PublicPacket.Length > 0 && PublicProfiles.Read(session.Engine.State.Racers[otherId])?.Relics.Any(relic => relic is MegaCrit.Sts2.Core.Models.Relics.LizardTail) == true, "peer public profile including late starting relic");
+            if (performance) { await NativeRewardNetworkPerformance.Run(game, run, session); return; }
+            if (eventRecovery)
+            { await NativeEventRecoveryVerification.Run(game, run, session, host, resume); return; }
+            if (serviceRecovery)
+            { await NativeServiceRecoveryVerification.Run(game, run, session, host, resume); return; }
+            if (four || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_NEW_EFFECTS") == "1")
+            { await NativeNewEffectsNetworkVerification.Run(game, run, session, host, resume); return; }
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RECOVERY") == "1")
             { await NativeRecoveryVerification.Run(game, run, session, host, resume); return; }
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_RECOVERY") == "1")

@@ -18,8 +18,10 @@ internal static class EffectIcons
         source.CopyTo(bytes);
         var image = new Image();
         if (image.LoadPngFromBuffer(bytes.ToArray()) != Error.Ok) throw new InvalidOperationException("图标加载失败：" + id);
-        // Preserve the original artwork; downsample only the GPU display texture for the small HUD.
-        image.Resize(TextureSize, TextureSize, Image.Interpolation.Lanczos);
+        // The build uses this same Lanczos conversion once and verifies every
+        // output pixel. Runtime choices never decode/resize the full artwork.
+        if (image.GetWidth() != TextureSize || image.GetHeight() != TextureSize)
+            throw new InvalidDataException("图标显示纹理尺寸错误：" + id);
         texture = ImageTexture.CreateFromImage(image);
         texture.ResourceName = id;
         textures[id] = texture;

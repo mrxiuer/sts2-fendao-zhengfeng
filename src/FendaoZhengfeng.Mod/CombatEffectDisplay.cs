@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
@@ -18,7 +18,7 @@ public sealed class RaceDisplayPower : PowerModel
 {
     public string EffectId { get; set; } = "exhaustion";
     public override PowerType Type => Catalog.Get(EffectId).Kind == EffectKind.Boon ? PowerType.Buff : PowerType.Debuff;
-    public override PowerStackType StackType => EffectId is "fortune_dice" or "bitter_sweet" or "hard_shell" or "scapegoat" or "no_plan" or "r_key" or "expedition" or "combo_tax" or "cornered" or "disorder" or "combat_cycle" or "heavy_followup" or "desperate_echo" or "chaos_core" or "piercing_edge" or "resonant_circuit" or "second_forge" or "evil_echo" or "flight_wings" or "gamblers_heart" ? PowerStackType.Counter : PowerStackType.Single;
+    public override PowerStackType StackType => EffectId is "fortune_dice" or "bitter_sweet" or "hard_shell" or "scapegoat" or "no_plan" or "r_key" or "expedition" or "combo_tax" or "cornered" or "disorder" or "combat_cycle" or "heavy_followup" or "desperate_echo" or "chaos_core" or "piercing_edge" or "resonant_circuit" or "second_forge" or "evil_echo" or "flight_wings" or "gamblers_heart" or "burrow_sanctuary" ? PowerStackType.Counter : PowerStackType.Single;
     public override bool ShouldReceiveCombatHooks => false;
     public override bool ShouldPlayVfx => false;
     public override LocString Title => new(ModEntry.Id, "display." + EffectId + ".title");
@@ -53,7 +53,7 @@ internal static class CombatEffectDisplay
                 foreach (var enemy in player.Creature.CombatState!.Enemies.Where(enemy => enemy.IsAlive && modifier.IsOpeningEnemy(enemy)))
                     if (id != "hard_shell" || modifier.Turn <= 3) desired.Add((enemy, id));
             }
-            else desired.Add((player.Creature, id));
+            else foreach (var body in TwinSlimeRuntime.BodiesOf(player.Creature).Where(body => body.IsAlive)) desired.Add((body, id));
         }
         foreach (var key in entries.Keys.Where(key => !desired.Contains(key) || !GodotObject.IsInstanceValid(entries[key].Container)).ToList())
         {
@@ -87,6 +87,7 @@ internal static class CombatEffectDisplay
                 "scapegoat" => session.Me.Ghosts,
                 "no_plan" => modifier.VaultCount,
                 "r_key" => session.Me.ResetCharges,
+                "burrow_sanctuary" => BurrowRules.Read(session.Me).Charges,
                 "expedition" => session.Me.ExpeditionProgress,
                 "combo_tax" => modifier.ManualCards % 4,
                 "cornered" => modifier.CorneredUsed ? 0 : 1,
@@ -137,7 +138,7 @@ internal static class InteractivePowerMarkerPatch
 {
     static void Postfix(NPower __instance)
     {
-        if (__instance.Model is not RaceDisplayPower marker || marker.EffectId is not ("small_light" or "good_connections" or "r_key")) return;
+        if (__instance.Model is not RaceDisplayPower marker || marker.EffectId is not ("small_light" or "good_connections" or "r_key" or "burrow_sanctuary")) return;
         __instance.GuiInput += input =>
         { if (input is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { __instance.AcceptEvent(); RaceUi.Run(() => AdvancedEffects.Click(marker.EffectId)); } };
     }

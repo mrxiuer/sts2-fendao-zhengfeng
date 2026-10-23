@@ -30,6 +30,7 @@ internal static class NativeChoiceUi
     }
     internal static Task<int> Choose(CanvasLayer layer, string title, IReadOnlyList<string> choices, IReadOnlyList<Texture2D>? icons)
     {
+        var grant=NativeRewardGrant.BeginChoice(modeChoice:true);
         var done = new TaskCompletionSource<int>();
         var veil = new ColorRect { Color = new Color(0, 0, 0, 0.8f), Name = "FdzfNativeChoice" };
         veil.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect); layer.AddChild(veil);
@@ -62,7 +63,7 @@ internal static class NativeChoiceUi
         }
         template.Free();
         veil.TreeExiting += () => { veils.Remove(veil); ActiveChoices--; done.TrySetResult(-1); };
-        return done.Task;
+        return grant==null ? done.Task : NativeRewardGrant.FinishChoice(done.Task,grant);
     }
     private sealed class UiOptionReward(Player player, string label, string description, Texture2D icon, Action choose) : Reward(player)
     {

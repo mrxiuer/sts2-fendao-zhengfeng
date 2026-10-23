@@ -120,6 +120,7 @@ public sealed partial class RaceModifier
 {
     public override async Task AfterDeath(PlayerChoiceContext context, Creature creature, bool wasRemovalPrevented, float deathAnimLength)
     {
+        await AfterPuppetDeath(creature, wasRemovalPrevented);
         if (wasRemovalPrevented || creature.Monster is not TowerHeart heart) return;
         if (RunState.CurrentActIndex == 4 && FiveActCampaign.IsFinalBoss(RunState))
             await S.Submit(S.New("heart_finish", Me.BattleKey));

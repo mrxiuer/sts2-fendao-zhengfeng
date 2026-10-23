@@ -76,6 +76,7 @@ public sealed partial class RaceModifier : ModifierModel
         replayOpening = RaceRuntime.ReplayingBattleKey == key && Me.InBattle;
         await S.Submit(S.New("battle_start", key));
         await BeforeAdvancedCombat();
+        await BeforePuppetCombat();
         var state = Player.Creature.CombatState ?? throw new InvalidOperationException("战斗未创建。");
         foreach (var enemy in state.Enemies) initialEnemies.Add(enemy);
         await Power<StrengthPower>(Player.Creature, -N("exhaustion"));
@@ -100,7 +101,7 @@ public sealed partial class RaceModifier : ModifierModel
         else if (!replayOpening) throw new RuleException("该战斗开场已经结算，不能重复进入。");
     }
     private async Task Power<T>(Creature creature, int amount) where T : PowerModel
-    { if (amount != 0) await PowerCmd.Apply<T>(Context(), creature, amount, null, null); }
+    { if (amount != 0) await CharmPowerCmd.Apply<T>(Context(), creature, amount, null, null); }
     public override async Task AfterEnergyResetLate(Player player)
     {
         if (player != Player) return; ResetTierTurn(); Turn++; ManualCards = 0; firstDraw = false; hpLost.Clear(); RefreshHandCosts();
@@ -154,6 +155,7 @@ public sealed partial class RaceModifier : ModifierModel
         if (player != Player) return;
         await TierTurnStart(ctx);
         await ChaosTurnStart(ctx);
+        await BurrowEffect.AfterPlayerTurnStartLate(player, this);
         if (Turn != 1) return;
         if (N("clutter") > 0) for (int i = 0; i < 1 + N("clutter"); i++) await CardPileCmd.AddGeneratedCardToCombat(Player.Creature.CombatState!.CreateCard<ClutterCard>(Player), PileType.Hand, null);
         await ApplyReceipts(ctx, true);
@@ -168,14 +170,15 @@ public sealed partial class RaceModifier : ModifierModel
         return multiplier;
     }
     public override decimal ModifyBlockMultiplicative(Creature target, decimal block, ValueProp props, CardModel? cardSource, CardPlay? cardPlay)
-        => target == Player.Creature ? (Me.Has("all_in") && Turn == 1 ? 0 : (decimal)(1 + Me.Growth)) : target.IsEnemy ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1;
+        => (target == Player.Creature ? (Me.Has("all_in") && Turn == 1 ? 0 : (decimal)(1 + Me.Growth)) : target.IsEnemy ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1) * PuppetBlockRatio(target, block, props, cardSource, cardPlay);
     public override decimal ModifyHpLostAfterOstyLate(Creature target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource)
     {
         if (initialEnemies.Contains(target) && N("hard_shell") > 0 && Turn <= 3)
         { int cap = (int)Math.Ceiling(openingMaxHp[target] * Math.Max(0.2, 0.4 - 0.05 * (N("hard_shell") - 1))); amount = Math.Min(amount, Math.Max(0, cap - hpLost.GetValueOrDefault(target))); }
         // Only intercept combat damage. Direct Kill/force death never passes this hook.
+        if (TwinSlimeRuntime.ShouldPrioritizeFirstSplit(target, amount, cardSource)) return amount;
         if (CombatManager.Instance.IsInProgress && !CombatManager.Instance.IsEnding
-            && target == Player.Creature && target.CurrentHp > 0 && amount >= target.CurrentHp
+            && (target == Player.Creature || TwinSlimeRuntime.Find(target)?.Owner == Player) && target.CurrentHp > 0 && amount >= target.CurrentHp
             && cardSource?.Owner != Player && S.TryReserveGhost())
             return Math.Max(0, target.CurrentHp - 1);
         return amount;
@@ -233,7 +236,9 @@ public sealed partial class RaceModifier : ModifierModel
             var finalPoint = RunState.Map.SecondBossMapPoint ?? RunState.Map.BossMapPoint;
             if (RunState.CurrentMapCoord == finalPoint.coord) await S.Submit(S.New("finish"));
         }
-        await ApplyReceipts(Context(), false); RaceRuntime.Checkpoint();
+        // The native SaveRun(completedRoom) boundary takes the post-victory
+        // snapshot once the room has actually been marked pre-finished.
+        await ApplyReceipts(Context(), false);
     }
     public override async Task BeforeCombatRewardOffered(RewardsSet rewards, CombatRoom room)
     {
@@ -246,7 +251,7 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override async Task AfterRoomEntered(AbstractRoom room)
     {
-        await RaceRuntime.NodeChanged();
+        if (!RaceRuntime.LoadingSavedRoom || !RaceRuntime.RestoringCapturedRoom) await RaceRuntime.NodeChanged();
         await S.Submit(S.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(RunState)) });
         await S.Submit(S.New("progress", amount: Player.Creature.CurrentHp, value: room.RoomType.ToString()));
         await ApplyReceipts(Context(), false); RaceRuntime.Checkpoint(); RaceUi.Refresh();
@@ -275,16 +280,19 @@ public sealed partial class RaceModifier : ModifierModel
         if (target != Player.Creature.MaxHp) await CreatureCmd.SetMaxHp(Player.Creature, target);
     }
     private readonly SemaphoreSlim receiptGate = new(1);
-    public async Task ApplyReceipts(PlayerChoiceContext ctx, bool inCombat, bool monetaryOnly = false)
+    public async Task ApplyReceipts(PlayerChoiceContext ctx, bool inCombat, bool monetaryOnly = false, bool puppetOnly = false)
     {
         await receiptGate.WaitAsync();
-        try { await ApplyReceiptCore(ctx, inCombat, monetaryOnly); } finally { receiptGate.Release(); }
+        try { await ApplyReceiptCore(ctx, inCombat, monetaryOnly, puppetOnly); } finally { receiptGate.Release(); }
     }
-    private async Task ApplyReceiptCore(PlayerChoiceContext ctx, bool inCombat, bool monetaryOnly)
+    private async Task ApplyReceiptCore(PlayerChoiceContext ctx, bool inCombat, bool monetaryOnly, bool puppetOnly)
     {
         foreach (var r in Me.Receipts.ToList())
         {
+            // Reward-set replay owns these receipts; a missing visible set is not success.
+            if (r.Kind == "reroll_native") continue;
             if (S.ReceiptApplied(r.Id)) { await S.Submit(S.New("ack", r.Id)); continue; }
+            if (puppetOnly && r.Kind is not ("puppet_create" or "puppet_reinforce")) continue;
             if (monetaryOnly && r.Kind is not ("gold" or "spend_gold")) continue;
             if ((r.Kind is "energy" or "status") && !inCombat) continue;
             suppressPropagation = true;
@@ -292,6 +300,9 @@ public sealed partial class RaceModifier : ModifierModel
             {
                 switch (r.Kind)
                 {
+                    case "timeline_card": await ApplyTimelineReceipt(ctx, r); break;
+                    case "charm_card": await CharmCardGrant.AddToDeck(RunState, Player, r.Id); break;
+                    case "puppet_create": case "puppet_reinforce": await ApplyPuppetReceipt(r, inCombat); break;
                     case "gold": await PlayerCmd.GainGold(r.Amount, Player); break;
                     case "refill_tail":
                         var tail = Player.Relics.OfType<LizardTail>().FirstOrDefault(tail => tail.WasUsed);

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 
 namespace FendaoZhengfeng.Core;
@@ -43,6 +43,7 @@ public static class Candidates
             .Where(e => e.Id != "war_feeds_war" || Balance.WarFeedsWarStacks(p.Effects.GetValueOrDefault(e.Id)) < 3)
             .Where(e => e.Id != "flight_wings" || !p.Has(e.Id) || p.Effects[e.Id].Rank < Balance.FlightMaxRank)
             .Where(e => e.Id != "gamblers_heart" || !p.Has(e.Id) || p.Effects[e.Id].Rank < Balance.CriticalMaxRank)
+            .Where(e => !Balance.AtAcquisitionCap(p, e.Id))
             .Where(e => e.Id != "scapegoat" || !p.Has(e.Id) || p.Ghosts < 2).ToList();
         double Weight(Effect e) => e.Weight * (e.Kind == EffectKind.Curse ? 1 : Balance.RepeatWeight(p.History.GetValueOrDefault(e.Id)));
         void Take(Func<Effect, bool> filter)

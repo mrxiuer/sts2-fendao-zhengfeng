@@ -1,4 +1,4 @@
-param([string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[switch]$Deploy,[string]$BaseLibPath)
+﻿param([string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[switch]$Deploy,[string]$BaseLibPath)
 $ErrorActionPreference='Stop'
 $repoRoot=Split-Path -Parent $PSScriptRoot
 $dotnetPath=Join-Path $repoRoot '.tools\dotnet\dotnet.exe'
@@ -10,6 +10,7 @@ $env:DOTNET_CLI_HOME=Join-Path $repoRoot '.tools\cli-home'
 $env:NUGET_PACKAGES=Join-Path $repoRoot '.tools\packages'
 $referenceArguments=@()
 if($BaseLibPath) {$referenceArguments+="-p:BaseLibPath=$BaseLibPath"}
+& (Join-Path $PSScriptRoot 'Build-IconTextures.ps1') -GameRoot $GameRoot
 & $dotnetPath build (Join-Path $repoRoot 'src\FendaoZhengfeng.Mod\FendaoZhengfeng.Mod.csproj') -c Release "-p:GameRoot=$GameRoot" @referenceArguments
 if($LASTEXITCODE -ne 0) {throw 'MOD compilation failed.'}
 & $dotnetPath run --project (Join-Path $repoRoot 'tests\FendaoZhengfeng.Tests') -c Release

@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 
@@ -40,7 +40,7 @@ internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, Hash
                 else if (message.Kind == "rules" && !host && sender == hostId)
                 {
                     var rules = StateJson.Deserialize<LobbyRules>(message.Content);
-                    if (rules.Version != Catalog.RulesVersion || rules.Effects.Any(id => !Catalog.All.Any(e => e.Id == id))) throw new RuleException("房主规则与本机模组版本不兼容。");
+                    if (rules.Version != Catalog.RulesVersion || rules.Effects.Any(id => !Catalog.IsKnown(id))) throw new RuleException("房主规则与本机模组版本不兼容。");
                     agreed = rules;
                     transport.SendMessage(new RaceMessage { Kind = "rules_ready", Content = rules.Version }, hostId);
                 }

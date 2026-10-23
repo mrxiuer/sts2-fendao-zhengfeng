@@ -16,6 +16,7 @@ public sealed class SubstitutePuppet : MonsterModel
 {
     // Enabled only by the unfinished item lifecycle or the dedicated native fixture.
     internal bool GuardsOwner { get; set; }
+    internal int Generation { get; set; }
     public override LocString Title => new(ModEntry.Id, "puppet.name");
     public override int MinInitialHp => 1;
     public override int MaxInitialHp => 1;

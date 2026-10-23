@@ -34,15 +34,8 @@ internal static class PuppetPresentation
         return root;
     }
     internal static void PositionFollowers(IEnumerable<NCreature> nodes)
-    {
-        if (!nodes.Any(node => node.Entity.Monster is SubstitutePuppet)) return;
-        var list = nodes.ToArray();
-        foreach (var follower in list.Where(node => node.Entity.Monster is SubstitutePuppet && node.Entity.IsAlive))
-        {
-            var owner = list.FirstOrDefault(node => node.Entity == follower.Entity.PetOwner?.Creature);
-            if (owner != null) follower.Position = owner.Position + new Vector2(230, 12);
-        }
-    }
+        => FriendlyFormation.Reflow(nodes);
+
 }
 
 internal partial class PuppetMotion : Node2D
@@ -50,6 +43,8 @@ internal partial class PuppetMotion : Node2D
     internal Sprite2D Sprite { get; set; } = null!;
     private SceneTree? tree;
     private double elapsed;
+    private double deathAge;
+    private NCreature? creature;
     internal PuppetMotion()
     {
         TreeEntered += () => { tree = GetTree(); tree.ProcessFrame += Frame; };
@@ -58,7 +53,25 @@ internal partial class PuppetMotion : Node2D
     private void Frame()
     {
         if (!GodotObject.IsInstanceValid(Sprite)) return;
-        elapsed += GetProcessDeltaTime();
+        double delta = GetProcessDeltaTime();
+        if (creature == null || !GodotObject.IsInstanceValid(creature))
+            for (Node? parent = GetParent(); parent != null; parent = parent.GetParent())
+                if (parent is NCreature native) { creature = native; break; }
+        if (creature?.Entity?.IsDead == true)
+        {
+            deathAge += delta;
+            float progress = (float)Math.Clamp(deathAge / 0.8, 0, 1);
+            Sprite.Rotation = 0.85f * progress;
+            Sprite.Modulate = new Color(1, 1, 1, 1 - progress);
+            if (progress >= 1)
+            {
+                Sprite.Visible = false;
+                if (GodotObject.IsInstanceValid(tree)) tree!.ProcessFrame -= Frame;
+                tree = null;
+            }
+            return;
+        }
+        elapsed += delta;
         Sprite.Rotation = (float)Math.Sin(elapsed * 1.7) * 0.012f;
         Sprite.Scale = new Vector2(0.5f, 0.5f + (float)Math.Sin(elapsed * 1.7) * 0.004f);
     }

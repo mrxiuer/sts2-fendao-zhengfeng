@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
@@ -41,9 +41,64 @@ internal static class NativeMechanicsVerification
             var memory = new SaveManager(new MockGodotFileIo("user://fdzf-mechanics-memory"));
             memory.InitProfileId(1); memory.InitSettingsDataForTest(); memory.InitPrefsDataForTest(); memory.InitProgressData(); memory.SetFtuesEnabled(false); SaveManager.MockInstanceForTesting(memory);
             RaceConfig.ModeEnabled = true; RaceConfig.DebugMode = false; RaceConfig.DisabledEffects = "";
-            var run = await MockTesting.StartWithCharacter(ModelDb.Character<Ironclad>(), "FDZFMECHANICS");
+            var character = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "formation"
+                ? (CharacterModel)ModelDb.Character<Necrobinder>() : ModelDb.Character<Ironclad>();
+            var run = await MockTesting.StartWithCharacter(character, "FDZFMECHANICS");
             var session = RaceSession.Current!; var player = run.Players.Single(); var modifier = RaceModifier.Active!;
             await CreatureCmd.SetMaxAndCurrentHp(player.Creature, 5000);
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "combinations")
+            {
+                await NativeCombinationVerification.Run(run, Check);
+                GD.Print("[FDZF COMBINATIONS COMPLETE] Native acquired-effect combination checks passed."); game.GetTree().Quit(0); return;
+            }
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "puppet_life")
+            {
+                await NativePuppetLifeVerification.Run(run, Check);
+                GD.Print("[FDZF PUPPET LIFE COMPLETE] Native puppet lifecycle checks passed."); game.GetTree().Quit(0); return;
+            }
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "formation")
+            {
+                await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
+                await Wait(() => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play);
+                await NativeFormationVerification.Run(run, Check);
+                GD.Print("[FDZF FORMATION COMPLETE] Native friendly formation checks passed."); game.GetTree().Quit(0); return;
+            }
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "twin_slime")
+            {
+                await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
+                await Wait(() => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play);
+                await NativeTwinSlimeVerification.Run(run, Check);
+                GD.Print("[FDZF TWIN SLIME COMPLETE] Native split-body checks passed."); game.GetTree().Quit(0); return;
+            }
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "burrow")
+            {
+                await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
+                await Wait(() => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play);
+                await NativeBurrowVerification.Run(run, Check);
+                game.GetTree().Quit(0); return;
+            }
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "reroll")
+            {
+                await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
+                await Wait(() => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play);
+                NativeRerollVerification.VerifyRules(); NativeRerollVerification.VerifyNativeGenerators(player);
+                await NativeRewardClickVerification.Run(game, run, Check);
+                GD.Print("[FDZF REROLL COMPLETE] Native reward generator checks passed."); game.GetTree().Quit(0); return;
+            }
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "charm")
+            {
+                await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
+                await Wait(() => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play);
+                await NativeCharmVerification.Run(run, Check);
+                GD.Print("[FDZF CHARM COMPLETE] Native charm checks passed."); game.GetTree().Quit(0); return;
+            }
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "giant")
+            {
+                await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
+                await Wait(() => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play);
+                await NativeGiantVerification.Run(run, Check);
+                GD.Print("[FDZF GIANT COMPLETE] Native giant checks passed."); game.GetTree().Quit(0); return;
+            }
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_ROLE") == "puppet_body")
             {
                 await RunManager.Instance.EnterRoomDebug(RoomType.Monster, model: ModelDb.Encounter<SlimesNormal>().ToMutable());
