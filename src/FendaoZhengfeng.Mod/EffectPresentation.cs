@@ -19,7 +19,9 @@ internal static class EffectHud
     internal static int IconCount => strip?.GetChildCount() ?? 0;
     public static void Install(CanvasLayer layer)
     {
-        strip = new HFlowContainer { Position = new Vector2(18, 174), Size = new Vector2(1050, 0), Theme = new Theme { DefaultFontSize = 22 } };
+        // Empty space in this wide overlay must not intercept native potion buttons.
+        // Individual effect icons retain their own mouse handling.
+        strip = new HFlowContainer { Position = new Vector2(18, 174), Size = new Vector2(1050, 0), MouseFilter = Control.MouseFilterEnum.Ignore, Theme = new Theme { DefaultFontSize = 22 } };
         strip.AddThemeConstantOverride("h_separation", 7);
         strip.AddThemeConstantOverride("v_separation", 7);
         layer.AddChild(strip);
