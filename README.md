@@ -4,9 +4,9 @@
 
 独立选路、独立战斗、遗物献祭的多人竞速 MOD。共享一张地图，各自推进；固定5幕，率先击败第五幕最终Boss的玩家获胜。
 
-**0.5.1 好友测试版。** 新增中英文游戏文本与双语工坊说明。**需要 `public-beta` 测试分支**；正式分支的 API 不兼容，不能仅删除版本门槛。兼容基准为游戏 **v0.111.0 public-beta**、**BaseLib 3.4.7**。本轮程序集对照见 [API核验](docs/API-COMPATIBILITY.md)，英文说明见 [0.5.1更新](docs/releases/0.5.1.md)。
+**0.5.2 好友测试版。** 修复增益跨幕消失与药水点击受遮挡，效果列表补充数量和期限。**需要 `public-beta` 测试分支**；正式分支的 API 不兼容，不能仅删除版本门槛。兼容基准为游戏 **v0.111.0 public-beta**、**BaseLib 3.4.7**。本轮程序集对照见 [API核验](docs/API-COMPATIBILITY.md)，英文说明见 [0.5.2更新](docs/releases/0.5.2.md)。
 
-包含65项模式效果、五幕竞速、独立进度保存恢复及奖励性能优化。[Steam创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)（仅上传账号的Steam好友可访问）；[GitHub安装包](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.1-preview)与工坊使用相同的运行文件。
+包含65项模式效果、五幕竞速、独立进度保存恢复及奖励性能优化。[Steam创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)（仅上传账号的Steam好友可访问）；[GitHub安装包](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.2-preview)与工坊使用相同的运行文件。
 
 本轮新增傀儡、双生史莱姆、遁地、巨人化、额外时间线、魅惑卡与奖励刷新。主要更新见 [0.5.0说明](docs/releases/0.5.0.md)，测试范围见 [验证记录](docs/VERIFICATION.md)。
 
@@ -16,7 +16,7 @@
 
 1. 在 Steam → 游戏属性 → Game Versions & Betas 中选择 **`public-beta`**。所有参与者使用相同游戏版本，安装并启用 **BaseLib 3.4.7 或更新版本**。目前只验证了 3.4.7，更新版本仍需兼容核验。本包不附带 BaseLib 或游戏程序集。
 2. **工坊安装：** 退出游戏，删除旧的 `mods/FendaoZhengfeng` 文件夹（只删本模组），然后[订阅分道争锋](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)，等待Steam下载完成；BaseLib也须安装并启用。无需将工坊文件复制到mods。仅上传账号的Steam好友可访问此条目。
-3. **手动安装：** 从[0.5.1发行页](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.1-preview)下载 `FendaoZhengfeng-0.5.1-preview.zip`，不要下载自动生成的 `Source code` 作为安装包。
+3. **手动安装：** 从[0.5.2发行页](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.2-preview)下载 `FendaoZhengfeng-0.5.2-preview.zip`，不要下载自动生成的 `Source code` 作为安装包。
    退出游戏，将 ZIP 中的 `FendaoZhengfeng` 文件夹放入游戏的 `mods` 目录。可在 Steam → 游戏 → 管理 → 浏览本地文件找到游戏目录。
 
 ```text
@@ -53,7 +53,7 @@ Slay the Spire 2/
 - 诅咒允许叠加，从目标下一场战斗开始生效并持续，直到依法净化。营地只净化普通档；商店不提供模式诅咒净化。Boss奖励中的净化按该奖励规则执行。
 - 每人开局额外获得原版蜥蜴尾巴，保留正常开局遗物选择。其他原版保命来源照常获得和生效，因此不是整局最多只能保命一次。
 - 每幕最终 Boss 首杀可选增益或诅咒护盾；非首杀可选净化或护盾。它们独立于遗物献祭。
-- 多数增益可重复取得并强化，但候选权重降低；小而轻、强买强卖持有后退出候选池，R键每次取得增加一次使用机会；已有双刃契约不重复持有。具体效果、负担补偿与价格见 [效果说明](docs/EFFECTS.md)。
+- 除错峰出击按场次生效外，增益整局有效；主动次数和傀儡死亡等特殊条件仍按说明处理。多数增益可重复取得并强化，但候选权重降低；小而轻、强买强卖持有后退出候选池，R键每次取得增加一次使用机会；已有双刃契约不重复持有。具体效果、负担补偿与价格见 [效果说明](docs/EFFECTS.md)。
 
 **替死鬼的边界：** 抵挡一次符合条件的战斗致命伤害并留下 1 点生命。直接处决、强制死亡、主动支付生命和事件直接失去生命不受保护。“灾厄、吞噬”是机制举例，不是仅排除两个技能的名称名单。原版其他保命来源仍按自身规则生效；第三方模组若把处决实现为普通伤害，需要另行适配。
 

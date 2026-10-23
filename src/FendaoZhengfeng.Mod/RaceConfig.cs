@@ -30,7 +30,7 @@ public sealed partial class RaceConfig : ModConfig
         list.AddThemeConstantOverride("separation", 12); optionContainer.AddChild(list);
         AddToggle(list, nameof(ModeEnabled), L10n.T("开启分道争锋模式"), L10n.T("多人新局以房主配置为准，所有玩家都须安装并启用本模组。配置更改在下一局生效。"));
         AddToggle(list, nameof(DebugMode), L10n.T("调试模式"), L10n.T("开启后显示顶部测试入口；正式联机不提供注入效果、金币等测试操作。"));
-        var heading = CreateRawLabelControl(L10n.T("效果列表"), 32); heading.CustomMinimumSize = new Vector2(0, 52); list.AddChild(heading);
+        var heading = CreateRawLabelControl(L10n.F($"效果列表（共{Catalog.All.Count}项）"), 32); heading.CustomMinimumSize = new Vector2(0, 52); list.AddChild(heading);
         var hint = CreateRawLabelControl(L10n.T("勾选后可进入候选池；取消后不会抽到。禁用优先于保证位。"), 23); hint.CustomMinimumSize = new Vector2(0, 56); hint.FitContent = true; list.AddChild(hint);
         foreach (var effect in Catalog.All)
         {
@@ -38,7 +38,7 @@ public sealed partial class RaceConfig : ModConfig
             row.AddThemeConstantOverride("separation", 18);
             row.AddChild(new TextureRect { Texture = EffectIcons.Get(effect.Id), CustomMinimumSize = new Vector2(64, 64), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered });
             string kind = effect.Kind switch { EffectKind.Curse => L10n.T("诅咒 · 对手"), EffectKind.Contract => L10n.T("双刃契约 · 自己"), _ => L10n.T("增益 · 自己") };
-            var text = CreateRawLabelControl(L10n.T(effect.Name) + " · " + kind + " · " + RaceUi.TierName(effect.Tier) + "\n" + L10n.T(effect.Description), 23);
+            var text = CreateRawLabelControl(L10n.T(effect.Name) + " · " + kind + " · " + RaceUi.TierName(effect.Tier) + "\n" + L10n.T(effect.Description) + "\n" + L10n.T(effect.Kind != EffectKind.Boon ? "持续至净化。" : effect.Permanent ? "整局有效。" : "按说明中的战斗场次生效。"), 23);
             text.CustomMinimumSize = new Vector2(650, 95); text.FitContent = true; text.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             row.AddChild(text);
             row.AddChild(CreateRawTickboxControl(typeof(RaceConfig).GetProperty("Effect_" + effect.Id)!));

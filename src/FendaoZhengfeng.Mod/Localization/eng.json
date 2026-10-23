@@ -59,7 +59,7 @@
   "R键 · 确认重置": "R Key · Confirm reset",
   "[分道争锋] ": "[FDZF] ",
   "[分道争锋] 原生奖励已领取，但刷新收据 {0} 没有已应用标记；保留收据且不会重复刷新。": "[FDZF] Reward already claimed, but reroll receipt {0} has no applied marker. Retaining receipt without rerolling again.",
-  "[分道争锋] 已加载开发预览版 0.5.1，配置位于模组配置中的独立分道争锋条目。": "[FDZF] Development preview 0.5.1 loaded. Settings are under Separate Paths in Mod Configuration.",
+  "[分道争锋] 已加载开发预览版 0.5.2，配置位于模组配置中的独立分道争锋条目。": "[FDZF] Development preview 0.5.2 loaded. Settings are under Separate Paths in Mod Configuration.",
   "[分道争锋] 额外时间线跳过无法解码的公开卡牌 {0}：{1}": "[FDZF] Extra Timeline skipped undecodable public card {0}: {1}",
   "{0}\n{1} · {2}\n诅咒护盾 {3} · 替死鬼 {4}\n": "{0}\n{1} · {2}\nCurse Shields: {3} · Scapegoat charges: {4}\n",
   "{0}\n牌组：{1}张": "{0}\nDeck: {1} cards",
@@ -590,5 +590,10 @@
   "需要在非战斗时补充已消耗的蜥蜴尾巴。": "Restore a spent Lizard Tail outside combat.",
   "额外奖励已处理。": "Bonus reward already processed.",
   "首杀候选奖励已失效。": "First-kill reward options are no longer valid.",
-  "首杀奖励已经领取。": "First-kill reward already claimed."
+  "首杀奖励已经领取。": "First-kill reward already claimed.",
+  "效果列表（共{0}项）": "Effects ({0} total)",
+  "持续至净化。": "Lasts until cleansed.",
+  "整局有效。": "Lasts for the entire run.",
+  "按说明中的战斗场次生效。": "Lasts for the number of combats stated above.",
+  "\n整局有效。": "\nLasts for the entire run."
 }

@@ -1,4 +1,4 @@
-﻿using FendaoZhengfeng.Core;
+using FendaoZhengfeng.Core;
 
 namespace FendaoZhengfeng.Mod;
 
@@ -57,7 +57,7 @@ internal static class EffectDetails
             _ => ""
         };
         if (effect.Kind != EffectKind.Boon) result += L10n.T("\n持续至净化；净化移除全部同名层数。");
-        else if (!effect.Permanent && id != "catch_up") result += L10n.T("\n持续至自己的下一次幕Boss击杀。");
+        else if (effect.Permanent) result += L10n.T("\n整局有效。");
         var sources = holding.Grants.Select(grant => grant.Source).Where(source => source.Length > 0 && source != racer.Id).Distinct()
             .Select(source => session!.Engine.State.Racers.TryGetValue(source, out var other) ? L10n.RacerName(other) : source).ToList();
         return sources.Count > 0 ? result + L10n.T("\n来源：") + string.Join("、", sources) : result;

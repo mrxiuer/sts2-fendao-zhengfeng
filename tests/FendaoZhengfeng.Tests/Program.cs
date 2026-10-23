@@ -19,7 +19,7 @@ Test("English covers all 65 effect names and rules without changing their source
   Check(text.Text(effect.Name,false)==effect.Name && text.Text(effect.Description,false)==effect.Description);
  }
  Check(StateJson.Serialize(New().State)==state,"translations must not mutate rule state");
- Check(Catalog.RulesVersion=="1.0.0-design.14");
+ Check(Catalog.RulesVersion=="1.0.0-design.15");
 });
 Test("translation format placeholders preserve all variables and native named tokens", () => {
  var text=Translations();
@@ -184,7 +184,37 @@ Test("status forwarding cap is global across sources", () => { var e = New(); fo
 Test("opening grants consumed once", () => { var e = New(); e.State.Racers["a"].PendingEnergy = 2; e.Execute(new("start", "a", "battle_start", "battle")); e.Execute(new("opening", "a", "consume_opening", "battle")); Check(e.State.Racers["a"].PendingEnergy == 0); Check(e.State.Racers["a"].Receipts.Single(r => r.Kind == "energy").Amount == 2); var before = StateJson.Serialize(e.State); try { e.Execute(new("again", "a", "consume_opening", "battle")); } catch (RuleException) { } Check(StateJson.Serialize(e.State) == before); });
 Test("unavailable contract offer preserves reward", () => { var e = New(); ReadyReward(e); foreach (var x in Catalog.All.Where(x => x.Kind == EffectKind.Contract)) Grant(e, "a", x.Id); var before = StateJson.Serialize(e.State); try { e.Execute(new("offer", "a", "offer", "battle|0", Boss: true, Route: Route.Contract)); } catch (RuleException) { } Check(StateJson.Serialize(e.State) == before); Check(!e.State.ConsumedRewards.Contains("a:battle|0")); });
 Test("permanent boon repeat strengthens one instance", () => { var e = New(); OfferEffect(e, "one", "battle_hardened", Route.Grow); e.Execute(new("1", "a", "choose", "one", "battle_hardened")); e.State.Offers["two"] = new() { Id = "two", Player = "a", RewardKey = "battle|1", Route = Route.Grow, Candidates = ["battle_hardened"] }; e.Execute(new("2", "a", "choose", "two", "battle_hardened")); Check(e.State.Racers["a"].Effects.Count == 1); Check(e.State.Racers["a"].Effects["battle_hardened"].Rank == 1); Check(e.State.Racers["a"].History["battle_hardened"] == 2); });
-Test("new post-boss boon survives its granting boss", () => { var e = New(); e.Execute(new("start", "a", "battle_start", "boss")); e.Execute(new("win", "a", "victory", "boss", Boss: true)); OfferEffect(e, "boon", "shared_fortune", Route.Grow); e.Execute(new("pick", "a", "choose", "boon", "shared_fortune")); Check(e.State.Racers["a"].Effects["shared_fortune"].ExpiresAfterAct == 1); });
+Test("new post-boss boon survives its granting boss", () => { var e = New(); e.Execute(new("start", "a", "battle_start", "boss")); e.Execute(new("win", "a", "victory", "boss", Boss: true)); OfferEffect(e, "boon", "shared_fortune", Route.Grow); e.Execute(new("pick", "a", "choose", "boon", "shared_fortune")); Check(e.State.Racers["a"].Effects["shared_fortune"].ExpiresAfterAct == -1); });
+Test("unbounded boons survive every act boss including stale expiry markers", () => {
+ var e=New(); var boons=Catalog.All.Where(effect=>effect.Kind==EffectKind.Boon && effect.Id!="catch_up").ToList();
+ foreach(var effect in boons) {
+  Check(effect.Permanent,effect.Id); Grant(e,"a",effect.Id);
+  e.State.Racers["a"].Effects[effect.Id].ExpiresAfterAct=0;
+ }
+ for(int act=0;act<5;act++) {
+  e.State.Racers["a"].Act=act;
+  e.Execute(new("start"+act,"a","battle_start","boss"+act));
+  e.Execute(new("win"+act,"a","victory","boss"+act,Boss:true));
+  foreach(var effect in boons) Check(e.State.Racers["a"].Has(effect.Id),effect.Id);
+ }
+ Grant(e,"a","catch_up");e.State.Racers["a"].Effects["catch_up"].Used=1;
+ e.Execute(new("limited-start","a","battle_start","limited"));
+ e.Execute(new("limited-win","a","victory","limited"));
+ Check(!e.State.Racers["a"].Effects.ContainsKey("catch_up"));
+});
+Test("legacy save migration clears boon expiry without restoring removed items or altering stacks", () => {
+ foreach(string version in new[]{"1.0.0-design.13","1.0.0-design.14"}) {
+  var e=New(); e.State.Version=version; Grant(e,"a","war_feeds_war");
+  var holding=e.State.Racers["a"].Effects["war_feeds_war"];
+  holding.ExpiresAfterAct=0;holding.Rank=2;holding.Used=3;
+  Grant(e,"a","catch_up");e.State.Racers["a"].Effects["catch_up"].Used=2;
+  var restored=MatchCompatibility.Read(version,StateJson.Serialize(e.State));
+  var actual=restored.Racers["a"].Effects["war_feeds_war"];
+  Check(actual.ExpiresAfterAct==-1 && actual.Rank==2 && actual.Used==3);
+  Check(restored.Racers["a"].Effects["catch_up"].Used==2);
+  Check(!restored.Racers["a"].Effects.ContainsKey("sharpen"));
+ }
+});
 Test("ghost cap has no hidden charges", () => { var e = New(); e.State.Racers["a"].Effects["scapegoat"] = new() { Id = "scapegoat" }; for (int i = 0; i < 20; i++) ReadyReward(e, "a", i.ToString()); Check(e.State.Racers["a"].Ghosts == 2); Check(e.State.Racers["a"].Effects["scapegoat"].Used == 20); e.Execute(new("spend", "a", "ghost")); Check(e.State.Racers["a"].Ghosts == 1); });
 Test("mixed elite pool has no fixed category slots and no boss curses", () => {
     var e = New(); var kinds = new HashSet<EffectKind>(); bool repeatsCategory = false;
@@ -344,7 +374,7 @@ Test("first double boss does not expire boons or award act-first prize", () => {
     e.Execute(new("b1","a","battle_start","boss1"));e.Execute(new("v1","a","victory","boss1",Boss:false,Value:"Boss"));
     Check(e.State.Racers["a"].Has("sharpen") && e.State.Racers["a"].BossPrizes.Count==0);
     e.Execute(new("b2","a","battle_start","boss2"));e.Execute(new("v2","a","victory","boss2",Boss:true,Value:"Boss"));
-    Check(!e.State.Racers["a"].Has("sharpen") && e.State.Racers["a"].BossPrizes.Single()=="3:first");
+    Check(e.State.Racers["a"].Has("sharpen") && e.State.Racers["a"].BossPrizes.Single()=="3:first");
 });
 Test("retroactive growth keeps pre-acquisition wins and revivals across R and serialization", () => {
     var e=New();for(int i=0;i<3;i++) ReadyReward(e,"a","historical-win:"+i);

@@ -178,7 +178,7 @@ internal static class NativeRewardRecoveryVerification
                 Check(snapshot.CompletedClaims?.Single().Id==claim.Id
                     && snapshot.Rewards!.Rewards.All(r=>r.Key!=claim.Key),"real serialized snapshot retains completion proof and excludes the already granted reward");
                 var repaired=RewardClaimRecovery.Merge(session.Engine.State,session.LocalId,snapshot.CompletedClaims!);
-                var bundle=new NativeCheckpoint.Bundle("0.5.1",repaired.Version,repaired.Revision,StateJson.Serialize(repaired),
+                var bundle=new NativeCheckpoint.Bundle("0.5.2",repaired.Version,repaired.Revision,StateJson.Serialize(repaired),
                     snapshot.NativePacket,snapshot.AppliedReceipts,snapshot.BattleKey,snapshot.Rewards);
                 var rebuilt=NativeCheckpoint.Restore(bundle);
                 Check(rebuilt.Run.Players.Single().Gold==beforeGold+777 && rebuilt.Match.ConsumedRewards.Contains(session.LocalId+":"+claim.Key),
@@ -283,7 +283,7 @@ internal static class NativeRewardRecoveryVerification
                 }
                 if(confirmedClaim) {
                     var archive=RaceRecovery.Read("1");var remote=archive.Players["2"];
-                    var restored=NativeCheckpoint.Restore(new NativeCheckpoint.Bundle("0.5.1",archive.RulesVersion,0,archive.MatchJson,remote.NativePacket,remote.AppliedReceipts,remote.BattleKey,remote.Rewards));
+                    var restored=NativeCheckpoint.Restore(new NativeCheckpoint.Bundle("0.5.2",archive.RulesVersion,0,archive.MatchJson,remote.NativePacket,remote.AppliedReceipts,remote.BattleKey,remote.Rewards));
                     var remoteExpected=StateJson.Deserialize<Expected>(File.ReadAllText(Path.Combine(System.Environment.GetEnvironmentVariable("FDZF_REPORT_DIR")!,"expected-2.json")));
                     Check(restored.Run.Players.Single().Gold==remoteExpected.Gold
                         && restored.Match.ConsumedRewards.Contains("2:"+remoteExpected.PendingClaimKey),
