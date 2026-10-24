@@ -88,7 +88,13 @@ public static class RaceRuntime
                 await RunManager.Instance.SetUpSavedSingleplayer(restored.Run, restored.Save);
                 AccessTools.PropertySetter(typeof(RunManager), nameof(RunManager.ShouldSave)).Invoke(RunManager.Instance, [false]);
                 LoadingSavedRoom = true; RestoringCapturedRoom = restored.Save.PreFinishedRoom != null;
-                try { await game.LoadRun(restored.Run, restored.Save.PreFinishedRoom); }
+                try
+                {
+                    await game.LoadRun(restored.Run, restored.Save.PreFinishedRoom);
+                    // LoadRun restores the scene but leaves the character-select
+                    // blackout in place. Native Continue also explicitly reveals it.
+                    await game.Transition.FadeIn();
+                }
                 finally { LoadingSavedRoom = false; RestoringCapturedRoom = false; RestoringParentEvent = false; }
                 return restored.Run;
             }

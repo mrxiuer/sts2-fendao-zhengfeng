@@ -1,6 +1,6 @@
-﻿param([ValidateSet('Single','Mechanics','Flight','Gambler','PuppetBody','PuppetLife','Giant','Timeline','Charm','Reroll','Burrow','RewardPerformance','RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance','TwinSlime','Formation','Combinations','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','Recovery','RewardRecovery','Economy','Heart','HeartNetwork','Campaign','Advanced','Revival','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[switch]$ResumeOnly,[switch]$EventGold,[switch]$ResetEmptyMap,[ValidateSet("", "Initial", "Rest")][string]$EventPage="",[switch]$RewardBaseline,[switch]$RewardNoPeriodicBackup,[switch]$PendingClaim,[switch]$SaveFailure,[switch]$GrantInProgress,[switch]$ConfirmedClaim,[switch]$EventInProgress)
+﻿param([ValidateSet('Single','Mechanics','Flight','Gambler','PuppetBody','PuppetLife','Giant','Timeline','Charm','Reroll','Burrow','RewardPerformance','RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance','TwinSlime','Formation','Combinations','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','MenuResume','Recovery','RewardRecovery','Economy','Heart','HeartNetwork','Campaign','Advanced','Revival','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[switch]$ResumeOnly,[switch]$EventGold,[switch]$ResetEmptyMap,[ValidateSet("", "Initial", "Rest")][string]$EventPage="",[switch]$RewardBaseline,[switch]$RewardNoPeriodicBackup,[switch]$PendingClaim,[switch]$SaveFailure,[switch]$GrantInProgress,[switch]$ConfirmedClaim,[switch]$EventInProgress)
 $ErrorActionPreference='Stop'
-if($ResumeOnly -and $Suite -notin @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery')) {throw 'ResumeOnly requires a host-archive recovery suite.'}
+if($ResumeOnly -and $Suite -notin @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','MenuResume')) {throw 'ResumeOnly requires a host-archive recovery suite.'}
 if($RewardNoPeriodicBackup -and $Suite -notin @('RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance')) {throw 'RewardNoPeriodicBackup requires a reward performance suite.'}
 $suiteKey=if($Suite -in @('RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance') -and $RewardBaseline) {"$Suite-baseline"} elseif($Suite -eq 'EventRecovery' -and $EventPage) {"EventRecovery-$EventPage"} elseif($Suite -eq 'EventRecovery' -and $EventGold) {'EventRecovery-Gold'} elseif($Suite -eq 'ResetNetwork' -and $ResetEmptyMap) {'ResetNetwork-EmptyMap'} else {$Suite}
 if($RewardNoPeriodicBackup) {$suiteKey += '-no-periodic-backup'}
@@ -14,7 +14,7 @@ $reportRoot=Join-Path $repoRoot 'artifacts\verification'
 New-Item -ItemType Directory -Path (Join-Path $reportRoot 'network') -Force | Out-Null
 if(@(Get-Process SlayTheSpire2 -ErrorAction SilentlyContinue | Where-Object {!$_.HasExited}).Count -gt 0) {throw 'An existing game process is running. Close it before isolated verification.'}
 function Start-VerificationProcess([string]$Role,[bool]$Resume,[bool]$Vanilla=$false,[bool]$HeartNetwork=$false) {
-  $filename=if($Suite -in @('RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance')) {"$Role-$suiteKey.log"} elseif($Suite -in @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery')) {if($Resume) {"$Role-$suiteKey-resume.log"} else {"$Role-$suiteKey.log"}} elseif($HeartNetwork) {"$Role-heart.log"} elseif($Vanilla) {"$Role-vanilla.log"} elseif($Role -eq 'single') {'single-final.log'} elseif($Resume) {"$Role-resume.log"} else {"$Role.log"}
+  $filename=if($Suite -in @('RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance')) {"$Role-$suiteKey.log"} elseif($Suite -in @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','MenuResume')) {if($Resume) {"$Role-$suiteKey-resume.log"} else {"$Role-$suiteKey.log"}} elseif($HeartNetwork) {"$Role-heart.log"} elseif($Vanilla) {"$Role-vanilla.log"} elseif($Role -eq 'single') {'single-final.log'} elseif($Resume) {"$Role-resume.log"} else {"$Role.log"}
   $logPath=if($Role -eq 'single') {Join-Path $reportRoot $filename} else {Join-Path $reportRoot "network\$filename"}
   # The fail-fast observer must never consume a previous run's error.
   [IO.File]::WriteAllText($logPath, '')
@@ -37,6 +37,7 @@ function Start-VerificationProcess([string]$Role,[bool]$Resume,[bool]$Vanilla=$f
   if($Suite -eq 'EventRecovery') {$launch.Environment['FDZF_VERIFY_EVENT_RECOVERY']='1';if($EventPage) {$launch.Environment['FDZF_VERIFY_EVENT_PAGE']=$EventPage};if($EventGold) {$launch.Environment['FDZF_VERIFY_EVENT_GOLD']='1'}}
   if($Suite -eq 'NewEffectsNetwork') {$launch.Environment['FDZF_VERIFY_NEW_EFFECTS']='1'}
   if($Suite -eq 'Recovery') {$launch.Environment['FDZF_VERIFY_RECOVERY']='1'}
+  if($Suite -eq 'MenuResume') {$launch.Environment['FDZF_VERIFY_MENU_RESUME']='1'}
   if($EventInProgress) {$launch.Environment['FDZF_VERIFY_EVENT_IN_PROGRESS']='1'}
   if($ConfirmedClaim) {$launch.Environment['FDZF_VERIFY_CONFIRMED_CLAIM']='1'}
   if($GrantInProgress) {$launch.Environment['FDZF_VERIFY_GRANT_IN_PROGRESS']='1'}
@@ -44,7 +45,7 @@ function Start-VerificationProcess([string]$Role,[bool]$Resume,[bool]$Vanilla=$f
   if($PendingClaim) {$launch.Environment['FDZF_VERIFY_PENDING_CLAIM']='1'}
   if($Suite -eq 'RewardRecovery') {$launch.Environment['FDZF_VERIFY_REWARD_RECOVERY']='1'}
   $launch.Environment['FDZF_REPORT_DIR']=Join-Path $reportRoot 'network'
-  if($Suite -in @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery')) {
+  if($Suite -in @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','MenuResume')) {
     $recoveryReports=Join-Path $reportRoot "$suiteKey-suite"
     New-Item -ItemType Directory -Path $recoveryReports -Force | Out-Null
     $launch.Environment['FDZF_REPORT_DIR']=$recoveryReports
@@ -56,7 +57,7 @@ function Start-VerificationProcess([string]$Role,[bool]$Resume,[bool]$Vanilla=$f
   }
   if($HeartNetwork) {$launch.Environment['FDZF_VERIFY_HEART_NETWORK']='1'}
   if($Role -ne 'single') {$launch.Environment['FDZF_VERIFY_ROLE']=$Role}
-  if($Resume) {$launch.Environment['FDZF_VERIFY_RESUME']='1'}
+  if($Resume) {$launch.Environment['FDZF_VERIFY_RESUME']='1';$launch.Environment['FDZF_VERIFY_RESUME_FADE']='1'}
   if($Vanilla) {$launch.Environment['FDZF_VERIFY_VANILLA']='1'}
   return [PSCustomObject]@{Process=[Diagnostics.Process]::Start($launch);Log=$logPath;Role=$Role;Resume=$Resume;Vanilla=$Vanilla;HeartNetwork=$HeartNetwork}
 }
@@ -108,7 +109,7 @@ if($Suite -in @('HeartNetwork','All')) {Write-Output 'Starting two-process heart
 
 if($Suite -in @('Economy','All')) {Write-Output 'Starting native economy and opening-stats verification';Wait-Verification @((Start-VerificationProcess 'economy' $false))}
 
-if($Suite -in @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery')) {
+if($Suite -in @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','MenuResume')) {
  if(!$ResumeOnly) {
   Write-Output 'Starting host-owned disconnected save verification'
   $records=@((Start-VerificationProcess 'host' $false),(Start-VerificationProcess 'client' $false));if($Suite -in @('FourPlayers','ResetNetwork','ServiceRecovery')) {$records+=@((Start-VerificationProcess 'peer3' $false),(Start-VerificationProcess 'peer4' $false))};Wait-Verification $records
@@ -147,7 +148,7 @@ if($Suite -in @('Formation','All')) {Write-Output 'Starting native friendly form
 
 # Recovery suites each need their own fresh/archive/restart pair and report root.
 if($Suite -eq 'All') {
- foreach($recoverySuite in @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery')) {
+ foreach($recoverySuite in @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','MenuResume')) {
   & $PSCommandPath -Suite $recoverySuite -GameRoot $GameRoot
  }
  & $PSCommandPath -Suite EventRecovery -EventGold -GameRoot $GameRoot

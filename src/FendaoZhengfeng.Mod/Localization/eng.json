@@ -595,5 +595,6 @@
   "持续至净化。": "Lasts until cleansed.",
   "整局有效。": "Lasts for the entire run.",
   "按说明中的战斗场次生效。": "Lasts for the number of combats stated above.",
-  "\n整局有效。": "\nLasts for the entire run."
+  "\n整局有效。": "\nLasts for the entire run.",
+  "战斗结算未获房主确认。请由房主保存比赛，再邀请原玩家继续；本场未确认的胜利不会发放奖励。": "The host has not confirmed this battle result. Ask the host to save the race, then invite the original players to continue. No rewards will be granted for this unconfirmed victory."
 }

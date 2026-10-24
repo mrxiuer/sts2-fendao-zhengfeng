@@ -74,7 +74,7 @@ internal static class NativeNetworkVerification
             }
             bool remoteDone = false, remoteSaved = false, remoteInteractiveReady = false, remoteFortuneDone = false; string? remoteCampaign = null; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "fortune_done") remoteFortuneDone = true; if (msg.Kind == "interactive_ready") remoteInteractiveReady = true; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; if (msg.Kind == "verification_campaign") remoteCampaign = msg.Content; });
             bool resume = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESUME") == "1"; RaceRuntime.ResumeRequested = resume;
-            RaceRuntime.ResumeFromHostArchive = resume && (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_NEW_EFFECTS") == "1" || four || eventRecovery);
+            RaceRuntime.ResumeFromHostArchive = resume && (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_NEW_EFFECTS") == "1" || four || eventRecovery || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_MENU_RESUME") == "1");
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_VANILLA") == "1")
             {
                 RaceConfig.ModeEnabled = !host;
@@ -88,10 +88,19 @@ internal static class NativeNetworkVerification
             if (interactive) { RaceConfig.ModeEnabled = true; RaceConfig.DebugMode = true; }
             else { RaceConfig.ModeEnabled = host; RaceConfig.DebugMode = host; RaceConfig.DisabledEffects = host ? "fortune_dice" : "ritual,exhaustion"; }
             var agreed = await LobbyRules.Agree(lobby);
+            bool resumeFade = resume && System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESUME_FADE") == "1";
+            // The real character-select screen blacks out before starting the run.
+            // A direct API load without this step cannot detect a stranded transition.
+            if (resumeFade) await game.Transition.FadeOut(0.01f);
             if (!interactive) Check(agreed.Enabled && agreed.Debug && !agreed.Effects.Contains("fortune_dice") && agreed.Effects.Contains("exhaustion") && agreed.Effects.Contains("ritual"), "host config overrides different client mode and effect selections");
             var runTask = RaceRuntime.Start(game, lobby, ActModel.GetDefaultList(), [], interactive ? System.Environment.GetEnvironmentVariable("FDZF_LOCAL_SEED") ?? "FDZFLOCAL" : "FDZFNETVERIFY", 0, agreed);
             await Wait(() => RaceSession.Current != null, "session capture"); pump?.QueueFree();
             var run = await runTask; var session = RaceSession.Current!;
+            if (resumeFade)
+            {
+                Check(!game.Transition.InTransition && game.Transition.MouseFilter == Control.MouseFilterEnum.Ignore,
+                    "resuming after character-select blackout reveals the run and releases input on each peer");
+            }
             if (interactive) Check(run.ExtraFields.StartedWithNeow && run.CurrentRoom is EventRoom opening
                 && opening.LocalMutableEvent is MegaCrit.Sts2.Core.Models.Events.Neow && opening.LocalMutableEvent.CurrentOptions.Count == 3,
                 "interactive peers retain the native three-choice opening alongside Lizard Tail");
@@ -100,6 +109,10 @@ internal static class NativeNetworkVerification
             await session.Submit(session.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(run)) });
             string otherId = host ? "2" : "1";
             await Wait(() => session.Engine.State.Racers[otherId].PublicPacket.Length > 0 && PublicProfiles.Read(session.Engine.State.Racers[otherId])?.Relics.Any(relic => relic is MegaCrit.Sts2.Core.Models.Relics.LizardTail) == true, "peer public profile including late starting relic");
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_VICTORY_NETWORK") == "1")
+            { await NativeVictoryNetworkVerification.Run(game, run, session, host); return; }
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_MENU_RESUME") == "1")
+            { await NativeMenuResumeVerification.Run(game, run, session, host, resume); return; }
             if (performance) { await NativeRewardNetworkPerformance.Run(game, run, session); return; }
             if (eventRecovery)
             { await NativeEventRecoveryVerification.Run(game, run, session, host, resume); return; }

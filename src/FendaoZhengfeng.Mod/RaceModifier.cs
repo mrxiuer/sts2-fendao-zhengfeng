@@ -227,9 +227,47 @@ public sealed partial class RaceModifier : ModifierModel
         { wear[original] = Math.Max(0, wear.GetValueOrDefault(original, 8) - 1); }
         await Task.CompletedTask;
     }
-    public override async Task AfterCombatVictory(CombatRoom room)
+    private CombatRoom? settlingVictoryRoom;
+    private Task? settlingVictory;
+    public override Task AfterCombatVictory(CombatRoom room)
     {
-        await S.Submit(S.New("victory", Me.BattleKey, value: room.RoomType.ToString(), boss: room.RoomType == RoomType.Boss && FiveActCampaign.IsFinalBoss(RunState)));
+        if (ReferenceEquals(settlingVictoryRoom, room) && settlingVictory != null) return settlingVictory;
+        settlingVictoryRoom = room;
+        return settlingVictory = CompleteVictory(room);
+    }
+    private async Task CompleteVictory(CombatRoom room)
+    {
+        var session = S;
+        try { await CompleteVictoryCore(room, session); }
+        catch (Exception error) when (!session.IsHost && (error is IOException or TimeoutException))
+        {
+            // Abort this native end-combat invocation. Returning normally here
+            // would grant rewards for an unconfirmed win. Move the UI only after
+            // the failing hook unwinds, using the native error/menu flow.
+            var message = new IOException(L10n.T("战斗结算未获房主确认。请由房主保存比赛，再邀请原玩家继续；本场未确认的胜利不会发放奖励。"), error);
+            Godot.Callable.From(() => RaceUi.Run(() => ShowVictoryFailure(message))).CallDeferred();
+            throw;
+        }
+    }
+    private static async Task ShowVictoryFailure(Exception error)
+    {
+        var game = MegaCrit.Sts2.Core.Nodes.NGame.Instance!;
+        await game.ReturnToMainMenu();
+        await game.ToSignal(game.GetTree(), Godot.SceneTree.SignalName.ProcessFrame);
+        // Menu startup can open its own modal. Give this actionable failure priority.
+        MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer.Instance!.Clear();
+        await game.ReturnToMainMenuWithInternalError(error);
+    }
+    private async Task CompleteVictoryCore(CombatRoom room, RaceSession session)
+    {
+        var victory = session.New("victory", Me.BattleKey, value: room.RoomType.ToString(), boss: room.RoomType == RoomType.Boss && FiveActCampaign.IsFinalBoss(RunState));
+        try { await session.Submit(victory); }
+        catch (TimeoutException) when (!session.IsHost && session.Transport.IsConnected)
+        {
+            // Reuse the command ID: a lost acknowledgement must not count a win twice.
+            session.Transport.SendMessage(new RaceMessage { Kind = "state_request" }, session.HostId);
+            await session.Submit(victory);
+        }
         resetScaled.Clear();
         if (room.RoomType.ToString() == "Boss" && RunState.CurrentActIndex == RunState.Acts.Count - 1)
         {
