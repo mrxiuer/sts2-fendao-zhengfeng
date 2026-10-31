@@ -19,39 +19,16 @@ internal static class RecoveryUi
         : PlatformUtil.GetLocalPlayerId(PlatformUtil.PrimaryPlatform).ToString(System.Globalization.CultureInfo.InvariantCulture);
     internal static void Refresh(NMainMenu menu)
     {
-        var parent = menu.GetNode<Control>("MainMenuTextButtons");
-        var button = parent.GetNodeOrNull<NMainMenuTextButton>(ButtonName);
-        bool available = File.Exists(RaceRecovery.ArchivePath(LocalHost));
-        if (button == null && available)
-        {
-            var source = parent.GetNode<NMainMenuTextButton>("MultiplayerButton");
-            button = (NMainMenuTextButton)source.Duplicate((int)(Node.DuplicateFlags.Scripts | Node.DuplicateFlags.Groups));
-            button.Name = ButtonName; parent.AddChild(button); parent.MoveChild(button, source.GetIndex() + 1);
-            AccessTools.Field(typeof(NMainMenuTextButton), "_locString").SetValue(button, NativeChoiceUi.Text(L10n.T("继续分道争锋")));
-            AccessTools.Method(typeof(NMainMenuTextButton), "RefreshLabel").Invoke(button, null);
-            button.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>(_ =>
-            {
-                try { RaceRecovery.Read(LocalHost); } catch (Exception error) { RaceUi.Error(L10n.T("无法恢复比赛：") + L10n.T(error.Message)); return; }
-                var submenu = menu.OpenMultiplayerSubmenu(); RaceRuntime.ResumeRequested = true; RaceRuntime.ResumeFromHostArchive = true;
-                submenu.FastHost(GameMode.Standard);
-                RaceUi.Notify(L10n.T("已选择恢复比赛：邀请原来的玩家，并选择原来的角色后开始。"));
-            }));
-        }
-        if (button != null) { button.Visible = available; button.SetEnabled(available); }
+        var button = menu.GetNode<Control>("MainMenuTextButtons").GetNodeOrNull<NMainMenuTextButton>(ButtonName);
+        if (button != null) { button.Hide(); button.QueueFree(); }
     }
-    internal static async Task SaveAndQuit()
+    internal static Task SaveAndQuit()
     {
-        var session = RaceSession.Current ?? throw new InvalidOperationException(L10n.T("比赛已结束。"));
-        try
-        {
-            await session.Recovery.SaveHost(true);
-            if (session.Transport.IsConnected) session.Transport.SendMessage(new RaceMessage { Kind = "recovery_saved_exit" });
-            RaceRuntime.ResumeRequested = true;
-            RaceRuntime.ResumeFromHostArchive = true;
-            await NGame.Instance!.ReturnToMainMenu();
-        }
-        catch (Exception error) { RaceUi.Error(L10n.T("保存失败，仍留在当前比赛：") + L10n.T(error.Message)); }
+        RaceRuntime.ResumeRequested = false;
+        RaceRuntime.ResumeFromHostArchive = false;
+        return NGame.Instance!.ReturnToMainMenu();
     }
+
 }
 
 [HarmonyPatch(typeof(NPauseMenu), "CloseToMenu")]
@@ -71,8 +48,8 @@ internal static class RacePauseButtonsPatch
     static void Postfix(NPauseMenu __instance)
     {
         if (!RaceRuntime.Live || RaceSession.Current is not { IsMock: false } session) return;
-        __instance.GetNode<Control>("%ButtonContainer/SaveAndQuit").Visible = session.IsHost;
-        __instance.GetNode<Control>("%ButtonContainer/Disconnect").Visible = !session.IsHost;
+        __instance.GetNode<Control>("%ButtonContainer/SaveAndQuit").Visible = false;
+        __instance.GetNode<Control>("%ButtonContainer/Disconnect").Visible = true;
     }
 }
 [HarmonyPatch(typeof(NMainMenu), nameof(NMainMenu.RefreshButtons))]

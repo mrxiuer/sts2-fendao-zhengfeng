@@ -1,4 +1,4 @@
-﻿using FendaoZhengfeng.Core;
+using FendaoZhengfeng.Core;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 
@@ -6,7 +6,7 @@ namespace FendaoZhengfeng.Mod;
 
 internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, HashSet<string> Effects, bool Resume, string ResumeBundle = "")
 {
-    internal static LobbyRules Local() => new(Catalog.RulesVersion, RaceConfig.ModeEnabled, RaceConfig.DebugMode, RaceConfig.EnabledIds(), RaceRuntime.ResumeRequested);
+    internal static LobbyRules Local() => new(Catalog.RulesVersion, RaceConfig.ModeEnabled, RaceConfig.DebugMode, RaceConfig.EnabledIds(), false);
     // Every modded participant enters this handshake, including clients whose local mode is disabled.
     internal static async Task<LobbyRules> Agree(StartRunLobby lobby)
     {
@@ -24,7 +24,7 @@ internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, Hash
             var match = StateJson.Deserialize<Match>(archive.MatchJson);
             if (!expected.Select(peer => peer.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToHashSet().SetEquals(match.Racers.Keys)) throw new RuleException(L10n.T("恢复比赛需要原来的玩家名单。"));
             if (!archive.Players.TryGetValue(playerId, out var snapshot)) throw new RuleException(L10n.T("缺少该玩家的恢复备份。"));
-            var bundle = new NativeCheckpoint.Bundle("0.5.2", archive.RulesVersion, match.Revision, archive.MatchJson, snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey, snapshot.Rewards);
+            var bundle = new NativeCheckpoint.Bundle("0.5.3", archive.RulesVersion, match.Revision, archive.MatchJson, snapshot.NativePacket, snapshot.AppliedReceipts, snapshot.BattleKey, snapshot.Rewards);
             return agreed! with { Enabled = true, Debug = match.DebugMode, Effects = match.EnabledEffects, ResumeBundle = RaceMessage.Compress(StateJson.Serialize(bundle)) };
         }
         string? error = null; bool committed = false;

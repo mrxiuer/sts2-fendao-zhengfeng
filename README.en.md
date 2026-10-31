@@ -2,7 +2,7 @@
 
 A five-act multiplayer race with independent paths, battles, and relic sacrifices. Share the map, advance at your own pace, and be the first to defeat the Heart of the Spire at the end of Act 5.
 
-**0.5.2 friends-only preview.** Fixes Boon expiry across acts and blocked potion clicks; clarifies effect counts and durations. [Download the installation package](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.2-preview).
+**0.5.3 friends-only preview.** Fixes Boon expiry across acts and blocked potion clicks; clarifies effect counts and durations. [Download the installation package](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.3-preview).
 
 ## Requirements and installation
 
@@ -36,3 +36,5 @@ Unfinished combat restarts from turn 1 with saved permanent resources; spent ite
 The rules remain `1.0.0-design.14`, protocol `wire:4`. Earlier native verification was performed on Windows; this update's API comparison and compilation were performed against local macOS assemblies. Compilation alone is not a full multiplayer playthrough. See the [Chinese guide](README.md) and [verification record](docs/VERIFICATION.md) for existing gameplay evidence and limitations.
 
 Boons persist across acts for the entire run, except Catch-Up, which lasts for its stated number of combats. Explicit charges and removal conditions, such as puppet death, still apply. The settings list shows all 65 effects and their duration.
+
+0.5.3 removes the race continue, checkpoint restore and save/pause UI. Exited races cannot be continued. Synchronous mode is not included. Existing backup files are retained.

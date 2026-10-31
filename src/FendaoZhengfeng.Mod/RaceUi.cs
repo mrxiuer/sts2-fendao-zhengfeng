@@ -80,13 +80,11 @@ public static class RaceUi
                 Text(L10n.T("模式开关、效果列表和调试开关位于模组配置 → 分道争锋。本局玩法配置以房主为准。"));
                 if (RaceConfig.DebugVisible)
                 {
-                    var resume = new CheckButton { Text = L10n.T("恢复上次共同检查点（原玩家与角色）"), ButtonPressed = RaceRuntime.ResumeRequested }; resume.Toggled += value => RaceRuntime.ResumeRequested = value; list.AddChild(resume);
                     Button(L10n.T("本地模拟测试（无需好友）"), MockTesting.Start);
                 }
                 return;
             }
             Text(RaceConfig.DebugVisible ? L10n.T("比赛进度 · ") + s.Engine.State.Id : L10n.T("比赛进度"));
-            if (s.IsHost && !s.IsMock) Button(s.PauseRequested ? L10n.T("继续比赛 / 取消共同暂停") : L10n.T("保存并暂停比赛"), () => { if (s.PauseRequested) s.ContinueRace(); else s.RequestPause(); return Task.CompletedTask; });
             if (s.IsMock && RaceConfig.DebugVisible)
             {
                 Text(L10n.T("本地模拟 · 对手为测试数据，不连接其他玩家，不写入原版进度，也不替代 Steam 网络验证。"));

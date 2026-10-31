@@ -4,9 +4,9 @@
 
 独立选路、独立战斗、遗物献祭的多人竞速 MOD。共享一张地图，各自推进；固定5幕，率先击败第五幕最终Boss的玩家获胜。
 
-**0.5.2 好友测试版。** 修复增益跨幕消失与药水点击受遮挡，效果列表补充数量和期限。**需要 `public-beta` 测试分支**；正式分支的 API 不兼容，不能仅删除版本门槛。兼容基准为游戏 **v0.111.0 public-beta**、**BaseLib 3.4.7**。本轮程序集对照见 [API核验](docs/API-COMPATIBILITY.md)，英文说明见 [0.5.2更新](docs/releases/0.5.2.md)。
+**0.5.3 好友测试版。** 修复增益跨幕消失与药水点击受遮挡，效果列表补充数量和期限。**需要 `public-beta` 测试分支**；正式分支的 API 不兼容，不能仅删除版本门槛。兼容基准为游戏 **v0.111.0 public-beta**、**BaseLib 3.4.7**。本轮程序集对照见 [API核验](docs/API-COMPATIBILITY.md)，英文说明见 [0.5.3更新](docs/releases/0.5.3.md)。
 
-包含65项模式效果、五幕竞速、独立进度保存恢复及奖励性能优化。[Steam创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)（仅上传账号的Steam好友可访问）；[GitHub安装包](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.2-preview)与工坊使用相同的运行文件。
+包含65项模式效果、五幕竞速、独立进度保存恢复及奖励性能优化。[Steam创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)（仅上传账号的Steam好友可访问）；[GitHub安装包](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.3-preview)与工坊使用相同的运行文件。
 
 本轮新增傀儡、双生史莱姆、遁地、巨人化、额外时间线、魅惑卡与奖励刷新。主要更新见 [0.5.0说明](docs/releases/0.5.0.md)，测试范围见 [验证记录](docs/VERIFICATION.md)。
 
@@ -16,7 +16,7 @@
 
 1. 在 Steam → 游戏属性 → Game Versions & Betas 中选择 **`public-beta`**。所有参与者使用相同游戏版本，安装并启用 **BaseLib 3.4.7 或更新版本**。目前只验证了 3.4.7，更新版本仍需兼容核验。本包不附带 BaseLib 或游戏程序集。
 2. **工坊安装：** 退出游戏，删除旧的 `mods/FendaoZhengfeng` 文件夹（只删本模组），然后[订阅分道争锋](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)，等待Steam下载完成；BaseLib也须安装并启用。无需将工坊文件复制到mods。仅上传账号的Steam好友可访问此条目。
-3. **手动安装：** 从[0.5.2发行页](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.2-preview)下载 `FendaoZhengfeng-0.5.2-preview.zip`，不要下载自动生成的 `Source code` 作为安装包。
+3. **手动安装：** 从[0.5.3发行页](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.3-preview)下载 `FendaoZhengfeng-0.5.3-preview.zip`，不要下载自动生成的 `Source code` 作为安装包。
    退出游戏，将 ZIP 中的 `FendaoZhengfeng` 文件夹放入游戏的 `mods` 目录。可在 Steam → 游戏 → 管理 → 浏览本地文件找到游戏目录。
 
 ```text
@@ -134,3 +134,5 @@ cd sts2-fendao-zhengfeng
 调试模式下可点击顶部“分道争锋” → “测试：进入第五幕心脏战”，需要先结算当前战斗。两个本地窗口都可使用；正常对局不会自动跳幕。仅复制卡牌，不复制对方遗物、药水、角色状态或资源；跨角色牌按原生规则使用。详细机制、制作与验证见[心脏Boss说明](docs/HEART_BOSS.md)。当前GitHub预览版为0.4.1。
 
 0.4.1调整：逆境生财每点已激活负担返还5金币，基础整局上限1000，跨幕保留且额度不重置；以战养战改为每次取得叠1层，开战每层获得1力量、1敏捷、1集中，最多3层，满层退出候选池。两端须同版本并重新开启测试局。
+
+0.5.3：取消继续分道争锋、恢复检查点和保存暂停入口；退出后不提供继续比赛。同步模式尚未加入。本次未删除已有备份文件。
