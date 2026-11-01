@@ -1,6 +1,6 @@
 # 实现与验证记录
 
-## 2026-11-01 0.5.4 同步模式本地测试包（未发布）
+## 2026-11-01 0.5.4 同步模式验证
 
 Release构建与101项规则检查通过。`Verify-Native.ps1 -Suite Shared` 使用两个真实ENet进程，沿用原版多人战局和原生动作/奖励同步；房主配置覆盖客户端不同配置。覆盖共同战斗、双方正常出牌、各自血量/奖励归属、精英遗物领取与献祭、Boss增益候选、团队R键重置及资源保留。
 
@@ -14,10 +14,10 @@ Release构建与101项规则检查通过。`Verify-Native.ps1 -Suite Shared` 使
 
 史莱姆布局定向日志确认重复布局位移0.000；动画缩放不引起重排，史莱姆、傀儡、奥斯提组合及死亡/替换跟班无重叠。该几何套件不替代完整联机战斗验收。
 
-证据保存在 `artifacts/verification/network/` 的 `shared-elite-boss-rewards-{host,client}.log`、`shared-active-items-{host,client}.log`、`0.5.4-shared-{host,client}.log`、`timeline.log`、`heart.log` 及 `formation-final-layout.log`。测试使用内存存档；测试前安装DLL备份并在退出后恢复。尚未上传工坊或GitHub。
+证据保存在 `artifacts/verification/network/` 的 `shared-elite-boss-rewards-{host,client}.log`、`shared-active-items-{host,client}.log`、`0.5.4-shared-{host,client}.log`、`timeline.log`、`heart.log` 及 `formation-final-layout.log`。测试使用内存存档；测试前安装DLL备份并在退出后恢复。发布与分发状态见[DISTRIBUTION](DISTRIBUTION.md)。
 
 
-当前本地构建：0.5.4；日期：2026-11-01。工坊仍为此前发布版本；下文0.4.x、0.5.0为历史记录。
+当前本地构建：0.5.4；日期：2026-11-01。分发状态以DISTRIBUTION和发行页为准；下文0.4.x、0.5.0为历史记录。
 
 ## 0.5.0 发布前核查
 

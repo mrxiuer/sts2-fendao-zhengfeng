@@ -1,8 +1,8 @@
-﻿# Slay the Spire 2: Separate Paths
+# Slay the Spire 2: Separate Paths
 
 A five-act multiplayer race with independent paths, battles, and relic sacrifices. Share the map, advance at your own pace, and be the first to defeat the Heart of the Spire at the end of Act 5.
 
-**0.5.4 local preview; not yet published to Workshop or GitHub.** Adds native cooperative mode and fixes Slime layout drift, Extra Timeline autoplay, and delayed multiplayer reward delivery. The [latest published package](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.3-preview) is still 0.5.3 and does not contain these changes.
+**0.5.4 friends-only preview.** Adds native cooperative mode and fixes Slime layout drift, Extra Timeline autoplay, and delayed multiplayer reward delivery. [Download the installation package](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.4-preview). Workshop and GitHub packages contain identical runtime files.
 
 ## Requirements and installation
 

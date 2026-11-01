@@ -4,9 +4,9 @@
 
 支持异步竞速与同步合作的五幕联机 MOD。异步模式独立选路、独立战斗；同步模式沿用原版共同选路与战斗，并加入增益及自身契约奖励。
 
-**0.5.4 本地测试包，尚未发布到工坊或GitHub。** 新增同步合作模式，修复史莱姆布局位移、额外时间线复制出牌和联机奖励等待问题。需要游戏 **v0.111.0 public-beta** 与 **BaseLib 3.4.7**；所有玩家须使用相同构建并新开比赛。改动与验证范围见[0.5.4说明](docs/releases/0.5.4.md)。
+**0.5.4 好友测试版。** 新增同步合作模式，修复史莱姆布局位移、额外时间线复制出牌和联机奖励等待问题。需要游戏 **v0.111.0 public-beta** 与 **BaseLib 3.4.7**；所有玩家须使用相同构建并新开比赛。改动与验证范围见[0.5.4说明](docs/releases/0.5.4.md)。
 
-包含65项模式效果、五幕玩法及奖励性能优化。本测试包不提供断线续局入口。[Steam创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)（仅上传账号的Steam好友可访问）；[GitHub安装包](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.3-preview)是此前发布的0.5.3文件，不包含本地0.5.4改动。
+包含65项模式效果、五幕玩法及奖励性能优化。本版本不提供断线续局入口。[Steam创意工坊订阅](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)（仅上传账号的Steam好友可访问）；[GitHub安装包](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.4-preview)与工坊使用相同的0.5.4运行文件。
 
 本轮新增傀儡、双生史莱姆、遁地、巨人化、额外时间线、魅惑卡与奖励刷新。主要更新见 [0.5.0说明](docs/releases/0.5.0.md)，测试范围见 [验证记录](docs/VERIFICATION.md)。
 
@@ -16,7 +16,7 @@
 
 房主可在分道争锋的模组配置中开启同步模式，下一局生效。同步模式沿用原版联机的共同选路、共同战斗、多人怪物数值和队友资料；精英及Boss遗物可照常领取，或献祭换取增益与自身双刃契约。Boss额外奖励直接选择增益。同步模式不开局赠送蜥蜴尾巴，正常获取与补充仍保留。
 
-同步候选池不提供诅咒、逆境生财、以牙还牙或灾祸共鸣。异步模式保留原有竞速与诅咒对抗。两端必须使用相同构建，并新开一局。上方0.5.3发行链接尚不包含这些本地测试包改动。
+同步候选池不提供诅咒、逆境生财、以牙还牙或灾祸共鸣。异步模式保留原有竞速与诅咒对抗。两端必须使用相同构建，并新开一局。更新后请所有玩家确认0.5.4，并重新开局。
 
 本轮重点修复史莱姆重复布局位移、额外时间线复制恶魔之焰，以及联机奖励登记先于本端发放时造成的等待问题。验证边界见[验证记录](docs/VERIFICATION.md)。
 
@@ -24,7 +24,7 @@
 
 1. 在 Steam → 游戏属性 → Game Versions & Betas 中选择 **`public-beta`**。所有参与者使用相同游戏版本，安装并启用 **BaseLib 3.4.7 或更新版本**。目前只验证了 3.4.7，更新版本仍需兼容核验。本包不附带 BaseLib 或游戏程序集。
 2. **工坊安装：** 退出游戏，删除旧的 `mods/FendaoZhengfeng` 文件夹（只删本模组），然后[订阅分道争锋](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)，等待Steam下载完成；BaseLib也须安装并启用。无需将工坊文件复制到mods。仅上传账号的Steam好友可访问此条目。
-3. **手动安装：** 从[0.5.3发行页](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.3-preview)下载 `FendaoZhengfeng-0.5.3-preview.zip`，不要下载自动生成的 `Source code` 作为安装包。
+3. **手动安装：** 从[0.5.4发行页](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.4-preview)下载 `FendaoZhengfeng-0.5.4-preview.zip`，不要下载自动生成的 `Source code` 作为安装包。
    退出游戏，将 ZIP 中的 `FendaoZhengfeng` 文件夹放入游戏的 `mods` 目录。可在 Steam → 游戏 → 管理 → 浏览本地文件找到游戏目录。
 
 ```text

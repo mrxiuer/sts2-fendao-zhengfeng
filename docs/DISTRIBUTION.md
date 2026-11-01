@@ -1,5 +1,13 @@
 # 原生加载与 Steam 创意工坊发布
 
+
+## 0.5.4 发布
+
+2026-11-01更新原工坊条目3825045315，保留好友可见性与BaseLib依赖3737335127；官方上传器返回成功。GitHub以v0.5.4-preview分发安装ZIP及SHA256SUMS.txt。两处运行内容均为经过验证的0.5.4 DLL和清单，不重新编译运行代码。更新说明见[0.5.4](releases/0.5.4.md)。
+
+使用原账号的Steam UGC查询核对可见性、更新版本和依赖；GitHub资产下载后与上传包校验SHA256。下文0.5.1/0.5.0为历史发布记录。
+
+
 0.5.1 中英文更新于2026-10-23更新原工坊条目 `3825045315`，保留好友可见性和BaseLib依赖；GitHub发布 `v0.5.1-preview`，保留0.5.0旧包。当前兼容基准为 `public-beta`，正式分支存在已确认的 API 差异，见 [API核验](API-COMPATIBILITY.md)。
 
 0.5.0已于2026-10-23上传[Steam创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3825045315)，仅好友可见。GitHub同步0.5.0源码及preview安装包；发行页见README。
