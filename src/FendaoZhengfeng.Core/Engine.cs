@@ -73,7 +73,7 @@ public sealed class Engine(Match state)
                 if (c.Boss && p.KilledBossActs.Add(p.Act))
                 {
                     foreach (var id in p.Effects.Values.Where(h => !Catalog.Get(h.Id).Permanent && h.ExpiresAfterAct >= 0 && h.ExpiresAfterAct <= p.Act).Select(h => h.Id).ToList()) p.Effects.Remove(id);
-                    bool first = p.ResetCount > 0 || m.BossFirstKills.TryAdd(p.Act, p.Id);
+                    bool first = m.Synchronous || p.ResetCount > 0 || m.BossFirstKills.TryAdd(p.Act, p.Id);
                     p.BossPrizes.Add((p.ResetCount > 0 ? "lap" + p.ResetCount + ":" : "") + p.Act + ":" + (first ? "first" : "later"));
                 }
                 break;
@@ -122,6 +122,7 @@ public sealed class Engine(Match state)
                 if (m.ConsumedRewards.Contains(token)) throw new RuleException("同一奖励已领取或献祭。");
                 var effect = Catalog.Get(c.Effect);
                 if (!m.EnabledEffects.Contains(effect.Id)) throw new RuleException("房主已禁用该效果。");
+                if (!Candidates.AvailableInMode(m, effect)) throw new RuleException("同步模式不提供该对抗效果。");
                 if (offer.Route == Route.FirstKill && !p.BossPrizes.Contains(offer.RewardKey)) throw new RuleException("首杀奖励已经领取。");
                 if (effect.Kind == EffectKind.Curse)
                 {
@@ -188,8 +189,14 @@ public sealed class Engine(Match state)
                 break;
             case "reset_use":
                 if (!p.Has("r_key") || p.ResetCharges <= 0 || p.InBattle || p.Eliminated || p.Finished || p.ResetPending) throw new RuleException("当前不能使用R键。");
-                p.ResetCharges--; p.ResetCount++; p.ResetPending = true; p.Act = 0; p.Floor = 0; p.Position = null; p.Room = "Reset";
-                p.KilledBossActs.Clear(); p.Trail.Clear(); p.ClearedNodes.Clear(); p.BattleKey = "";
+                var resetPlayers = m.Synchronous ? m.Racers.Values.ToList() : [p];
+                if (resetPlayers.Any(r => r.InBattle || r.ResetPending || r.Finished)) throw new RuleException("所有玩家结束当前战斗后才能重开。");
+                p.ResetCharges--;
+                foreach (var racer in resetPlayers)
+                {
+                    racer.ResetCount++; racer.ResetPending = true; racer.Act = 0; racer.Floor = 0; racer.Position = null; racer.Room = "Reset";
+                    racer.KilledBossActs.Clear(); racer.Trail.Clear(); racer.ClearedNodes.Clear(); racer.BattleKey = "";
+                }
                 break;
             case "reset_ready":
                 if (!p.ResetPending) throw new RuleException("没有待完成的重置。"); p.ResetPending = false; break;
@@ -201,7 +208,19 @@ public sealed class Engine(Match state)
                 p.TailSpent = false;
                 p.Receipts.Add(new(c.Id + ":tail-cost", "spend_gold", "", Balance.TailRefillCost));
                 p.Receipts.Add(new(c.Id + ":tail", "refill_tail")); break;
-            case "ack": p.Receipts.RemoveAll(r => r.Id == c.Key); break;
+            case "ack":
+                if (m.Synchronous)
+                {
+                    if (!m.Racers.ContainsKey(c.Value)) throw new RuleException("收据确认来源无效。");
+                    if (!p.Receipts.Any(r => r.Id == c.Key)) break;
+                    string acknowledgementKey = p.Id + ":" + c.Key;
+                    if (!m.ReceiptAcknowledgements.TryGetValue(acknowledgementKey, out var confirmed))
+                        m.ReceiptAcknowledgements[acknowledgementKey] = confirmed = [];
+                    confirmed.Add(c.Value);
+                    if (!confirmed.IsSupersetOf(m.Racers.Keys)) break;
+                    m.ReceiptAcknowledgements.Remove(acknowledgementKey);
+                }
+                p.Receipts.RemoveAll(r => r.Id == c.Key); break;
             default: throw new RuleException("未知操作：" + c.Kind);
         }
     }

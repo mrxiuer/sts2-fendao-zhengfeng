@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace FendaoZhengfeng.Core;
@@ -101,12 +101,14 @@ public sealed class Offer
 }
 public sealed class Match
 {
+    public bool Synchronous { get; set; }
     public string Id { get; set; } = "";
     public string Version { get; set; } = Catalog.RulesVersion;
     public string Seed { get; set; } = "";
     public HashSet<string> EnabledEffects { get; set; } = Catalog.All.Select(effect => effect.Id).ToHashSet();
     public bool DebugMode { get; set; }
     public long Revision { get; set; }
+    public Dictionary<string, HashSet<string>> ReceiptAcknowledgements { get; set; } = [];
     public Dictionary<string, Racer> Racers { get; set; } = [];
     public Dictionary<string, Offer> Offers { get; set; } = [];
     public HashSet<string> ConsumedRewards { get; set; } = [];

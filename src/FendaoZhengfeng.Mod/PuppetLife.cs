@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using FendaoZhengfeng.Core;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Commands;
@@ -105,7 +105,7 @@ public sealed partial class RaceModifier
     {
         CapturePuppetVitals();
         if (PuppetFollower.Find(Player) is { } live) live.LoseBlockInternal(live.Block);
-        await BurrowEffect.AfterCombatEnd();
+        await BurrowEffect.AfterCombatEnd(this);
     }
 }
 

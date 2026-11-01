@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Characters;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Combat;
@@ -138,28 +139,38 @@ internal static class NativeTimelineVerification
 
             int targetIndex = FindSnapshotCardIndex(eligibleSnapshot, run, player,
                 card => card.Type == CardType.Attack && card.TargetType == TargetType.AnyEnemy);
-            Check(targetIndex >= 0, "real peer snapshot contains a native single-enemy card for target-cancel verification");
-            var targetProbe = NativeCheckpoint.DecodeCard(eligibleSnapshot[targetIndex].Packet, run, player);
-            string targetCardId = targetProbe.Id.ToString(); targetProbe.RemoveFromState();
-            int targetCopiesBefore = CombatCards(player).Count(card => card.Id.ToString() == targetCardId && card.DeckVersion == null);
+            Check(targetIndex >= 0, "real peer snapshot contains a native single-enemy card");
             var chooseTargetCard = new TestCardSelector(); chooseTargetCard.PrepareToSelect(new[] { targetIndex });
             using (CardSelectCmd.UseSelector(chooseTargetCard))
-            {
-                Task copyTask = TimelineEffects.PlayFromOpponent(ctx, player, "2");
-                await Wait(() => NTargetManager.Instance.IsInSelection, "原生目标选择器未启动。");
-                NTargetManager.Instance.CancelTargeting();
-                await copyTask;
-            }
-            Check(CombatCards(player).Count(card => card.Id.ToString() == targetCardId && card.DeckVersion == null) == targetCopiesBefore
-                && player.PlayerCombatState.Energy == energyBefore,
-                "canceling native target selection removes the temporary clone before AutoPlay");
+                await TimelineEffects.PlayFromOpponent(ctx, player, "2").WaitAsync(TimeSpan.FromSeconds(15));
+            Check(!NTargetManager.Instance.IsInSelection && player.PlayerCombatState.Energy == energyBefore,
+                "single-target copy automatically plays without a second target prompt or energy payment");
             Check(player.Deck.Cards.Select(NativeCheckpoint.EncodeCard).SequenceEqual(permanentBefore)
                 && session.Engine.State.Racers["2"].MarketCards.SequenceEqual(retainedSnapshot),
-                "target cancellation preserves the player's deck and the disconnected peer's retained snapshot");
+                "automatic targeting preserves both permanent decks and the retained snapshot");
+
+            // Regression: Fiend Fire must consume the real hand and resolve, rather than
+            // leave a generated, unplayable card in the hand awaiting another action.
+            var fiend = run.CreateCard<FiendFire>(player);
+            session.Engine.State.Racers["2"].MarketCards = [new MarketCard("fiend-probe", NativeCheckpoint.EncodeCard(fiend), fiend.Title)];
+            fiend.RemoveFromState();
+            var enemy = player.Creature.CombatState!.Enemies.First(enemy => enemy.IsAlive);
+            await CreatureCmd.SetMaxAndCurrentHp(enemy, 9999);
+            await CardPileCmd.AddGeneratedCardToCombat(player.Creature.CombatState.CreateCard<DefendIronclad>(player), PileType.Hand, player);
+            var handBeforeFiend = PileType.Hand.GetPile(player).Cards.ToArray();
+            var chooseFiend = new TestCardSelector(); chooseFiend.PrepareToSelect(new[] { 0 });
+            using (CardSelectCmd.UseSelector(chooseFiend))
+                await TimelineEffects.PlayFromOpponent(ctx, player, "2").WaitAsync(TimeSpan.FromSeconds(15));
+            Check(handBeforeFiend.All(card => card.Pile?.Type == PileType.Exhaust)
+                && PileType.Exhaust.GetPile(player).Cards.OfType<FiendFire>().Any()
+                && !PileType.Hand.GetPile(player).Cards.OfType<FiendFire>().Any(),
+                "Fiend Fire exhausts the hand and itself without leaving a stuck playable copy");
+            Check(player.PlayerCombatState.Energy == energyBefore, "Fiend Fire copy spends no additional energy");
+            session.Engine.State.Racers["2"].MarketCards = retainedSnapshot.ToList();
 
             var timelinesOnly = retainedSnapshot.Where(IsTimelinePacket).ToList();
             Check(timelinesOnly.Count >= 2, "the real peer fixture contains timeline cards that must be excluded");
-            peer.MarketCards = timelinesOnly;
+            session.Engine.State.Racers["2"].MarketCards = timelinesOnly;
             int cardsBeforeExcluded = CombatCards(player).Count;
             try
             {
@@ -170,7 +181,7 @@ internal static class NativeTimelineVerification
                 Check(CombatCards(player).Count == cardsBeforeExcluded && player.PlayerCombatState.Energy == energyBefore,
                     "excluding timeline cards creates no ineffective copies or copied-card resource cost");
             }
-            finally { peer.MarketCards = retainedSnapshot.ToList(); }
+            finally { session.Engine.State.Racers["2"].MarketCards = retainedSnapshot.ToList(); }
 
             Godot.GD.Print("[FDZF TIMELINE COMPLETE] Native timeline checks passed using real public card packets.");
             game.GetTree().Quit(0);

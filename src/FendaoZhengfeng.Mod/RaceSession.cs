@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using Godot;
@@ -18,6 +18,7 @@ public sealed class RaceSession : IDisposable
     public INetGameService Transport { get; }
     private bool localVerification;
     public bool IsMock { get; }
+    internal bool NativeOwnsTransport { get; set; }
     public bool IsHost => localVerification || Transport.Type == NetGameType.Host;
     public ulong HostId { get; }
     private readonly string localId;
@@ -88,7 +89,7 @@ public sealed class RaceSession : IDisposable
         var m = new Match { Id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes((Transport.GetRawLobbyIdentifier() ?? "local") + seed)))[..24], Seed = seed };
         int slot = 0;
         foreach (var p in lobby.Players) m.Racers[p.id.ToString(System.Globalization.CultureInfo.InvariantCulture)] = new Racer { Id = p.id.ToString(System.Globalization.CultureInfo.InvariantCulture), Name = $"Player {++slot}" };
-        m.EnabledEffects = rules.Effects.ToHashSet(); m.DebugMode = rules.Debug;
+        m.EnabledEffects = rules.Effects.ToHashSet(); m.DebugMode = rules.Debug; m.Synchronous = rules.Synchronous;
         Engine = new(m); PublicProfiles.Reset(); hello.Add(Transport.NetId);
         if (RaceRuntime.ResumeRequested)
         {
@@ -113,7 +114,7 @@ public sealed class RaceSession : IDisposable
             if (Restored.Value.Run.Players.Single().Character.Id != lobby.LocalPlayer.character.Id) throw new InvalidOperationException(L10n.T("恢复比赛时请选择原来的角色。"));
             Engine = new(Restored.Value.Match);
         }
-        handshake = Catalog.RulesVersion + "|wire:4|" + (Restored == null ? "new:" + Engine.State.Seed : "resume:" + Engine.State.Id + ":" + Engine.State.Revision);
+        handshake = Catalog.RulesVersion + "|wire:6|" + (Engine.State.Synchronous ? "shared|" : "independent|") + (Restored == null ? "new:" + Engine.State.Seed : "resume:" + Engine.State.Id + ":" + Engine.State.Revision);
         Transport.RegisterMessageHandler<RaceMessage>(OnMessage); Transport.Disconnected += OnDisconnected;
         Transport.SetBufferMessages(false);
         if (Transport is INetHostGameService host) foreach (var id in lobby.Players.Select(p => p.id).Where(id => id != Transport.NetId)) host.SetPeerReadyForBroadcasting(id);
@@ -130,13 +131,13 @@ public sealed class RaceSession : IDisposable
         if (IsHost) Broadcast();
     }
     internal void PumpNetwork()
-    { if (!disposed && !RewardPerformance.LegacyPathForVerification) Transport.Update(); }
+    { if (!disposed && !NativeOwnsTransport && !RewardPerformance.LegacyPathForVerification) Transport.Update(); }
     public void Tick()
     {
         if (disposed) return;
-        if (RewardPerformance.LegacyPathForVerification) Transport.Update();
+        if (!NativeOwnsTransport && RewardPerformance.LegacyPathForVerification) Transport.Update();
         foreach (var error in persistence.TakeErrors()) RaceUi.Error(L10n.T("比赛进度保存失败：") + L10n.T(error.Message));
-        Recovery.Tick();
+        if (!Engine.State.Synchronous) Recovery.Tick();
         if (waitingForFullState) RequestFullState();
         if (!flushingClaims && !Recovery.Frozen && !WaitingAtCheckpoint && commandGate.CurrentCount > 0
             && (IsHost || Transport.IsConnected) && Environment.TickCount64 >= nextClaimRetry
@@ -179,7 +180,25 @@ public sealed class RaceSession : IDisposable
         lastPublicProfile = command.Profile; pendingPublicProfile = null; lastTelemetry = Environment.TickCount64;
     }
     public Command New(string kind, string key = "", string effect = "", int amount = 0, string value = "", bool boss = false, Route route = Route.Disrupt)
-        => new(Guid.NewGuid().ToString("N"), LocalId, kind, key, effect, amount, RunManager.Instance.DebugOnlyGetState()?.CurrentActIndex ?? 0, RunManager.Instance.DebugOnlyGetState()?.ActFloor ?? 0, value, boss, route, RunManager.Instance.DebugOnlyGetState()?.Players.Single().Creature.MaxHp ?? 0);
+        => new(Guid.NewGuid().ToString("N"), LocalId, kind, key, effect, amount, RunManager.Instance.DebugOnlyGetState()?.CurrentActIndex ?? 0, RunManager.Instance.DebugOnlyGetState()?.ActFloor ?? 0, value, boss, route, RaceRuntime.LocalPlayer()?.Creature.MaxHp ?? 0);
+    // Shared native hooks execute on every peer. Only the host commits a lifecycle event;
+    // the other peers wait for that exact commit before mutating their native combat.
+    internal async Task SubmitSharedLifecycle(Command command)
+    {
+        if (!Engine.State.Synchronous) { await Submit(command); return; }
+        if (command.Kind is not ("battle_start" or "victory" or "finish" or "consume_opening" or "burrow_emerge" or "burrow_ready" or "burrow_cleanup" or "offer" or "choose" or "offer_reroll" or "boss_shield" or "boss_cleanse" or "claim" or "siphon" or "trade_removed" or "trade_delivered" or "revive" or "status" or "progress" or "profile" or "tail_refill" or "market_buy" or "burrow_use" or "burrow_block_broken"))
+            throw new ArgumentException("Not a shared lifecycle command", nameof(command));
+        if (IsHost) { await Submit(command); return; }
+        long deadline = Environment.TickCount64 + 20000;
+        while (!Engine.State.ProcessedCommands.Contains(command.Id))
+        {
+            if (disposed || !Transport.IsConnected) throw new IOException("Shared combat connection was lost.");
+            if (Environment.TickCount64 >= deadline)
+                throw new TimeoutException("Shared combat event was not confirmed: " + command.Kind);
+            await Task.Delay(20);
+        }
+    }
+
     public async Task Submit(Command command)
     {
         var queueTiming = RewardPerformance.Begin(RewardPerfStage.CommandQueueWait);
@@ -188,7 +207,7 @@ public sealed class RaceSession : IDisposable
         try
         {
             if (disposed) throw new InvalidOperationException(L10n.T("比赛连接已关闭。"));
-            if (!IsHost && !Transport.IsConnected) throw new IOException(L10n.T("比赛通信已断开，请等待房主恢复比赛。"));
+            if (!IsHost && !Transport.IsConnected) throw new IOException(L10n.T("比赛通信已断开，请返回主菜单重新开局。"));
             if (Recovery.Frozen && command.Kind is not ("ack" or "profile")) throw new RuleException(L10n.T("房主正在保存比赛，请稍候。"));
             if (WaitingAtCheckpoint && command.Kind != "ack") throw new RuleException(L10n.T("个人进度已进入共同检查点，请等待房主继续比赛。"));
             if (IsHost) { if(!IsMock && NativeClaimJournal.Contains(this,command.Id)) Recovery.RequireNativeClaimBackup(command,LocalId); Engine.Execute(command); Recovery.ObserveReceipts(); PublishState(); Changed?.Invoke(); RecordCommittedProfile(command); return; }
@@ -214,7 +233,8 @@ public sealed class RaceSession : IDisposable
             else if (message.Kind is "command" or "native_claim" && IsHost)
             {
                 var c = StateJson.Deserialize<Command>(message.Content);
-                if (c.Actor != sender.ToString(System.Globalization.CultureInfo.InvariantCulture)) throw new RuleException(L10n.T("操作身份不匹配。"));
+                if (c.Actor != sender.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    && !(Engine.State.Synchronous && c.Kind == "ack" && c.Value == sender.ToString(System.Globalization.CultureInfo.InvariantCulture))) throw new RuleException(L10n.T("操作身份不匹配。"));
                 try { if (Recovery.Frozen && c.Kind is not ("ack" or "profile")) throw new RuleException(L10n.T("房主正在保存比赛，请稍候。")); if(message.Kind=="native_claim") Recovery.RequireNativeClaimBackup(c,c.Actor); Engine.Execute(c); Recovery.ObserveReceipts(); PublishState(); Changed?.Invoke(); }
                 catch (Exception e) { Transport.SendMessage(new RaceMessage { Kind = "reject", Content = c.Id + "\n" + L10n.T(e.Message) }, sender); }
             }
@@ -333,7 +353,7 @@ public sealed class RaceSession : IDisposable
     private void CommitPause()
     {
         if (checkpointPacket == null || checkpointGate == null) throw new RuleException(L10n.T("个人检查点尚未就绪。"));
-        var bundle = new NativeCheckpoint.Bundle("0.5.3", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket, checkpointAppliedReceipts, "", checkpointRewards);
+        var bundle = new NativeCheckpoint.Bundle("0.5.4", Catalog.RulesVersion, Engine.State.Revision, StateJson.Serialize(Engine.State), checkpointPacket, checkpointAppliedReceipts, "", checkpointRewards);
         Directory.CreateDirectory(Path.GetDirectoryName(ResumePath)!); AtomicWrite(ResumePath, StateJson.Serialize(bundle)); Paused = true;
         RaceUi.Error(L10n.T("共同检查点已保存。可等待房主继续，或全员退出后重建房间并勾选恢复共同检查点。")); RaceUi.Refresh();
     }
@@ -361,6 +381,6 @@ public sealed class RaceSession : IDisposable
         checkpointGate?.TrySetCanceled();
         RewardRecovery.Pending = null;
         try { persistence.Dispose(); } catch (Exception error) { RaceUi.Error(L10n.T("退出前保存进度失败：") + L10n.T(error.Message)); }
-        if (Transport.IsConnected) Transport.Disconnect(NetError.Quit);
+        if (!NativeOwnsTransport && Transport.IsConnected) Transport.Disconnect(NetError.Quit);
     }
 }

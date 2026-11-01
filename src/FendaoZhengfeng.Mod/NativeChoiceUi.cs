@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Assets;
@@ -55,7 +55,7 @@ internal static class NativeChoiceUi
             int index = i == choices.Count ? -1 : i;
             string text = index < 0 ? L10n.T("返回") : choices[index];
             string[] parts = text.Split('\n', 2);
-            var option = new UiOptionReward(RaceRuntime.State!.Players.Single(), parts[0], parts.Length > 1 ? parts[1] : parts[0],
+            var option = new UiOptionReward(RaceRuntime.LocalPlayer()!, parts[0], parts.Length > 1 ? parts[1] : parts[0],
                 index >= 0 && icons != null ? icons[index] : EffectIcons.Get("choice_reward"), () => Finish(index));
             var row = NRewardButton.Create(option, null!);
             row.CustomMinimumSize = new Vector2(540, 96); row.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
@@ -92,21 +92,22 @@ internal static class NativeChoiceUi
 internal sealed class RaceActionReward(Player player, int kind) : Reward(player)
 {
     internal const int SerializedType = 464620;
-    internal bool Available => kind == 1 ? RaceModifier.Active?.CanRecoverSkill == true : RaceSession.Current?.Me.BossPrizes.Count > 0;
+    internal bool Available => kind == 1 ? RaceModifier.ForPlayer(Player)?.CanRecoverSkill == true : RaceRuntime.RacerFor(Player)?.BossPrizes.Count > 0;
     protected override RewardType RewardType => (RewardType)SerializedType;
     public override int RewardsSetIndex => 4;
-    private string Label => kind == 1 ? L10n.T("技艺封存 · 取回1张技能牌") : L10n.T("Boss额外奖励 · 2选1");
+    private string Label => kind == 1 ? L10n.T("技艺封存 · 取回1张技能牌") : L10n.T(RaceSession.Current?.Engine.State.Synchronous == true ? "Boss额外增益" : "Boss额外奖励 · 2选1");
     public override LocString Description => NativeChoiceUi.Text(Label);
     public override bool IsPopulated => true;
     public override void Populate() { }
     public override void MarkContentAsSeen() { }
     public override Control CreateIcon() => NativeChoiceUi.Icon(EffectIcons.Get("choice_reward"));
     public override IEnumerable<IHoverTip> HoverTips => [new HoverTip(NativeChoiceUi.Text(Label), kind == 1
-        ? L10n.F($"从技艺封存暂存的 {RaceModifier.Active?.VaultCount ?? 0} 张技能牌中任选1张取回；保留原升级与耐久。每场胜利最多1次。")
-        : L10n.T("点击进入选择：首杀可选增益或1层诅咒护盾；非首杀可选净化或1层诅咒护盾。与遗物献祭独立。"), EffectIcons.Get("choice_reward"))];
+        ? L10n.F($"从技艺封存暂存的 {RaceModifier.ForPlayer(Player)?.VaultCount ?? 0} 张技能牌中任选1张取回；保留原升级与耐久。每场胜利最多1次。")
+        : L10n.T(RaceSession.Current?.Engine.State.Synchronous == true ? "选择1项额外增益，与遗物奖励或献祭独立。" : "点击进入选择：首杀可选增益或1层诅咒护盾；非首杀可选净化或1层诅咒护盾。与遗物献祭独立。"), EffectIcons.Get("choice_reward"))];
     protected override async Task<bool> OnSelect()
     {
-        if (kind == 1) return await RaceModifier.Active!.RecoverSkill();
+        if (kind == 1) return await RaceModifier.ForPlayer(Player)!.RecoverSkill();
+        if (RaceSession.Current?.Engine.State.Synchronous == true) return await SharedBossRewards.Select(Player);
         var session = RaceSession.Current!;
         var prize = session.Me.BossPrizes.FirstOrDefault(); if (prize == null) return true;
         bool first = prize.EndsWith(":first", StringComparison.Ordinal);

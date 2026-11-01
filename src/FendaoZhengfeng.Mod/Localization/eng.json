@@ -596,5 +596,16 @@
   "整局有效。": "Lasts for the entire run.",
   "按说明中的战斗场次生效。": "Lasts for the number of combats stated above.",
   "\n整局有效。": "\nLasts for the entire run.",
-  "战斗结算未获房主确认。请由房主保存比赛，再邀请原玩家继续；本场未确认的胜利不会发放奖励。": "The host has not confirmed this battle result. Ask the host to save the race, then invite the original players to continue. No rewards will be granted for this unconfirmed victory."
+  "战斗结算未获房主确认。请由房主保存比赛，再邀请原玩家继续；本场未确认的胜利不会发放奖励。": "The host has not confirmed this battle result. Ask the host to save the race, then invite the original players to continue. No rewards will be granted for this unconfirmed victory.",
+  "Boss额外增益": "Boss Bonus Boon",
+  "[分道争锋] 已加载开发预览版 0.5.4，配置位于模组配置中的独立分道争锋条目。": "[Separate Paths] Preview 0.5.4 loaded. Configure it in its separate Mod Configuration entry.",
+  "勾选后可进入对应模式的候选池；同步模式排除诅咒及诅咒对抗效果。禁用优先于保证位。": "Checked effects may appear in the relevant mode. Cooperative mode excludes Curses and opposing Curse effects. Disabled effects override guarantees.",
+  "原版共同选路、共同战斗；只提供增益和自身契约，不赠送开局蜥蜴尾巴。以房主配置为准，下一局生效。": "Native shared routing and combat; Boons and self-applied Contracts only, without a starting Lizard Tail. Host settings apply to the next run.",
+  "同步模式": "Synchronous Mode",
+  "当前没有可交易的队友。": "No teammate is available for trading.",
+  "献祭遗物 · 增益与自身契约3选1": "Sacrifice relic · Choose a Boon or self-applied Contract",
+  "确认购买 · 金币交给原主人，双方下场战斗交接卡牌": "Confirm · Pay the owner; transfer the card at each player’s next combat",
+  "诅咒 · 对手 · 仅异步": "Curse · Opponents · Racing only",
+  "该玩家当前没有可购买的卡牌。": "This player has no purchasable cards.",
+  "选择1项额外增益，与遗物奖励或献祭独立。": "Choose one bonus Boon, independently of the relic reward or sacrifice."
 }

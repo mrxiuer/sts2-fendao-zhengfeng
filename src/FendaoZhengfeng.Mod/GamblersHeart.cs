@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Commands.Builders;
@@ -13,7 +13,7 @@ namespace FendaoZhengfeng.Mod;
 public sealed partial class RaceModifier
 {
     private sealed record CriticalAttack(AttackCommand Command, bool Critical);
-    private readonly List<CriticalAttack> criticalAttacks = [];
+    private List<CriticalAttack> criticalAttacks = [];
     internal int CriticalRolls { get; private set; }
     internal bool LastAttackCritical { get; private set; }
     internal int ActiveCriticalAttacks => criticalAttacks.Count;
@@ -25,7 +25,7 @@ public sealed partial class RaceModifier
         if (IsSuppressed || !Me.Has("gamblers_heart") || !IsGamblerDealer(command.Attacker)
             || !command.DamageProps.HasFlag(ValueProp.Move)) return;
         EndCriticalAttack(command);
-        var random = new StableRandom(S.Engine.State.Seed + ":critical:" + S.LocalId + ":" + Me.ResetCount + ":" + Me.BattleKey + ":" + CriticalRolls++);
+        var random = new StableRandom(S.Engine.State.Seed + ":critical:" + Me.Id + ":" + Me.ResetCount + ":" + Me.BattleKey + ":" + CriticalRolls++);
         LastAttackCritical = random.Next() < (double)Balance.CriticalChance(Me.Effects["gamblers_heart"].Rank);
         criticalAttacks.Add(new(command, LastAttackCritical));
         if (LastAttackCritical) ShowCriticalHit(command.Attacker!);
@@ -69,7 +69,7 @@ internal static class CriticalAttackCleanupPatch
 {
     static void Postfix(AttackCommand __instance, ref Task<AttackCommand> __result)
     {
-        if (RaceRuntime.Live && RaceSession.Current?.Me.Has("gamblers_heart") == true && RaceModifier.Active is { } modifier)
+        if (RaceRuntime.Live && RaceModifier.ForPlayer(__instance.Attacker?.Player ?? __instance.Attacker?.PetOwner) is { } modifier)
             __result = Finish(__result, modifier, __instance);
     }
     private static async Task<AttackCommand> Finish(Task<AttackCommand> pending, RaceModifier modifier, AttackCommand command)

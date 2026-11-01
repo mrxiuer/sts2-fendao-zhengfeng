@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 
 int passed = 0;
 void Test(string name, Action test) { try { test(); passed++; Console.WriteLine("PASS " + name); } catch (Exception e) { Console.Error.WriteLine("FAIL " + name + ": " + e); Environment.ExitCode = 1; } }
@@ -19,7 +19,7 @@ Test("English covers all 65 effect names and rules without changing their source
   Check(text.Text(effect.Name,false)==effect.Name && text.Text(effect.Description,false)==effect.Description);
  }
  Check(StateJson.Serialize(New().State)==state,"translations must not mutate rule state");
- Check(Catalog.RulesVersion=="1.0.0-design.15");
+ Check(Catalog.RulesVersion=="1.0.0-design.16");
 });
 Test("translation format placeholders preserve all variables and native named tokens", () => {
  var text=Translations();
@@ -731,5 +731,41 @@ Test("reward refresh engine persists generations atomically and rejects exhauste
  reloaded.Execute(new("native-claim","a","claim","rrbattle|native"));before=StateJson.Serialize(reloaded.State);bad=false;
  try{reloaded.Execute(new("native-repeat","a","reward_reroll","rrbattle|native"));}catch(RuleException){bad=true;}
  Check(bad && before==StateJson.Serialize(reloaded.State));
+});
+Test("synchronous boss prizes belong to every player and reset consumes only the initiator charge",()=>{
+ var e=New();e.State.Synchronous=true;
+ foreach(var id in new[]{"a","b","c"}) {
+  e.Execute(new("start-"+id,id,"battle_start","boss"));
+  e.Execute(new("win-"+id,id,"victory","boss",Boss:true));
+  Check(e.State.Racers[id].BossPrizes.Single()=="0:first");
+ }
+ Grant(e,"a","r_key");e.State.Racers["a"].ResetCharges=1;
+ e.Execute(new("reset","a","reset_use"));
+ Check(e.State.Racers.Values.All(r=>r.ResetCount==1 && r.ResetPending));
+ Check(e.State.Racers["a"].ResetCharges==0);
+ Check(StateJson.Deserialize<Match>(StateJson.Serialize(e.State)).Synchronous);
+});
+Test("synchronous reset cannot partially rewind a teammate still fighting",()=>{
+ var e=New();e.State.Synchronous=true;Grant(e,"a","r_key");e.State.Racers["a"].ResetCharges=1;
+ e.Execute(new("start","b","battle_start","fight"));var before=StateJson.Serialize(e.State);bool rejected=false;
+ try{e.Execute(new("reset","a","reset_use"));}catch(RuleException){rejected=true;}
+ Check(rejected && before==StateJson.Serialize(e.State));
+});
+Test("shared native receipts remain until every peer applies the owner's mutation",()=>{
+ var e=New();e.State.Synchronous=true;e.State.Racers["a"].Receipts.Add(new("shared-gold","gold","",5));
+ e.Execute(new("ack-a","a","ack","shared-gold",Value:"a"));
+ e.Execute(new("ack-b","a","ack","shared-gold",Value:"b"));
+ Check(e.State.Racers["a"].Receipts.Count==1);
+ e.Execute(new("ack-c","a","ack","shared-gold",Value:"c"));
+ Check(e.State.Racers["a"].Receipts.Count==0 && e.State.ReceiptAcknowledgements.Count==0);
+});
+Test("cooperative mixed rewards exclude curses and retain self contracts",()=>{
+ var e=New();e.State.Synchronous=true;var p=e.State.Racers["a"];
+ for(int i=0;i<50;i++) foreach(bool boss in new[]{false,true}) {
+  var ids=Candidates.Generate(e.State,p,"coop"+i,Route.Mixed,boss);
+  Check(ids.Count>0 && ids.All(id=>Catalog.Get(id).Kind!=EffectKind.Curse && id is not ("adversity_profit" or "retaliation" or "shared_misery")));
+ }
+ var contracts=Candidates.Generate(e.State,p,"self-contract",Route.Contract,false);
+ Check(contracts.All(id=>Catalog.Get(id).Kind==EffectKind.Contract));
 });
 Console.WriteLine($"{passed} checks passed");

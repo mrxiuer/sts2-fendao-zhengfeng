@@ -44,7 +44,7 @@ internal static class CombatEffectDisplay
             }
             entries.Clear(); return;
         }
-        var session = RaceSession.Current!; var player = RaceRuntime.State!.Players.Single(); var modifier = RaceModifier.Active!;
+        var session = RaceSession.Current!; var player = RaceRuntime.LocalPlayer()!; var modifier = RaceModifier.Active!;
         var desired = new HashSet<(Creature, string)>();
         foreach (var id in session.Me.Effects.Keys.Where(id => session.Me.Has(id)))
         {
@@ -138,8 +138,13 @@ internal static class InteractivePowerMarkerPatch
 {
     static void Postfix(NPower __instance)
     {
-        if (__instance.Model is not RaceDisplayPower marker || marker.EffectId is not ("small_light" or "good_connections" or "r_key" or "burrow_sanctuary")) return;
+        // Native NPower enters the tree before its model is assigned.
         __instance.GuiInput += input =>
-        { if (input is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { __instance.AcceptEvent(); RaceUi.Run(() => AdvancedEffects.Click(marker.EffectId)); } };
+        {
+            if (input is not InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) return;
+            if (AccessTools.Field(typeof(NPower), "_model").GetValue(__instance) is not RaceDisplayPower marker
+                || marker.EffectId is not ("small_light" or "good_connections" or "r_key" or "burrow_sanctuary")) return;
+            __instance.AcceptEvent(); RaceUi.Run(() => AdvancedEffects.Click(marker.EffectId));
+        };
     }
 }

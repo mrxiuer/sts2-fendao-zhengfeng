@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Commands;
@@ -80,7 +80,7 @@ public sealed class HeartEchoPower : HeartPower
         get
         {
             var heart = Owner.CombatState?.Enemies.Select(enemy => enemy.Monster).OfType<TowerHeart>().FirstOrDefault();
-            return L10n.F($"正在使用{heart?.EchoDeck.DonorName ?? L10n.T("对手")}牌组的临时副本，剩余{Amount}个玩家回合。第7回合抽牌前恢复自己的各牌堆；新增状态牌保留。对手和永久牌组不受影响。");
+            return L10n.F($"正在使用{heart?.EchoDeck.DonorNameFor(Owner.Player) ?? L10n.T("对手")}牌组的临时副本，剩余{Amount}个玩家回合。第7回合抽牌前恢复自己的各牌堆；新增状态牌保留。对手和永久牌组不受影响。");
         }
     }
 }

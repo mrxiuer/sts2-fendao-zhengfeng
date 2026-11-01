@@ -1,4 +1,4 @@
-﻿param([ValidateSet('Single','Mechanics','Flight','Gambler','PuppetBody','PuppetLife','Giant','Timeline','Charm','Reroll','Burrow','RewardPerformance','RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance','TwinSlime','Formation','Combinations','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','MenuResume','Recovery','RewardRecovery','Economy','Heart','HeartNetwork','Campaign','Advanced','Revival','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[switch]$ResumeOnly,[switch]$EventGold,[switch]$ResetEmptyMap,[ValidateSet("", "Initial", "Rest")][string]$EventPage="",[switch]$RewardBaseline,[switch]$RewardNoPeriodicBackup,[switch]$PendingClaim,[switch]$SaveFailure,[switch]$GrantInProgress,[switch]$ConfirmedClaim,[switch]$EventInProgress)
+﻿param([ValidateSet('Shared','Single','Mechanics','Flight','Gambler','PuppetBody','PuppetLife','Giant','Timeline','Charm','Reroll','Burrow','RewardPerformance','RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance','TwinSlime','Formation','Combinations','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','MenuResume','Recovery','RewardRecovery','Economy','Heart','HeartNetwork','Campaign','Advanced','Revival','Network','Resume','Vanilla','All')][string]$Suite='All',[string]$GameRoot='D:\SteamLibrary\steamapps\common\Slay the Spire 2',[switch]$ResumeOnly,[switch]$EventGold,[switch]$ResetEmptyMap,[ValidateSet("", "Initial", "Rest")][string]$EventPage="",[switch]$RewardBaseline,[switch]$RewardNoPeriodicBackup,[switch]$PendingClaim,[switch]$SaveFailure,[switch]$GrantInProgress,[switch]$ConfirmedClaim,[switch]$EventInProgress)
 $ErrorActionPreference='Stop'
 if($ResumeOnly -and $Suite -notin @('Recovery','RewardRecovery','NewEffectsNetwork','FourPlayers','ResetNetwork','ServiceRecovery','EventRecovery','MenuResume')) {throw 'ResumeOnly requires a host-archive recovery suite.'}
 if($RewardNoPeriodicBackup -and $Suite -notin @('RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance')) {throw 'RewardNoPeriodicBackup requires a reward performance suite.'}
@@ -25,6 +25,7 @@ function Start-VerificationProcess([string]$Role,[bool]$Resume,[bool]$Vanilla=$f
   $launch.CreateNoWindow=$true
   $launch.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
   foreach($argument in @('--headless','--audio-driver','Dummy','--log-file',$logPath,'--max-fps','60','--quit-after','18000')) {$launch.ArgumentList.Add($argument)}
+  if($Suite -eq 'Shared') {$launch.Environment['FDZF_VERIFY_SHARED']='1'}
   $launch.Environment['SteamAppId']='2868840'
   $launch.Environment['SteamGameId']='2868840'
   $launch.Environment['FDZF_NATIVE_VERIFY']='1'
@@ -67,13 +68,14 @@ function Wait-Verification($Records) {
     while(@($Records | Where-Object {!$_.Process.HasExited}).Count -gt 0) {
       if([DateTime]::UtcNow -gt $deadline) {throw 'Native verification timed out.'}
       foreach($record in $Records) {
+        if($record.Process.HasExited -and $record.Process.ExitCode -ne 0) {throw "Native verification process failed: $($record.Log)"}
         if(!$record.Process.HasExited -and (Test-Path -LiteralPath $record.Log)) {
           try {
             $probe=[IO.File]::Open($record.Log,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite)
             $reader=[IO.StreamReader]::new($probe)
             try {$startupLog=$reader.ReadToEnd()} finally {$reader.Dispose()}
           } catch [IO.IOException] {continue}
-          if($startupLog.Contains('Exception thrown when calling mod initializer of type FendaoZhengfeng.Mod.ModEntry') -or $startupLog -match 'Failed to initialize Steam!|turn loop died|ObjectDisposedException|LocException|\[FDZF [A-Z ]+ FAILED\]') {
+          if($startupLog.Contains('Exception thrown when calling mod initializer of type FendaoZhengfeng.Mod.ModEntry') -or $startupLog -match 'Failed to initialize Steam!|turn loop died|ObjectDisposedException|LocException|State divergence detected|State divergence message received|completed with exception|\[FDZF [A-Z ]+ FAILED\]') {
             throw "Native verification failed before completion: $($record.Log)"
           }
         }
@@ -84,13 +86,14 @@ function Wait-Verification($Records) {
       $log=Get-Content -LiteralPath $record.Log -Raw
       $marker=if($Suite -in @('RewardNetworkPerformance','RewardChoicePerformance','RewardRefreshPerformance')) {'[FDZF REWARD NETWORK COMPLETE]'} elseif($Suite -eq 'EventRecovery') {'[FDZF EVENT RECOVERY COMPLETE]'} elseif($Suite -eq 'ServiceRecovery') {'[FDZF SERVICE RECOVERY COMPLETE]'} elseif($Suite -eq 'ResetNetwork') {'[FDZF RESET NETWORK COMPLETE]'} elseif($Suite -eq 'FourPlayers') {'[FDZF FOUR PLAYERS COMPLETE]'} elseif($Suite -eq 'NewEffectsNetwork') {'[FDZF NEW EFFECTS COMPLETE]'} elseif($Suite -eq 'RewardRecovery') {'[FDZF REWARD RECOVERY COMPLETE]'} elseif($Suite -eq 'Recovery') {'[FDZF RECOVERY COMPLETE]'} elseif($record.HeartNetwork) {'[FDZF HEART NETWORK COMPLETE]'} elseif($record.Vanilla) {'[FDZF VANILLA COMPLETE]'} elseif($record.Role -eq 'combinations') {'[FDZF COMBINATIONS COMPLETE]'} elseif($record.Role -eq 'formation') {'[FDZF FORMATION COMPLETE]'} elseif($record.Role -eq 'twin_slime') {'[FDZF TWIN SLIME COMPLETE]'} elseif($record.Role -eq 'reward_performance') {'[FDZF REWARD PERF COMPLETE]'} elseif($record.Role -eq 'burrow') {'[FDZF BURROW COMPLETE]'} elseif($record.Role -eq 'reroll') {'[FDZF REROLL COMPLETE]'} elseif($record.Role -eq 'charm') {'[FDZF CHARM COMPLETE]'} elseif($record.Role -eq 'timeline') {'[FDZF TIMELINE COMPLETE]'} elseif($record.Role -eq 'giant') {'[FDZF GIANT COMPLETE]'} elseif($record.Role -eq 'puppet_life') {'[FDZF PUPPET LIFE COMPLETE]'} elseif($record.Role -eq 'puppet_body') {'[FDZF PUPPET BODY COMPLETE]'} elseif($record.Role -eq 'gambler') {'[FDZF GAMBLER COMPLETE]'} elseif($record.Role -eq 'flight') {'[FDZF FLIGHT COMPLETE]'} elseif($record.Role -eq 'mechanics') {'[FDZF MECHANICS COMPLETE]'} elseif($record.Role -eq 'economy') {'[FDZF ECONOMY COMPLETE]'} elseif($record.Role -eq 'heart') {'[FDZF HEART COMPLETE]'} elseif($record.Role -eq 'campaign') {'[FDZF CAMPAIGN COMPLETE]'} elseif($record.Role -eq 'revival') {'[FDZF REVIVAL COMPLETE]'} elseif($record.Role -eq 'advanced') {'[FDZF ADVANCED COMPLETE]'} elseif($record.Role -eq 'single') {'[FDZF VERIFY COMPLETE]'} elseif($record.Resume) {'[FDZF NETWORK RESUME COMPLETE]'} else {'[FDZF NETWORK COMPLETE]'}
       if($record.Process.ExitCode -ne 0 -or !$log.Contains($marker)) {throw "Verification failed: $($record.Log)"}
-      if($log -match 'LocException|ObjectDisposedException|turn loop died|\[FDZF (?:VERIFY|NETWORK|ADVANCED|CAMPAIGN|REVIVAL|HEART|ECONOMY) FAILED\]') {throw "Native runtime error: $($record.Log)"}
+      if($log -match 'LocException|ObjectDisposedException|turn loop died|State divergence detected|State divergence message received|completed with exception|\[FDZF (?:VERIFY|NETWORK|ADVANCED|CAMPAIGN|REVIVAL|HEART|ECONOMY) FAILED\]') {throw "Native runtime error: $($record.Log)"}
       Write-Output "PASS $($record.Role) resume=$($record.Resume): $($record.Log)"
     }
   } finally {
     foreach($record in $Records) {if(!$record.Process.HasExited) {$record.Process.Kill();[void]$record.Process.WaitForExit(5000)};$record.Process.Dispose()}
   }
 }
+if($Suite -eq 'Shared') {Write-Output 'Starting shared native cooperative verification';$records=@((Start-VerificationProcess 'host' $false),(Start-VerificationProcess 'client' $false));Wait-Verification $records}
 if($Suite -in @('Single','All')) {Write-Output 'Starting native single-process verification';Wait-Verification @((Start-VerificationProcess 'single' $false))}
 if($Suite -in @('Network','All')) {Write-Output 'Starting native two-process ENet verification';$records=@((Start-VerificationProcess 'host' $false),(Start-VerificationProcess 'client' $false));Wait-Verification $records}
 if($Suite -in @('Resume','All')) {Write-Output 'Starting two-process checkpoint restore verification';$records=@((Start-VerificationProcess 'host' $true),(Start-VerificationProcess 'client' $true));Wait-Verification $records}

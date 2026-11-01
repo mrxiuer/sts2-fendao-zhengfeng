@@ -1,8 +1,8 @@
-# Slay the Spire 2: Separate Paths
+﻿# Slay the Spire 2: Separate Paths
 
 A five-act multiplayer race with independent paths, battles, and relic sacrifices. Share the map, advance at your own pace, and be the first to defeat the Heart of the Spire at the end of Act 5.
 
-**0.5.3 friends-only preview.** Fixes Boon expiry across acts and blocked potion clicks; clarifies effect counts and durations. [Download the installation package](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.3-preview).
+**0.5.4 local preview; not yet published to Workshop or GitHub.** Adds native cooperative mode and fixes Slime layout drift, Extra Timeline autoplay, and delayed multiplayer reward delivery. The [latest published package](https://github.com/mrxiuer/sts2-fendao-zhengfeng/releases/tag/v0.5.3-preview) is still 0.5.3 and does not contain these changes.
 
 ## Requirements and installation
 
@@ -18,6 +18,12 @@ Quit the game before updating. Everyone should update together.
 
 Text follows the game's language: Chinese locales use Chinese, and English or other locales use English. Effects, configuration, reward choices, status tooltips, recovery, and debug tools are translated. Reopen configuration and choice screens after changing language; existing temporary dialogs may retain their original text. Players may use different interface languages. Effect IDs, save rules, and the network protocol do not depend on translation.
 
+## Cooperative mode
+
+The host enables Synchronous Mode in Mod Configuration. The next run uses native shared map votes, cooperative combats, multiplayer monster scaling, and teammate inspection. Elite and Boss relics can be kept or sacrificed for Boons and self-applied Double-edged Contracts. Boss bonus rewards select a Boon directly. Curses, Adversity Profit, Retaliation, and Shared Misery are excluded. No starting Lizard Tail is granted; normal acquisition and Tail Refill still work.
+
+All players need the same build and a new run. Independent racing retains its original opposing Curse rules.
+
 ## Race rules
 
 - Players choose adjacent map nodes independently and fight their own combats with solo enemy HP. Entering the same node does not merge battles.
@@ -27,14 +33,6 @@ Text follows the game's language: Chinese locales use Chinese, and English or ot
 - Acts 4 and 5 each contain two consecutive Bosses. Only the last Boss of Act 5 ends the race. Act 4/5 monsters gain 20%/40% HP, damage, and Block, added to R Key reset scaling.
 - The act's first Boss finisher chooses a Boon or Curse Shield; others choose a cleanse or Curse Shield. These rewards are separate from relic sacrifice.
 
-## Saving and recovery
+## Exiting a run
 
-The host uses Save and Quit from the pause menu. Reward and event callbacks must finish before a safe snapshot can be captured; a failed save preserves the previous save. To restore, the original host selects Continue Separate Paths, invites the original roster, and everyone chooses their original character.
-
-Unfinished combat restarts from turn 1 with saved permanent resources; spent items are not refunded. Remaining rewards retain their specific choices and claim records. Host migration and seamless mid-run reconnect are not implemented. Complex events and third-party combinations are not exhaustively tested.
-
-The rules remain `1.0.0-design.14`, protocol `wire:4`. Earlier native verification was performed on Windows; this update's API comparison and compilation were performed against local macOS assemblies. Compilation alone is not a full multiplayer playthrough. See the [Chinese guide](README.md) and [verification record](docs/VERIFICATION.md) for existing gameplay evidence and limitations.
-
-Boons persist across acts for the entire run, except Catch-Up, which lasts for its stated number of combats. Explicit charges and removal conditions, such as puppet death, still apply. The settings list shows all 65 effects and their duration.
-
-0.5.3 removes the race continue, checkpoint restore and save/pause UI. Exited races cannot be continued. Synchronous mode is not included. Existing backup files are retained.
+This preview does not offer race continuation or mid-run reconnect. Boons persist across acts except effects with explicit combat limits, charges, or removal conditions. Rules are `1.0.0-design.16`, protocol `wire:6`. See the [verification record](docs/VERIFICATION.md) for the actual Windows native and two-process test coverage.

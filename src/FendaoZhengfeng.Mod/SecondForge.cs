@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using FendaoZhengfeng.Core;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -19,7 +19,7 @@ internal static class SecondForge
         .Select(value => value is CalculatedVar ? (DynamicVar)AccessTools.Method(typeof(CalculatedVar), "GetBaseVar").Invoke(value, null)! : value)
         .Distinct();
     internal static bool Available(CardModel card) => !card.IsCanonical && RaceRuntime.Live && ModelDb.GetById<CardModel>(card.Id).MaxUpgradeLevel == 1 && card.Owner?.RunState == RaceRuntime.State
-        && RaceSession.Current!.Me.Has("second_forge") && NumericVars(card).Any();
+        && RaceRuntime.RacerFor(card.Owner)?.Has("second_forge") == true && NumericVars(card).Any();
     internal static void Apply(CardModel card, int bonus)
     {
         int previous = Bonus(card);
@@ -34,13 +34,17 @@ internal static class SecondForge
     internal static void Forget(CardModel card) => bonuses.Remove(card);
     internal static void RefreshOwned()
     {
-        if (!RaceRuntime.Live || RaceSession.Current is not { } session || !session.Me.Has("second_forge")) return;
-        var player = RaceRuntime.State!.Players.Single(); var cards = player.Deck.Cards.ToHashSet();
-        if (player.PlayerCombatState != null)
-            foreach (var pile in new[] { MegaCrit.Sts2.Core.Entities.Cards.PileType.Hand, MegaCrit.Sts2.Core.Entities.Cards.PileType.Draw, MegaCrit.Sts2.Core.Entities.Cards.PileType.Discard, MegaCrit.Sts2.Core.Entities.Cards.PileType.Exhaust, MegaCrit.Sts2.Core.Entities.Cards.PileType.Play })
-                cards.UnionWith(pile.GetPile(player).Cards);
-        int desired = 3 + session.Me.Effects["second_forge"].Rank;
-        foreach (var card in cards.Where(card => Bonus(card) > 0 && Bonus(card) < desired)) Apply(card, desired);
+        if (!RaceRuntime.Live) return;
+        foreach (var player in RaceRuntime.State!.Players)
+        {
+            if (RaceRuntime.RacerFor(player) is not { } racer || !racer.Has("second_forge")) continue;
+            var cards = player.Deck.Cards.ToHashSet();
+            if (player.PlayerCombatState != null)
+                foreach (var pile in new[] { PileType.Hand, PileType.Draw, PileType.Discard, PileType.Exhaust, PileType.Play })
+                    cards.UnionWith(pile.GetPile(player).Cards);
+            int desired = 3 + racer.Effects["second_forge"].Rank;
+            foreach (var card in cards.Where(card => Bonus(card) > 0 && Bonus(card) < desired)) Apply(card, desired);
+        }
     }
 }
 [HarmonyPatch(typeof(CardModel), "get_MaxUpgradeLevel")]
@@ -55,7 +59,7 @@ internal static class SecondForgeUpgradePatch
     static bool Prefix(CardModel __instance)
     {
         if (__instance.CurrentUpgradeLevel != 1 || !SecondForge.Available(__instance) || AdvancedEffects.UpgradeBlocked(__instance)) return true;
-        SecondForge.Apply(__instance, 3 + RaceSession.Current!.Me.Effects["second_forge"].Rank); return false;
+        SecondForge.Apply(__instance, 3 + RaceRuntime.RacerFor(__instance.Owner)!.Effects["second_forge"].Rank); return false;
     }
 }
 [HarmonyPatch(typeof(AbstractModel), nameof(AbstractModel.MutableClone))]

@@ -1,4 +1,4 @@
-using System.Threading;
+﻿using System.Threading;
 using FendaoZhengfeng.Core;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Commands;
@@ -27,9 +27,8 @@ internal static class EvilEchoScope
     [ThreadStatic] internal static bool EnterApply;
     [ThreadStatic] internal static bool EnterModify;
     internal static bool NeedsScope(PowerModel power, Creature target, decimal amount, Creature? applier)
-        => power is ITemporaryPower && RaceRuntime.Live && RaceModifier.Active?.IsSuppressed == false
-            && RaceSession.Current?.Me.Has("evil_echo") == true && target.IsEnemy
-            && applier == RaceRuntime.State!.Players.Single().Creature && power.GetTypeForAmount(amount) == PowerType.Debuff;
+        => power is ITemporaryPower && RaceRuntime.Live && RaceModifier.ForPlayer(applier?.Player)?.IsSuppressed == false
+            && RaceRuntime.RacerFor(applier?.Player)?.Has("evil_echo") == true && target.IsEnemy && power.GetTypeForAmount(amount) == PowerType.Debuff;
     internal static bool IsInternal(PowerModel power, Creature target, Creature giver, CardModel? card)
     {
         for (var scope = current.Value; scope != null; scope = scope.Parent)

@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
@@ -19,34 +19,68 @@ namespace FendaoZhengfeng.Mod;
 
 public sealed partial class RaceModifier : ModifierModel
 {
+    protected override void DeepCloneFields()
+    {
+        base.DeepCloneFields();
+        // Native MutableClone uses MemberwiseClone. Every player needs separate mutable containers.
+        resetScaled = new(resetScaled); resetBaseHp = new(resetBaseHp);
+        barbsHits = new(barbsHits); hpLost = new(hpLost); initialEnemies = new(initialEnemies);
+        openingMaxHp = new(openingMaxHp); wear = new(wear); expandedRewards = new(expandedRewards);
+        deckIds = new(deckIds); deferredIds = new(deferredIds); skillVault = new(skillVault);
+        appliedTrades = new(appliedTrades); recoveredBattles = new(recoveredBattles);
+        criticalAttacks = new(criticalAttacks); puppetReceipts = new(puppetReceipts);
+        appliedTimelineReceipts = new(appliedTimelineReceipts);
+        receiptGate = new(1);
+    }
     private RaceSession S => RaceSession.Current ?? throw new InvalidOperationException(L10n.T("分道争锋会话未初始化。"));
-    private Racer Me => S.Me;
-    private Player Player => RunState.Players.Single();
-    public static RaceModifier? Active => RaceRuntime.State?.Modifiers.OfType<RaceModifier>().FirstOrDefault();
+    [SavedProperty] public string OwnerId { get; set; } = "";
+    private Racer Me => RaceRuntime.RacerFor(Player) ?? throw new InvalidOperationException("Effect owner is not part of the active match.");
+    internal Player OwnerPlayer => Player;
+    private Player Player => OwnerId.Length == 0
+        ? RaceRuntime.LocalPlayer(RunState) ?? throw new InvalidOperationException("Local player is not part of the active run.")
+        : RunState.Players.Single(player => player.NetId.ToString(System.Globalization.CultureInfo.InvariantCulture) == OwnerId);
+    internal static RaceModifier? ForPlayer(Player? player)
+    {
+        if (player == null) return null;
+        return RaceRuntime.State?.Modifiers.OfType<RaceModifier>().FirstOrDefault(modifier =>
+            modifier.OwnerId.Length == 0 ? player == RaceRuntime.LocalPlayer() : modifier.OwnerId == player.NetId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+    public static RaceModifier? Active => ForPlayer(RaceRuntime.LocalPlayer());
+    private Command ReceiptAcknowledgement(string receiptId)
+        => S.New("ack", receiptId, value: S.LocalId) with { Actor = Me.Id };
+    internal Command LifecycleCommand(string kind, string key, string value = "", bool boss = false, int amount = 0)
+    {
+        var command = S.New(kind, key, value: value, boss: boss, amount: amount) with { Actor = Me.Id, MaxHealth = Player.Creature.MaxHp };
+        if (!S.Engine.State.Synchronous) return command;
+        string identity = StateJson.Serialize(new[] { S.Engine.State.Id, Me.Id, Me.ResetCount.ToString(System.Globalization.CultureInfo.InvariantCulture), kind, key, amount.ToString(System.Globalization.CultureInfo.InvariantCulture) });
+        return command with { Id = "shared:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(identity))) };
+    }
     public override MegaCrit.Sts2.Core.Localization.LocString Title => new(ModEntry.Id, "mode.title");
     public override MegaCrit.Sts2.Core.Localization.LocString Description => new(ModEntry.Id, "mode.description");
     public int Turn { get; private set; }
     public int ManualCards { get; private set; }
     public int Dice { get; private set; } = 100;
+    // Campaign/R-key scaling belongs to the shared encounter, not to each player's modifier.
+    private bool OwnsEncounterScaling => !S.Engine.State.Synchronous || Player.NetId == RunState.Players.Min(player => player.NetId);
     internal bool IsOpeningEnemy(Creature creature) => initialEnemies.Contains(creature);
     internal int RemainingEnemyBudget(Creature creature) => Math.Max(0, (int)Math.Ceiling(openingMaxHp.GetValueOrDefault(creature, creature.MaxHp) * Math.Max(0.2, 0.4 - 0.05 * (N("hard_shell") - 1))) - hpLost.GetValueOrDefault(creature));
-    private readonly HashSet<Creature> resetScaled = [];
-    private readonly Dictionary<Creature, int> resetBaseHp = [];
+    private HashSet<Creature> resetScaled = [];
+    private Dictionary<Creature, int> resetBaseHp = [];
     internal int ResetBaseHp(Creature creature) => resetBaseHp.GetValueOrDefault(creature, creature.MaxHp);
     public override async Task AfterCreatureAddedToCombat(Creature creature)
     {
-        if (creature.IsEnemy && FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) > 1 && resetScaled.Add(creature))
+        if (creature.IsEnemy && OwnsEncounterScaling && FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) > 1 && resetScaled.Add(creature))
         { resetBaseHp[creature] = creature.MaxHp; await CreatureCmd.SetMaxAndCurrentHp(creature, Math.Ceiling(creature.MaxHp * (FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount)))); }
     }
     private bool firstDraw;
     private bool suppressPropagation;
     private bool reflecting;
-    private readonly HashSet<(CardModel, Creature)> barbsHits = [];
-    private readonly Dictionary<Creature, int> hpLost = [];
-    private readonly HashSet<Creature> initialEnemies = [];
-    private readonly Dictionary<Creature, int> openingMaxHp = [];
-    private readonly Dictionary<CardModel, int> wear = [];
-    private readonly HashSet<Reward> expandedRewards = [];
+    private HashSet<(CardModel, Creature)> barbsHits = [];
+    private Dictionary<Creature, int> hpLost = [];
+    private HashSet<Creature> initialEnemies = [];
+    private Dictionary<Creature, int> openingMaxHp = [];
+    private Dictionary<CardModel, int> wear = [];
+    private HashSet<Reward> expandedRewards = [];
     private string deferredWear = "[]";
     [SavedProperty] public string OpeningBattleKey { get; set; } = "";
     [SavedProperty] public string OpeningReceiptId { get; set; } = "";
@@ -60,7 +94,7 @@ public sealed partial class RaceModifier : ModifierModel
     [SavedProperty]
     public string WearJson
     {
-        get => IsCanonical ? "[]" : StateJson.Serialize(Player.Deck.Cards.Select(c => wear.GetValueOrDefault(c, 8)).ToList());
+        get => IsCanonical ? "[]" : StateJson.Serialize(Player.Deck.Cards.Select(c => CardWear(c)).ToList());
         set => deferredWear = value;
     }
     protected override void AfterRunLoaded(RunState runState) { wear.Clear(); var values = StateJson.Deserialize<List<int>>(deferredWear); for (int i = 0; i < Math.Min(values.Count, Player.Deck.Cards.Count); i++) wear[Player.Deck.Cards[i]] = values[i]; LoadExtraState(); }
@@ -74,7 +108,7 @@ public sealed partial class RaceModifier : ModifierModel
         Turn = 0; ManualCards = 0; firstDraw = false; barbsHits.Clear(); hpLost.Clear(); initialEnemies.Clear(); openingMaxHp.Clear();
         string key = RaceRuntime.RoomKey;
         replayOpening = RaceRuntime.ReplayingBattleKey == key && Me.InBattle;
-        await S.Submit(S.New("battle_start", key));
+        await S.SubmitSharedLifecycle(LifecycleCommand("battle_start", key));
         await BeforeAdvancedCombat();
         await BeforePuppetCombat();
         var state = Player.Creature.CombatState ?? throw new InvalidOperationException(L10n.T("战斗未创建。"));
@@ -91,6 +125,11 @@ public sealed partial class RaceModifier : ModifierModel
         }
         await TierOpening();
         await UpdateMaxHp();
+        if (S.Engine.State.Synchronous)
+        {
+            await S.SubmitSharedLifecycle(LifecycleCommand("consume_opening", key));
+            return;
+        }
         if (!Me.UsedServices.Contains("opening:" + key))
         {
             var opening = S.New("consume_opening", key);
@@ -105,7 +144,7 @@ public sealed partial class RaceModifier : ModifierModel
     public override async Task AfterEnergyResetLate(Player player)
     {
         if (player != Player) return; ResetTierTurn(); Turn++; ManualCards = 0; firstDraw = false; hpLost.Clear(); RefreshHandCosts();
-        if (N("fortune_dice") > 0) { int min = Math.Max(50, 80 - 5 * (N("fortune_dice") - 1)); var r = new StableRandom(S.Engine.State.Seed + ":" + S.LocalId + ":" + Me.BattleKey + ":" + Turn); Dice = min + (int)(r.Next() * (111 - min)); } else Dice = 100;
+        if (N("fortune_dice") > 0) { int min = Math.Max(50, 80 - 5 * (N("fortune_dice") - 1)); var r = new StableRandom(S.Engine.State.Seed + ":" + Me.Id + ":" + Me.BattleKey + ":" + Turn); Dice = min + (int)(r.Next() * (111 - min)); } else Dice = 100;
         if (Me.Has("borrowed_time")) { await PlayerCmd.GainEnergy(1, player); await Power<DoomPower>(player.Creature, 3); }
         if (Turn == 1)
         {
@@ -114,7 +153,7 @@ public sealed partial class RaceModifier : ModifierModel
             if (replayOpening && OpeningBattleKey == Me.BattleKey)
             {
                 foreach (var receipt in Me.Receipts.Where(receipt => receipt.Id.StartsWith(OpeningReceiptId + ":", StringComparison.Ordinal)).ToList())
-                    await S.Submit(S.New("ack", receipt.Id));
+                    await S.Submit(ReceiptAcknowledgement(receipt.Id));
                 await PlayerCmd.GainEnergy(OpeningEnergy, Player);
                 foreach (string id in StateJson.Deserialize<string[]>(OpeningStatuses))
                 {
@@ -146,7 +185,7 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override async Task AfterCardDrawn(PlayerChoiceContext ctx, CardModel card, bool fromHandDraw)
     {
-        if (firstDraw || Turn != 1 || !fromHandDraw || N("clutter") == 0) return;
+        if (card.Owner != Player || firstDraw || Turn != 1 || !fromHandDraw || N("clutter") == 0) return;
         // Insert after the normal hand-draw batch, not after its first card.
         firstDraw = true; await Task.CompletedTask;
     }
@@ -163,14 +202,14 @@ public sealed partial class RaceModifier : ModifierModel
     public override decimal ModifyDamageMultiplicative(Creature? target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource, CardPlay? cardPlay)
     {
         decimal multiplier = dealer == Player.Creature && cardSource?.Type == CardType.Attack ? (decimal)(1 + Me.Growth) * Dice / 100m
-            : dealer?.IsEnemy == true ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1m;
+            : dealer?.IsEnemy == true && OwnsEncounterScaling ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1m;
         if (target == Player.Creature && Me.Has("flight_wings") && props.HasFlag(ValueProp.Move))
             multiplier *= Balance.FlightReceivedRatio(Me.Effects["flight_wings"].Rank);
         multiplier *= GamblerDamageMultiplier(target, props, dealer, cardSource, cardPlay);
         return multiplier;
     }
     public override decimal ModifyBlockMultiplicative(Creature target, decimal block, ValueProp props, CardModel? cardSource, CardPlay? cardPlay)
-        => (target == Player.Creature ? (Me.Has("all_in") && Turn == 1 ? 0 : (decimal)(1 + Me.Growth)) : target.IsEnemy ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1) * PuppetBlockRatio(target, block, props, cardSource, cardPlay);
+        => (target == Player.Creature ? (Me.Has("all_in") && Turn == 1 ? 0 : (decimal)(1 + Me.Growth)) : target.IsEnemy && OwnsEncounterScaling ? FiveActCampaign.ExtraMonsterMultiplier(RunState.CurrentActIndex, Me.ResetCount) : 1) * PuppetBlockRatio(target, block, props, cardSource, cardPlay);
     public override decimal ModifyHpLostAfterOstyLate(Creature target, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource)
     {
         if (initialEnemies.Contains(target) && N("hard_shell") > 0 && Turn <= 3)
@@ -194,6 +233,7 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override Task BeforeCardPlayed(CardPlay play)
     {
+        if (play.Player != Player) return Task.CompletedTask;
         FlightWings.RetargetCard(play);
         TierBeforePlay(play);
         if (play.IsFirstInSeries) barbsHits.RemoveWhere(hit => hit.Item1 == play.Card);
@@ -207,7 +247,7 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override bool TryModifyEnergyCostInCombatLate(CardModel card, decimal originalCost, out decimal modifiedCost)
     {
-        bool applies = Me.Has("bitter_sweet") && ManualCards == 0 && card.Owner == Player;
+        bool applies = RaceRuntime.Live && RaceSession.Current != null && card.Owner == Player && Me.Has("bitter_sweet") && ManualCards == 0;
         // The native hook consumes the out value even when the method returns false.
         modifiedCost = applies ? originalCost * 2 : originalCost;
         return applies;
@@ -220,11 +260,11 @@ public sealed partial class RaceModifier : ModifierModel
         => Me.Has("bitter_sweet") && ManualCards == 2 && card.Owner == Player && !CardPlayScope.IsAutomatic(card) ? playCount + 1 + (ShouldEcho(card) ? 1 : 0) : playCount + (ShouldEcho(card) ? 1 : 0);
     public override async Task AfterCardPlayedLate(PlayerChoiceContext ctx, CardPlay play)
     {
-        if (!play.IsLastInSeries || play.IsAutoPlay) return;
+        if (play.Player != Player || !play.IsLastInSeries || play.IsAutoPlay) return;
         await TierAfterPlay(ctx, play);
         var original = play.Card.DeckVersion;
         if (Me.Has("bloom_decay") && original != null && original.Type is not (CardType.Status or CardType.Curse))
-        { wear[original] = Math.Max(0, wear.GetValueOrDefault(original, 8) - 1); }
+        { wear[original] = Math.Max(0, CardWear(original) - 1); }
         await Task.CompletedTask;
     }
     private CombatRoom? settlingVictoryRoom;
@@ -244,7 +284,7 @@ public sealed partial class RaceModifier : ModifierModel
             // Abort this native end-combat invocation. Returning normally here
             // would grant rewards for an unconfirmed win. Move the UI only after
             // the failing hook unwinds, using the native error/menu flow.
-            var message = new IOException(L10n.T("战斗结算未获房主确认。请由房主保存比赛，再邀请原玩家继续；本场未确认的胜利不会发放奖励。"), error);
+            var message = new IOException(L10n.T("战斗结算未获房主确认，已结束本局。请重新开局；未确认的胜利不会发放奖励。"), error);
             Godot.Callable.From(() => RaceUi.Run(() => ShowVictoryFailure(message))).CallDeferred();
             throw;
         }
@@ -260,19 +300,19 @@ public sealed partial class RaceModifier : ModifierModel
     }
     private async Task CompleteVictoryCore(CombatRoom room, RaceSession session)
     {
-        var victory = session.New("victory", Me.BattleKey, value: room.RoomType.ToString(), boss: room.RoomType == RoomType.Boss && FiveActCampaign.IsFinalBoss(RunState));
-        try { await session.Submit(victory); }
+        var victory = LifecycleCommand("victory", Me.BattleKey, value: room.RoomType.ToString(), boss: room.RoomType == RoomType.Boss && FiveActCampaign.IsFinalBoss(RunState));
+        try { await session.SubmitSharedLifecycle(victory); }
         catch (TimeoutException) when (!session.IsHost && session.Transport.IsConnected)
         {
             // Reuse the command ID: a lost acknowledgement must not count a win twice.
             session.Transport.SendMessage(new RaceMessage { Kind = "state_request" }, session.HostId);
-            await session.Submit(victory);
+            await session.SubmitSharedLifecycle(victory);
         }
         resetScaled.Clear();
         if (room.RoomType.ToString() == "Boss" && RunState.CurrentActIndex == RunState.Acts.Count - 1)
         {
             var finalPoint = RunState.Map.SecondBossMapPoint ?? RunState.Map.BossMapPoint;
-            if (RunState.CurrentMapCoord == finalPoint.coord) await S.Submit(S.New("finish"));
+            if (RunState.CurrentMapCoord == finalPoint.coord) await S.SubmitSharedLifecycle(LifecycleCommand("finish", Me.BattleKey));
         }
         // The native SaveRun(completedRoom) boundary takes the post-victory
         // snapshot once the room has actually been marked pre-finished.
@@ -280,6 +320,7 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override async Task BeforeCombatRewardOffered(RewardsSet rewards, CombatRoom room)
     {
+        if (rewards.Player != Player) return;
         RaceRuntime.RewardRoom = room; RaceRuntime.CombatRewards = rewards;
         if (RewardRecovery.IsRestored(rewards)) return;
         await AddExpeditionRewards(rewards);
@@ -289,9 +330,14 @@ public sealed partial class RaceModifier : ModifierModel
     }
     public override async Task AfterRoomEntered(AbstractRoom room)
     {
-        if (!RaceRuntime.LoadingSavedRoom || !RaceRuntime.RestoringCapturedRoom) await RaceRuntime.NodeChanged();
-        await S.Submit(S.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(RunState)) });
-        await S.Submit(S.New("progress", amount: Player.Creature.CurrentHp, value: room.RoomType.ToString()));
+        // Local telemetry is emitted once per peer; shared room hooks still update every owner.
+        if (Player == RaceRuntime.LocalPlayer(RunState))
+        {
+            if (!RaceRuntime.LoadingSavedRoom || !RaceRuntime.RestoringCapturedRoom) await RaceRuntime.NodeChanged();
+            await S.Submit(S.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(RunState)) });
+        }
+        await S.SubmitSharedLifecycle(LifecycleCommand("progress", RaceRuntime.RoomKey,
+            amount: Player.Creature.CurrentHp, value: room.RoomType.ToString()));
         await ApplyReceipts(Context(), false); RaceRuntime.Checkpoint(); RaceUi.Refresh();
     }
     public override bool TryModifyRewardsLate(Player player, List<Reward> rewards, AbstractRoom? room)
@@ -301,11 +347,13 @@ public sealed partial class RaceModifier : ModifierModel
         var options = (CardCreationOptions)HarmonyLib.AccessTools.PropertyGetter(typeof(CardReward), "RerollOptions").Invoke(original, null)!;
         rewards.Add(new CardReward(options, 3, Player)); return true;
     }
+    [SavedProperty] public int RevivalEventSequence { get; set; }
+    [SavedProperty] public int PropagatedStatusSequence { get; set; }
     internal async Task RecordRevival(Creature creature)
     {
         if (creature != Player.Creature || creature.CurrentHp <= 0 || !creature.IsAlive) return;
         // Record every successful native revival, even before this boon is owned.
-        await S.Submit(S.New("revive"));
+        await S.SubmitSharedLifecycle(LifecycleCommand("revive", Me.BattleKey + ":revive:" + ++RevivalEventSequence));
         await UpdateMaxHp(); RaceRuntime.Checkpoint(); RaceUi.Refresh();
     }
     public async Task UpdateMaxHp()
@@ -317,7 +365,7 @@ public sealed partial class RaceModifier : ModifierModel
         AppliedMaxHpBonus = Math.Max(0, target + SmallLightLoss - (int)basis);
         if (target != Player.Creature.MaxHp) await CreatureCmd.SetMaxHp(Player.Creature, target);
     }
-    private readonly SemaphoreSlim receiptGate = new(1);
+    private SemaphoreSlim receiptGate = new(1);
     public async Task ApplyReceipts(PlayerChoiceContext ctx, bool inCombat, bool monetaryOnly = false, bool puppetOnly = false)
     {
         await receiptGate.WaitAsync();
@@ -329,7 +377,7 @@ public sealed partial class RaceModifier : ModifierModel
         {
             // Reward-set replay owns these receipts; a missing visible set is not success.
             if (r.Kind == "reroll_native") continue;
-            if (S.ReceiptApplied(r.Id)) { await S.Submit(S.New("ack", r.Id)); continue; }
+            if (S.ReceiptApplied(r.Id)) { await S.Submit(ReceiptAcknowledgement(r.Id)); continue; }
             if (puppetOnly && r.Kind is not ("puppet_create" or "puppet_reinforce")) continue;
             if (monetaryOnly && r.Kind is not ("gold" or "spend_gold")) continue;
             if ((r.Kind is "energy" or "status") && !inCombat) continue;
@@ -360,7 +408,7 @@ public sealed partial class RaceModifier : ModifierModel
                     case "restore_skills": await RestoreSkills(); break;
                     case "repair": case "restore_deck": await Repair(); break;
                 }
-                S.MarkReceiptApplied(r.Id); await S.Submit(S.New("ack", r.Id));
+                S.MarkReceiptApplied(r.Id); await S.Submit(ReceiptAcknowledgement(r.Id));
             }
             finally { suppressPropagation = false; }
         }
@@ -368,13 +416,15 @@ public sealed partial class RaceModifier : ModifierModel
     public bool IsSuppressed => suppressPropagation;
     public override async Task AfterCardGeneratedForCombat(CardModel card, Player? creator)
     {
-        if (suppressPropagation || creator != null || card.Type != CardType.Status || card is ClutterCard or WitheredCard || !Me.Has("shared_misery")) return;
-        await S.Submit(S.New("status", amount: 1, value: card.Id.ToString()));
+        if (card.Owner != Player || suppressPropagation || creator != null || card.Type != CardType.Status || card is ClutterCard or WitheredCard || !Me.Has("shared_misery")) return;
+        await S.SubmitSharedLifecycle(LifecycleCommand("status", Me.BattleKey + ":status:" + ++PropagatedStatusSequence, amount: 1, value: card.Id.ToString()));
     }
     public override async Task AfterCardChangedPiles(CardModel card, PileType oldPileType, AbstractModel? clonedBy)
     {
+        if (card.Owner != Player) return;
+        if (S.Engine.State.Synchronous && card.Pile?.Type == PileType.Deck) CardIdentity(card);
         if (!suppressPropagation && Me.Has("bloom_decay") && card is not WitheredCard && card.DeckVersion is { } original
-            && wear.GetValueOrDefault(original, 8) == 0 && card.Pile?.Type is PileType.Discard or PileType.Draw or PileType.Hand)
+            && CardWear(original) == 0 && card.Pile?.Type is PileType.Discard or PileType.Draw or PileType.Hand)
         {
             suppressPropagation = true;
             try { var wilted = Player.Creature.CombatState!.CreateCard<WitheredCard>(Player); wilted.DeckVersion = original; wilted.OriginalPacket = NativeCheckpoint.EncodeCard(original); await CardCmd.Transform(card, wilted); }
@@ -407,7 +457,7 @@ public sealed partial class RaceModifier : ModifierModel
         suppressPropagation = true;
         try
         {
-            foreach (var card in Player.Deck.Cards.Where(c => wear.GetValueOrDefault(c, 8) <= 0 && !IsReserved(c)).ToList())
+            foreach (var card in Player.Deck.Cards.Where(c => CardWear(c) <= 0 && !IsReserved(c)).ToList())
             { var replacement = RunState.CreateCard<WitheredCard>(Player); replacement.OriginalPacket = NativeCheckpoint.EncodeCard(card); var result = await CardCmd.Transform(card, replacement); if (result?.success == true) wear.Remove(card); }
         }
         finally { suppressPropagation = false; }
@@ -416,7 +466,7 @@ public sealed partial class RaceModifier : ModifierModel
     public async Task Repair()
     {
         suppressPropagation = true;
-        try { foreach (var card in Player.Deck.Cards.OfType<WitheredCard>().ToList()) await CardCmd.Transform(card, NativeCheckpoint.DecodeCard(card.OriginalPacket, RunState, Player)); wear.Clear(); }
+        try { foreach (var card in Player.Deck.Cards.OfType<WitheredCard>().ToList()) await CardCmd.Transform(card, NativeCheckpoint.DecodeCard(card.OriginalPacket, RunState, Player)); wear.Clear(); foreach (var repaired in Player.Deck.Cards) SharedCardWear.Write(repaired, 8); }
         finally { suppressPropagation = false; }
     }
 }

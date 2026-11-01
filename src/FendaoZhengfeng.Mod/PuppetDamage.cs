@@ -45,7 +45,7 @@ internal static class PuppetDirectDamagePatch
     {
         if (PuppetDamageScope.EnterOriginal) { PuppetDamageScope.EnterOriginal = false; return true; }
         if (targets == null) return true;
-        if (PuppetDamageScope.Current.Value == null && (!RaceRuntime.Live || PuppetFollower.Find(RaceRuntime.State!.Players.Single()) == null)) return true;
+        if (PuppetDamageScope.Current.Value == null && (!RaceRuntime.Live || !RaceRuntime.State!.Players.Any(player => PuppetFollower.Find(player) != null))) return true;
         var list = targets.ToArray();
         if (PuppetDamageScope.Current.Value == null && !list.Any(target => target.Monster is SubstitutePuppet || PuppetFollower.AttackGuard(target, props) != null)) return true;
         __result = PuppetDamageScope.Damage(choiceContext, list, amount, props, dealer, cardSource, cardPlay); return false;

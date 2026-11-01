@@ -1,4 +1,4 @@
-﻿using Environment = System.Environment;
+using Environment = System.Environment;
 using MegaCrit.Sts2.Core.Combat;
 using FendaoZhengfeng.Core;
 using Godot;
@@ -151,6 +151,22 @@ internal static class NativeFormationVerification
             for (int pass = 0; pass < 5; pass++) FriendlyFormation.Reflow(room.CreatureNodes);
             float repeatedDrift = expectedNodes.Select((node, index) => node.GlobalPosition.DistanceTo(stablePositions[index])).Max();
             check(repeatedDrift < 0.5f, $"repeating formation layout does not drift: {repeatedDrift:0.000} units");
+            int animationSignature = FriendlyFormation.SizeSignature(room);
+            var animatedNode = expectedNodes.First();
+            Vector2 originalVisualScale = animatedNode.Visuals.Scale;
+            Vector2 originalPosition = animatedNode.GlobalPosition;
+            try
+            {
+                animatedNode.Visuals.Scale *= new Vector2(1.12f, 0.88f);
+                animatedNode.GlobalPosition += new Vector2(30, -8);
+                check(FriendlyFormation.SizeSignature(room) == animationSignature,
+                    "attack movement and squash/stretch do not invalidate the formation layout");
+            }
+            finally
+            {
+                animatedNode.Visuals.Scale = originalVisualScale;
+                animatedNode.GlobalPosition = originalPosition;
+            }
             int previousSignature = FriendlyFormation.SizeSignature(room);
             await PowerCmd.Apply<ArtifactPower>(context, pair.Second, 1, null, null);
             await WaitUntil(() => FriendlyFormation.SizeSignature(room) != previousSignature,

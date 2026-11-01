@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Runtime.CompilerServices;
 using Godot;
 using HarmonyLib;
@@ -30,6 +30,23 @@ public static class RaceRuntime
     internal static RewardsSet? CombatRewards { get; set; }
     public static CardPlay? CurrentCardPlay { get; set; }
     public static RunState? State => RunManager.Instance.DebugOnlyGetState();
+    // Independent sessions use native player 1; shared sessions retain Steam player IDs.
+    internal static MegaCrit.Sts2.Core.Entities.Players.Player? LocalPlayer(RunState? run = null)
+    {
+        run ??= State;
+        if (run == null || RaceSession.Current is not { } session) return null;
+        return session.Engine.State.Synchronous
+            ? run.Players.FirstOrDefault(player => player.NetId.ToString(System.Globalization.CultureInfo.InvariantCulture) == session.LocalId)
+            : run.Players.Count == 1 ? run.Players[0] : null;
+    }
+    internal static Racer? RacerFor(MegaCrit.Sts2.Core.Entities.Players.Player? player)
+    {
+        if (player == null || RaceSession.Current is not { } session || State?.Players.Contains(player) != true) return null;
+        return session.Engine.State.Synchronous
+            ? session.Engine.State.Racers.GetValueOrDefault(player.NetId.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            : player == LocalPlayer() ? session.Me : null;
+    }
+
     private sealed record RestoredRoomIdentity(string Key);
     private static readonly ConditionalWeakTable<AbstractRoom, RestoredRoomIdentity> restoredRoomKeys = new();
     private static RunState? restoringRun;
@@ -98,7 +115,23 @@ public static class RaceRuntime
                 finally { LoadingSavedRoom = false; RestoringCapturedRoom = false; RestoringParentEvent = false; }
                 return restored.Run;
             }
-            var list = modifiers.Where(m => m is not RaceModifier).ToList(); list.Add(ModelDb.Modifier<RaceModifier>().ToMutable());
+            var list = modifiers.Where(m => m is not RaceModifier).ToList();
+            if (session.Engine.State.Synchronous)
+            {
+                foreach (var participant in lobby.Players.OrderBy(player => player.id))
+                {
+                    var modifier = (RaceModifier)ModelDb.Modifier<RaceModifier>().ToMutable();
+                    modifier.OwnerId = participant.id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    list.Add(modifier);
+                }
+                session.NativeOwnsTransport = true;
+                StartRacePatch.NativeCall = true;
+                Task<RunState> shared;
+                try { shared = game.StartNewMultiplayerRun(lobby, false, acts, list, seed, ascension, null); }
+                finally { StartRacePatch.NativeCall = false; }
+                return await shared;
+            }
+            list.Add(ModelDb.Modifier<RaceModifier>().ToMutable());
             // The built-in singleplayer service intentionally uses player id 1. Real lobby identities remain in RaceSession.
             var result = await game.StartNewSingleplayerRun(lobby.LocalPlayer.character, false, acts, list, seed, lobby.GameMode, ascension);
             return result;
@@ -138,7 +171,7 @@ public static class RaceRuntime
     internal static void ResetLocalTracking() { rewardIds.Clear(); rewardSequence = 0; RewardRoom = null; CombatRewards = null; RewardRecovery.Pending = null; lastNode = ""; }
     public static void Checkpoint()
     {
-        if (!Live || RaceSession.Current?.IsMock == true) return;
+        if (!Live || RaceSession.Current?.IsMock == true || RaceSession.Current?.Engine.State.Synchronous == true) return;
         try
         {
             var s = RaceSession.Current!; var snapshot = s.Recovery.SendSnapshot();
@@ -223,8 +256,8 @@ internal static class StartRacePatch
 [HarmonyPatch(typeof(RunManager), nameof(RunManager.FinalizeStartingRelics))]
 internal static class StartingTailPatch
 {
-    static void Postfix(ref Task __result) { if (RaceRuntime.Live) __result = After(__result); }
-    static async Task After(Task original) { await original; var p = RaceRuntime.State!.Players.Single(); if (!p.Relics.Any(r => r is MegaCrit.Sts2.Core.Models.Relics.LizardTail)) await MegaCrit.Sts2.Core.Commands.RelicCmd.Obtain<MegaCrit.Sts2.Core.Models.Relics.LizardTail>(p); }
+    static void Postfix(ref Task __result) { if (RaceRuntime.Live && RaceSession.Current?.Engine.State.Synchronous == false) __result = After(__result); }
+    static async Task After(Task original) { await original; foreach (var p in RaceRuntime.State!.Players) if (!p.Relics.Any(r => r is MegaCrit.Sts2.Core.Models.Relics.LizardTail)) await MegaCrit.Sts2.Core.Commands.RelicCmd.Obtain<MegaCrit.Sts2.Core.Models.Relics.LizardTail>(p); }
 }
 
 [HarmonyPatch(typeof(RunManager), nameof(RunManager.WinRun))]

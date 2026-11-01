@@ -26,9 +26,15 @@ internal static class TimelineEffects
             return;
         }
 
-        // Freeze the reducer's real public packet list before opening any asynchronous picker.
-        // In particular, do not query live peer connectivity: a disconnected racer's last snapshot is valid.
-        var snapshots = TimelineRules.OpponentSnapshots(session.Engine.State, session.LocalId);
+        // Freeze before any picker. Shared combat has authoritative native decks on every peer;
+        // independent races retain the opponent's last public packet after a disconnect.
+        IReadOnlyList<TimelineOpponentSnapshot> snapshots = session.Engine.State.Synchronous
+            ? run.Players.Where(other => other != player).OrderBy(other => other.NetId)
+                .Select(other => new TimelineOpponentSnapshot(RaceRuntime.RacerFor(other)!.Id, RaceRuntime.RacerFor(other)!.Name,
+                    other.Deck.Cards.Select((card, index) => new MarketCard(index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        NativeCheckpoint.EncodeCard(card), card.Title)).ToArray()))
+                .Where(snapshot => snapshot.Cards.Count > 0).ToArray()
+            : TimelineRules.OpponentSnapshots(session.Engine.State, RaceRuntime.RacerFor(player)?.Id ?? session.LocalId);
         if (snapshots.Count == 0)
         {
             RaceUi.Notify(L10n.T("对手的牌组尚未同步，暂时无法复制。"));
@@ -43,11 +49,11 @@ internal static class TimelineEffects
         }
         else
         {
-            int selectedIndex = await RaceUi.Choose(
+            int selectedIndex = await SharedChoice.Choose(player, snapshots.Count, () => RaceUi.Choose(
                 L10n.T("额外时间线 · 选择一名对手"),
                 snapshots.Select(snapshot =>
                     L10n.F($"{DisplayName(snapshot)}\n牌组：{snapshot.Cards.Count}张"))
-                    .ToArray());
+                    .ToArray()), ctx);
             if (selectedIndex < 0 || selectedIndex >= snapshots.Count) return;
             source = snapshots[selectedIndex];
         }
@@ -94,15 +100,14 @@ internal static class TimelineEffects
             bool shouldCleanCopy = true;
             try
             {
-                var added = await CardPileCmd.AddGeneratedCardToCombat(copy, PileType.Hand, player);
+                var added = await CardPileCmd.AddGeneratedCardToCombat(copy, PileType.Play, player);
                 if (!added.success) return;
-
-                var targetSelection = await SelectTarget(copy, player);
-                if (!targetSelection.Continue) return;
 
                 // CardCmd.AutoPlay is the native free-play path: it spends no energy or stars and
                 // preserves the game's X-cost, target, pile and other special-card behavior.
-                await CardCmd.AutoPlay(ctx, copy, targetSelection.Target, AutoPlayType.Default);
+                // Let the native auto-play path choose a legal target from combat RNG.
+                // Never expose a pending copy as a manually playable hand card.
+                await CardCmd.AutoPlay(ctx, copy, null, AutoPlayType.Default);
                 shouldCleanCopy = false;
             }
             finally
@@ -117,48 +122,10 @@ internal static class TimelineEffects
         }
     }
 
-    private static async Task<(bool Continue, Creature? Target)> SelectTarget(CardModel card, Player player)
-    {
-        if (card.TargetType is not (TargetType.AnyEnemy or TargetType.AnyAlly)) return (true, null);
-
-        var combat = card.CombatState ?? player.Creature.CombatState;
-        if (combat == null) return (false, null);
-        bool hasTarget = card.TargetType == TargetType.AnyEnemy
-            ? combat.HittableEnemies.Any(card.IsValidTarget)
-            : combat.PlayerCreatures.Any(card.IsValidTarget);
-
-        // Match AutoPlay's native no-target result: no choice is needed, and it will move the card
-        // to its result pile without playing it. This avoids presenting a dead target prompt.
-        if (!hasTarget) return (true, null);
-
-        var targetManager = NTargetManager.Instance;
-        if (targetManager.IsInSelection) return (false, null);
-        var hand = NCombatRoom.Instance?.Ui.Hand;
-        if (hand == null) return (false, null);
-
-        var sourceCard = hand.GetCard(card);
-        if (sourceCard != null)
-            targetManager.StartTargeting(card.TargetType, sourceCard, TargetMode.ClickMouseToTarget, () => CombatManager.Instance.IsOverOrEnding, null);
-        else
-            targetManager.StartTargeting(card.TargetType, hand.GlobalPosition, TargetMode.ClickMouseToTarget, () => CombatManager.Instance.IsOverOrEnding, null);
-
-        Node? selectedNode = await targetManager.SelectionFinished();
-        if (selectedNode == null) return (false, null);
-
-        Creature? target = selectedNode switch
-        {
-            NCreature nCreature => nCreature.Entity,
-            NMultiplayerPlayerState multiplayerPlayer => multiplayerPlayer.Player.Creature,
-            _ => null
-        };
-        if (target == null || !card.IsValidTarget(target)) return (false, null);
-        return (true, target);
-    }
-
     private static async Task RemoveCombatCopy(CardModel card)
     {
         if (card.Pile?.Type.IsCombatPile() == true)
-            await CardPileCmd.RemoveFromCombat(card, skipVisuals: true);
+            await CardPileCmd.RemoveFromCombat(card, skipVisuals: false);
         card.RemoveFromState();
     }
 

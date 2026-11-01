@@ -184,7 +184,7 @@ public static class RaceUi
             if (index < 0 || !ReferenceEquals(RaceSession.Current, s)) return false;
             if (canReroll && index == candidates.Length)
             { await s.Submit(s.New("offer_reroll", reward, route: route)); continue; }
-            await s.Submit(s.New("choose", offer.Id, candidates[index]) with { MaxHealth = RaceRuntime.State!.Players.Single().Creature.MaxHp }); await Apply(); RaceRuntime.Checkpoint(); Refresh(); return true;
+            await s.Submit(s.New("choose", offer.Id, candidates[index]) with { MaxHealth = RaceRuntime.LocalPlayer()!.Creature.MaxHp }); await Apply(); RaceRuntime.Checkpoint(); Refresh(); return true;
         }
         return false;
     }

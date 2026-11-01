@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Text;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Multiplayer.Serialization;
@@ -24,9 +24,9 @@ public sealed class RaceMessage : INetMessage
         if (reader.ReadByte() != 1) throw new InvalidDataException(L10n.T("分道争锋通信协议不兼容。"));
         Kind = Read(reader, 32); Content = Read(reader, 768 * 1024);
     }
-    private static void Write(PacketWriter writer, string value, int max)
+    internal static void Write(PacketWriter writer, string value, int max)
     { var bytes = Encoding.UTF8.GetBytes(value); if (bytes.Length > max) throw new InvalidDataException(L10n.T("消息过大。")); writer.WriteInt(bytes.Length); writer.WriteBytes(bytes, bytes.Length); }
-    private static string Read(PacketReader reader, int max)
+    internal static string Read(PacketReader reader, int max)
     { int len = reader.ReadInt(); if (len < 0 || len > max || len > reader.Buffer.Length - reader.BitPosition / 8) throw new InvalidDataException(L10n.T("消息长度无效。")); var bytes = new byte[len]; reader.ReadBytes(bytes, len); return Encoding.UTF8.GetString(bytes); }
     public static string Compress(string value)
     { using var output = new MemoryStream(); using (var zip = new BrotliStream(output, CompressionLevel.Fastest, true)) zip.Write(Encoding.UTF8.GetBytes(value)); return Convert.ToBase64String(output.ToArray()); }

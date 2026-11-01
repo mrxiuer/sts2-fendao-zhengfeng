@@ -23,11 +23,14 @@ public sealed class StableRandom(string seed)
 
 public static class Candidates
 {
+    public static bool AvailableInMode(Match match, Effect effect) => !match.Synchronous
+        || effect.Kind != EffectKind.Curse && effect.Id is not ("adversity_profit" or "retaliation" or "shared_misery");
     public static List<string> Generate(Match m, Racer p, string key, Route route, bool boss)
     {
         var rng = new StableRandom(m.Seed + ":" + p.Id + ":" + key + ":" + route);
         var candidates = new List<Effect>();
-        var available = Catalog.All.Where(e => m.EnabledEffects.Contains(e.Id)).Where(e => route switch
+        var available = Catalog.All.Where(e => m.EnabledEffects.Contains(e.Id))
+            .Where(e => AvailableInMode(m, e)).Where(e => route switch
         {
             Route.Mixed => e.Kind switch
             {
@@ -54,7 +57,7 @@ public static class Candidates
         }
         if (route == Route.Mixed)
         {
-            if (boss) Take(e => e.Kind == EffectKind.Curse && e.Tier == Tier.Boss);
+            if (boss) Take(e => e.Tier == Tier.Boss && (m.Synchronous || e.Kind == EffectKind.Curse));
             while (candidates.Count < 3 && available.Count > 0)
             {
                 var tier = boss ? (rng.Next() < 0.5 ? Tier.Elite : Tier.Boss) : (rng.Next() < 0.65 ? Tier.Ordinary : Tier.Elite);

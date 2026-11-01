@@ -1,4 +1,4 @@
-using System.Threading;
+﻿using System.Threading;
 using FendaoZhengfeng.Core;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Commands;
@@ -19,7 +19,7 @@ public sealed partial class RaceModifier
     {
         if (!Me.Has("chaos_core") || (Turn - 1) % Balance.ChaosInterval(Me.Effects["chaos_core"].Rank) != 0) return;
         OrbModel[] pool = [ModelDb.Orb<LightningOrb>(), ModelDb.Orb<FrostOrb>(), ModelDb.Orb<DarkOrb>(), ModelDb.Orb<PlasmaOrb>(), ModelDb.Orb<GlassOrb>()];
-        var random = new StableRandom(S.Engine.State.Seed + ":chaos:" + S.LocalId + ":" + Me.BattleKey + ":" + Turn);
+        var random = new StableRandom(S.Engine.State.Seed + ":chaos:" + Me.Id + ":" + Me.BattleKey + ":" + Turn);
         await OrbCmd.Channel(context, pool[(int)(random.Next() * pool.Length)].ToMutable(), Player);
         ChaosChannels++;
     }
@@ -44,14 +44,14 @@ internal static class DamageOriginScope
     internal static decimal Pierce(Creature target, decimal amount, ValueProp props)
     {
         if (!RaceRuntime.Live || !target.IsEnemy || props.HasFlag(ValueProp.Unblockable)
-            || origin.Value is not { Card.Type: CardType.Attack } current || current.Dealer != RaceRuntime.State!.Players.Single().Creature
-            || RaceSession.Current is not { } session || !session.Me.Has("piercing_edge")) return amount;
-        return amount - Math.Floor(Math.Max(0, amount) * Balance.PierceRatio(session.Me.Effects["piercing_edge"].Rank));
+            || origin.Value is not { Card.Type: CardType.Attack } current || current.Dealer?.Player is not { } owner
+            || RaceRuntime.RacerFor(owner) is not { } racer || !racer.Has("piercing_edge")) return amount;
+        return amount - Math.Floor(Math.Max(0, amount) * Balance.PierceRatio(racer.Effects["piercing_edge"].Rank));
     }
     static bool Prefix(PlayerChoiceContext choiceContext, IEnumerable<Creature>? targets, decimal amount, ValueProp props, Creature? dealer, CardModel? cardSource, CardPlay? cardPlay, ref Task<IEnumerable<DamageResult>> __result)
     {
         if (enterOriginal) { enterOriginal = false; return true; }
-        if (!RaceRuntime.Live || RaceSession.Current?.Me.Has("piercing_edge") != true) return true;
+        if (!RaceRuntime.Live || RaceRuntime.RacerFor(dealer?.Player)?.Has("piercing_edge") != true) return true;
         __result = Execute(choiceContext, targets, amount, props, dealer, cardSource, cardPlay); return false;
     }
     private static async Task<IEnumerable<DamageResult>> Execute(PlayerChoiceContext context, IEnumerable<Creature>? targets, decimal amount, ValueProp props, Creature? dealer, CardModel? card, CardPlay? play)

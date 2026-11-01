@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using Godot;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Relics;
@@ -109,7 +109,7 @@ internal static class EffectHud
         var badge = new TextureRect { Texture = EffectIcons.Get("choice_reward"), CustomMinimumSize = new Vector2(64, 64), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered, MouseFilter = Control.MouseFilterEnum.Stop };
         badge.MouseEntered += () => NHoverTipSet.CreateAndShow(badge, new HoverTip(NativeChoiceUi.Text(title), description, EffectIcons.Get("choice_reward")), HoverTipAlignment.Right);
         badge.MouseExited += () => NHoverTipSet.Remove(badge); badge.TreeExiting += () => NHoverTipSet.Remove(badge);
-        badge.GuiInput += input => { if (input is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { badge.AcceptEvent(); RaceUi.Run(async () => { await new RaceActionReward(RaceRuntime.State!.Players.Single(), kind).SelectUnsynchronized(); }); } };
+        badge.GuiInput += input => { if (input is InputEventMouseButton { ButtonIndex: MouseButton.Left, Pressed: true }) { badge.AcceptEvent(); RaceUi.Run(async () => { await new RaceActionReward(RaceRuntime.LocalPlayer()!, kind).SelectUnsynchronized(); }); } };
         strip!.AddChild(badge);
     }
 }

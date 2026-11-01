@@ -1,4 +1,5 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
@@ -72,9 +73,373 @@ internal static class NativeNetworkVerification
                 lobby.Players.Add(new() { id = 3, character = ModelDb.Character<Defect>(), unlockState = UnlockState.all.ToSerializable() });
                 lobby.Players.Add(new() { id = 4, character = ModelDb.Character<Necrobinder>(), unlockState = UnlockState.all.ToSerializable() });
             }
-            bool remoteDone = false, remoteSaved = false, remoteInteractiveReady = false, remoteFortuneDone = false; string? remoteCampaign = null; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "fortune_done") remoteFortuneDone = true; if (msg.Kind == "interactive_ready") remoteInteractiveReady = true; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; if (msg.Kind == "verification_campaign") remoteCampaign = msg.Content; });
+            bool remoteBurrowReady = false, remoteMarketReady = false, remoteTailReady = false, remoteActiveReady = false, remoteTimelineReady = false, remoteTimelineDone = false, remoteBossReady = false, remoteWon = false, remoteDone = false, remoteSaved = false, remoteInteractiveReady = false, remoteFortuneDone = false; string? remoteCampaign = null; transport.RegisterMessageHandler<RaceMessage>((msg, sender) => { if (sender == transport.NetId) return; if (msg.Kind == "burrow_ready_fixture") remoteBurrowReady = true; if (msg.Kind == "market_ready") remoteMarketReady = true; if (msg.Kind == "tail_ready") remoteTailReady = true; if (msg.Kind == "active_ready") remoteActiveReady = true; if (msg.Kind == "timeline_ready") remoteTimelineReady = true; if (msg.Kind == "timeline_done") remoteTimelineDone = true; if (msg.Kind == "boss_ready") remoteBossReady = true; if (msg.Kind == "shared_won") remoteWon = true; if (msg.Kind == "fortune_done") remoteFortuneDone = true; if (msg.Kind == "interactive_ready") remoteInteractiveReady = true; if (msg.Kind == "verification_done") remoteDone = true; if (msg.Kind == "verification_saved") remoteSaved = true; if (msg.Kind == "verification_campaign") remoteCampaign = msg.Content; });
             bool resume = System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RESUME") == "1"; RaceRuntime.ResumeRequested = resume;
             RaceRuntime.ResumeFromHostArchive = resume && (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_REWARD_RECOVERY") == "1" || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_NEW_EFFECTS") == "1" || four || eventRecovery || System.Environment.GetEnvironmentVariable("FDZF_VERIFY_MENU_RESUME") == "1");
+            if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_SHARED") == "1")
+            {
+                RaceConfig.ModeEnabled = host;
+                RaceConfig.SynchronousMode = host; // Deliberately disagree: the host must win.
+                var shared = await RaceRuntime.StartConfigured(game, lobby, ActModel.GetDefaultList(), [], "FDZFSHARED", 0, false);
+                pump?.Stop();
+                Check(shared.Players.Count == 2 && RaceSession.Current?.Engine.State.Synchronous == true,
+                    "host selects a real native two-player shared run despite opposite client configuration");
+                Check(shared.Modifiers.OfType<RaceModifier>().Select(modifier => modifier.OwnerId).ToHashSet().SetEquals(new[] { "1", "2" }),
+                    "shared run has exactly one owned modifier for each native player");
+                Check(RaceRuntime.LocalPlayer(shared)?.NetId == transport.NetId,
+                    "each peer resolves its own native player");
+                Check(shared.Players.All(player => !player.Relics.OfType<MegaCrit.Sts2.Core.Models.Relics.LizardTail>().Any()), "shared mode does not grant a starting Lizard Tail");
+                await RunManager.Instance.EnterRoomDebug(RoomType.Elite);
+                await Wait(() => shared.Players.All(player => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play)
+                    && shared.Modifiers.OfType<RaceModifier>().All(modifier => modifier.Turn == 1), "shared first combat ready");
+                Check(shared.Players.All(player => player.Creature.CombatState == shared.Players[0].Creature.CombatState),
+                    "both native players enter one shared combat state");
+                Check(RaceSession.Current!.Engine.State.Racers.Values.All(racer => racer.InBattle),
+                    "each owned modifier commits the matching player's battle start");
+                if (host)
+                {
+                    var bearer = RaceSession.Current!.Engine.State.Racers["1"];
+                    bearer.Effects["evil_echo"] = new() { Id = "evil_echo" };
+                    bearer.Effects["second_forge"] = new() { Id = "second_forge", Rank = 1 };
+                    bearer.Effects["bloom_decay"] = new() { Id = "bloom_decay", Grants = [new() { EventId = "verify-wear", Source = "1", ActiveBattle = bearer.Battle }] };
+                    await RaceSession.Current.Submit(RaceSession.Current.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(shared)) });
+                }
+                await Wait(() => RaceSession.Current!.Engine.State.Racers["1"].Has("second_forge"), "effect ownership fixture replicated");
+                foreach (var participant in shared.Players)
+                {
+                    var card = shared.CreateCard<MegaCrit.Sts2.Core.Models.Cards.StrikeIronclad>(participant);
+                    Check(card.MaxUpgradeLevel == (participant.NetId == 1 ? 2 : 1), "second forge availability belongs only to its holder");
+                    if (participant.NetId == 1)
+                    {
+                        card.UpgradeInternal(); card.UpgradeInternal();
+                        Check(SecondForge.Bonus(card) == 4, "holder's second upgrade uses that holder's reinforcement rank");
+                    }
+                    card.RemoveFromState();
+                }
+                var echoEnemy = shared.Players[0].Creature.CombatState!.Enemies.First(enemy => enemy.IsAlive);
+                if (echoEnemy.GetPower<MegaCrit.Sts2.Core.Models.Powers.ArtifactPower>() is { } ward) await PowerCmd.Remove(ward);
+                foreach (var participant in shared.Players)
+                {
+                    int before = echoEnemy.GetPowerAmount<MegaCrit.Sts2.Core.Models.Powers.WeakPower>();
+                    await PowerCmd.Apply<MegaCrit.Sts2.Core.Models.Powers.WeakPower>(new ThrowingPlayerChoiceContext(), echoEnemy, 1, participant.Creature, participant.Deck.Cards.First());
+                    Check(echoEnemy.GetPowerAmount<MegaCrit.Sts2.Core.Models.Powers.WeakPower>() == before + (participant.NetId == 1 ? 2 : 1),
+                        "shared enemy debuff uses the actual applier's Evil Echo ownership");
+                }
+                var local = RaceRuntime.LocalPlayer(shared)!;
+                var hand = MegaCrit.Sts2.Core.Entities.Cards.PileType.Hand.GetPile(local);
+                var attack = hand.Cards.First(card => card.Type == MegaCrit.Sts2.Core.Entities.Cards.CardType.Attack);
+                int energy = local.PlayerCombatState!.Energy;
+                Check(attack.TryManualPlay(local.Creature.CombatState!.Enemies.First(enemy => enemy.IsAlive)),
+                    "local player queues a native attack action");
+                await Wait(() => attack.Pile?.Type is MegaCrit.Sts2.Core.Entities.Cards.PileType.Discard or MegaCrit.Sts2.Core.Entities.Cards.PileType.Exhaust,
+                    "shared attack resolves to its result pile");
+                Check(local.PlayerCombatState.Energy < energy, "shared attack spends its owner's native energy");
+                await Wait(() => shared.Players.All(player => player.PlayerCombatState!.Energy == 2) && !RunManager.Instance.ActionExecutor.IsRunning, "both native strikes and their checksums completed");
+                transport.SendMessage(new RaceMessage { Kind = "verification_done" });
+                await Wait(() => remoteDone, "shared peer startup completion");
+                await Wait(() => RaceSession.Current!.Engine.State.Racers.Values.All(racer => racer.PublicPacket.Length > 0), "Timeline donor profiles available");
+                var donor = shared.Players.Single(player => player.NetId == 2);
+                var fiendTemplate = shared.CreateCard<MegaCrit.Sts2.Core.Models.Cards.FiendFire>(donor);
+                await CardPileCmd.Add(fiendTemplate, PileType.Deck);
+                await RaceSession.Current!.Submit(RaceSession.Current.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(shared)) });
+                await Wait(() => TimelineRules.OpponentSnapshots(RaceSession.Current!.Engine.State, "1").Any(snapshot => snapshot.Cards.Any(card => card.Name == fiendTemplate.Title)), "Fiend Fire donor profile replicated");
+                var timelineOwner = shared.Players.Single(player => player.NetId == 1);
+                var timelineCard = timelineOwner.Creature.CombatState!.CreateCard<ExtraTimelineCard>(timelineOwner);
+                await CardPileCmd.AddGeneratedCardToCombat(timelineCard, PileType.Hand, timelineOwner);
+                var timelineSelector = new MegaCrit.Sts2.Core.TestSupport.TestCardSelector();
+                timelineSelector.PrepareToSelect(new[] { donor.Deck.Cards.Count - 1 });
+                using (MegaCrit.Sts2.Core.Commands.CardSelectCmd.UseSelector(timelineSelector))
+                {
+                    transport.SendMessage(new RaceMessage { Kind = "timeline_ready" });
+                    await Wait(() => remoteTimelineReady, "both Timeline replicas ready");
+                    if (host)
+                    {
+                        Check(timelineCard.TryManualPlay(null), "Timeline queues a real shared card action");
+                        await Wait(() => NativeChoiceUi.ActiveVeil != null, "Timeline owner sees opponent picker");
+                        var opponentButton = NativeChoiceUi.ActiveVeil!.FindChildren("*", "", true, false)
+                            .OfType<MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton>().First();
+                        HarmonyLib.AccessTools.Method(typeof(MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton), "OnRelease").Invoke(opponentButton, null);
+                    }
+                    await Wait(() => timelineCard.Pile?.Type is PileType.Discard or PileType.Exhaust, "Timeline resolves on both peers after owner-only opponent selection");
+                    Check(!PileType.Play.GetPile(timelineOwner).Cards.Any() && NativeChoiceUi.ActiveVeil == null,
+                        "shared Timeline leaves neither a stuck card nor a remote opponent menu");
+                }
+                await Wait(() => !RunManager.Instance.ActionExecutor.IsRunning, "Timeline action and checksum completed");
+                Check(PileType.Hand.GetPile(timelineOwner).Cards.Count == 0
+                    && PileType.Exhaust.GetPile(timelineOwner).Cards.OfType<MegaCrit.Sts2.Core.Models.Cards.FiendFire>().Count() == 1,
+                    "copied Fiend Fire exhausts the real hand and resolves in the exhaust pile on both peers");
+                Check(donor.Deck.Cards.Contains(fiendTemplate), "Timeline leaves the donor's actual Fiend Fire in its permanent deck");
+                transport.SendMessage(new RaceMessage { Kind = "timeline_done" });
+                await Wait(() => remoteTimelineDone, "both Timeline actions completed");
+                for (int wave = 0; wave < 8 && CombatManager.Instance.IsInProgress; wave++)
+                {
+                    foreach (var enemy in local.Creature.CombatState!.Enemies.Where(enemy => enemy.IsAlive).ToArray())
+                        await CreatureCmd.Kill(enemy, true);
+                    await CombatManager.Instance.CheckWinCondition();
+                    await Task.Delay(100);
+                }
+                await Wait(() => !CombatManager.Instance.IsInProgress && RaceSession.Current!.Engine.State.Racers.Values.All(racer => !racer.InBattle && racer.VictoryCount == 1),
+                    "shared victory commits exactly once for both players");
+                Check(RaceSession.Current!.Engine.State.Racers.Values.All(racer => racer.VictoryCount == 1),
+                    "both players receive exactly one shared victory");
+                await Wait(() => shared.Players.All(player =>
+                {
+                    var state = HarmonyLib.AccessTools.Method(typeof(MegaCrit.Sts2.Core.Multiplayer.Game.RewardsSetSynchronizer), "GetRewardStateForPlayer")
+                        .Invoke(RunManager.Instance.RewardsSetSynchronizer, [player])!;
+                    var stack = (System.Collections.IEnumerable)HarmonyLib.AccessTools.Field(state.GetType(), "rewardsStack").GetValue(state)!;
+                    return stack.Cast<object>().Any(entry =>
+                    {
+                        var set = (MegaCrit.Sts2.Core.Rewards.RewardsSet)HarmonyLib.AccessTools.Field(entry.GetType(), "set").GetValue(entry)!;
+                        return set.Rewards.Any(reward => reward is MegaCrit.Sts2.Core.Rewards.RelicReward)
+                            && set.Rewards.Any(reward => reward is MegaCrit.Sts2.Core.Rewards.GoldReward);
+                    });
+                }), "native elite reward sets have finished registering for both owners");
+                transport.SendMessage(new RaceMessage { Kind = "interactive_ready" });
+                await Wait(() => remoteInteractiveReady, "both peers finished native victory reward registration");
+                bool localChoiceOpened = false;
+                int sharedChoice = await SharedChoice.Choose(shared.Players.Single(player => player.NetId == 1), 3,
+                    () => { localChoiceOpened = true; return Task.FromResult(2); });
+                Check(sharedChoice == 2 && localChoiceOpened == host,
+                    "native reward choice opens only for its owner and replicates the same index");
+                int cancelledChoice = await SharedChoice.Choose(shared.Players.Single(player => player.NetId == 2), 3,
+                    () => Task.FromResult(-1));
+                Check(cancelledChoice == -1, "remote reward cancellation is replicated without choosing an item");
+                var relicCounts = shared.Players.ToDictionary(player => player.NetId, player => player.Relics.Count);
+                int buyerHistoryBefore = RaceSession.Current!.Engine.State.Racers["2"].History.Values.Sum();
+                var relicSets = shared.Players.Select(player =>
+                {
+                    var set = new MegaCrit.Sts2.Core.Rewards.RewardsSet(player);
+                    set.Rewards.Add(new MegaCrit.Sts2.Core.Rewards.RelicReward(ModelDb.Relic<MegaCrit.Sts2.Core.Models.Relics.Vajra>().ToMutable(), player));
+                    return set;
+                }).ToArray();
+                var relicCompletions = relicSets.Select(set => RunManager.Instance.RewardsSetSynchronizer.BeginRewardsSet(set)).ToArray();
+                var relicSelection = RunManager.Instance.RewardsSetSynchronizer.SelectLocalReward(relicSets.Single(set => set.Player == local).Rewards.Single());
+                await Wait(() => NativeChoiceUi.ActiveVeil != null, "elite relic keep-or-sacrifice menu opens");
+                var firstVeil = NativeChoiceUi.ActiveVeil!;
+                var relicButton = firstVeil.FindChildren("*", "", true, false).OfType<MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton>().ElementAt(host ? 0 : 1);
+                HarmonyLib.AccessTools.Method(typeof(MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton), "OnRelease").Invoke(relicButton, null);
+                if (!host)
+                {
+                    await Wait(() => NativeChoiceUi.ActiveVeil != null && NativeChoiceUi.ActiveVeil != firstVeil, "elite cooperative effect candidates open");
+                    var effectButton = NativeChoiceUi.ActiveVeil!.FindChildren("*", "", true, false).OfType<MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton>().First();
+                    HarmonyLib.AccessTools.Method(typeof(MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton), "OnRelease").Invoke(effectButton, null);
+                }
+                await relicSelection.WaitAsync(TimeSpan.FromSeconds(20));
+                await Task.WhenAll(relicCompletions).WaitAsync(TimeSpan.FromSeconds(20));
+                Check(shared.Players.All(player => player.Relics.Count == relicCounts[player.NetId] + (player.NetId == 1 ? 1 : 0))
+                    && RaceSession.Current!.Engine.State.Racers["2"].History.Values.Sum() == buyerHistoryBefore + 1,
+                    "elite rewards let one player keep a relic while the other sacrifices for one cooperative effect");
+                var beforeGold = shared.Players.ToDictionary(player => player.NetId, player => player.Gold);
+                var goldSets = shared.Players.Select(player =>
+                {
+                    var set = new MegaCrit.Sts2.Core.Rewards.RewardsSet(player);
+                    set.Rewards.Add(new MegaCrit.Sts2.Core.Rewards.GoldReward(player.NetId == 1 ? 17 : 29, player));
+                    return set;
+                }).ToArray();
+                if (!host)
+                {
+                    var ownerState = HarmonyLib.AccessTools.Method(typeof(MegaCrit.Sts2.Core.Multiplayer.Game.RewardsSetSynchronizer), "GetRewardStateForPlayer")
+                        .Invoke(RunManager.Instance.RewardsSetSynchronizer, [shared.Players.Single(player => player.NetId == 1)])!;
+                    int nextId = (int)HarmonyLib.AccessTools.Field(ownerState.GetType(), "nextId").GetValue(ownerState)!;
+                    string earlyClaim = "1:" + RaceRuntime.RoomKey + "|shared:1:" + nextId + ":0";
+                    await Wait(() => RaceSession.Current!.Engine.State.ConsumedRewards.Contains(earlyClaim), "host core claim deliberately arrives before remote native gold set");
+                    Check(shared.Players.Single(player => player.NetId == 1).Gold == beforeGold[1],
+                        "early core claim is not mistaken for an already applied remote inventory grant");
+                }
+                var goldCompletions = goldSets.Select(set => RunManager.Instance.RewardsSetSynchronizer.BeginRewardsSet(set)).ToArray();
+                var localGold = goldSets.Single(set => set.Player == local).Rewards.Single();
+                await RunManager.Instance.RewardsSetSynchronizer.SelectLocalReward(localGold);
+                await Task.WhenAll(goldCompletions).WaitAsync(TimeSpan.FromSeconds(20));
+                Check(shared.Players.All(player => player.Gold == beforeGold[player.NetId] + (player.NetId == 1 ? 17 : 29)),
+                    "native synchronized gold rewards credit each owner exactly once on both peers");
+                Check(goldSets.All(set => RaceSession.Current!.Engine.State.ConsumedRewards.Contains(
+                    RaceRuntime.RacerFor(set.Player)!.Id + ":" + RaceRuntime.RewardKey(set.Rewards.Single()))),
+                    "shared reward claims are committed for both owners");
+                if (host)
+                {
+                    foreach (var racer in RaceSession.Current!.Engine.State.Racers.Values) racer.BossPrizes.Add("verify:first");
+                    await RaceSession.Current.Submit(RaceSession.Current.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(shared)) });
+                }
+                await Wait(() => RaceSession.Current!.Engine.State.Racers.Values.All(racer => racer.BossPrizes.Contains("verify:first")), "Boss fixture replicated from host");
+                var boonsBefore = RaceSession.Current.Engine.State.Racers.ToDictionary(pair => pair.Key, pair => pair.Value.History.Values.Sum());
+                transport.SendMessage(new RaceMessage { Kind = "boss_ready" });
+                await Wait(() => remoteBossReady, "both peers captured Boss fixture baseline");
+                var bossSets = shared.Players.Select(player =>
+                {
+                    var set = new MegaCrit.Sts2.Core.Rewards.RewardsSet(player);
+                    set.Rewards.Add(new RaceActionReward(player, 2)); return set;
+                }).ToArray();
+                var bossCompletions = bossSets.Select(set => RunManager.Instance.RewardsSetSynchronizer.BeginRewardsSet(set)).ToArray();
+                var bossSelection = RunManager.Instance.RewardsSetSynchronizer.SelectLocalReward(bossSets.Single(set => set.Player == local).Rewards.Single());
+                await Wait(() => NativeChoiceUi.ActiveVeil != null, "local Boss reward menu opens");
+                var shieldButton = NativeChoiceUi.ActiveVeil!.FindChildren("*", "", true, false)
+                    .OfType<MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton>().ElementAt(0);
+                HarmonyLib.AccessTools.Method(typeof(MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton), "OnRelease").Invoke(shieldButton, null);
+                await bossSelection.WaitAsync(TimeSpan.FromSeconds(20));
+                await Task.WhenAll(bossCompletions).WaitAsync(TimeSpan.FromSeconds(20));
+                Check(RaceSession.Current.Engine.State.Racers.All(pair => pair.Value.History.Values.Sum() == boonsBefore[pair.Key] + 1 && !pair.Value.BossPrizes.Contains("verify:first")),
+                    "actual cooperative Boss boon menus consume each owner's prize once across both peers");
+                var activeOwner = shared.Players.Single(player => player.NetId == 1);
+                if (host)
+                {
+                    RaceSession.Current.Engine.State.Racers["1"].Effects["small_light"] = new() { Id = "small_light" };
+                    await RaceSession.Current.Submit(RaceSession.Current.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(shared)) });
+                }
+                await Wait(() => RaceSession.Current!.Engine.State.Racers["1"].Has("small_light"), "active item fixture replicated");
+                int activeDeckBefore = activeOwner.Deck.Cards.Count, activeHpBefore = activeOwner.Creature.MaxHp;
+                int otherHpBefore = shared.Players.Single(player => player.NetId == 2).Creature.MaxHp;
+                var removeSelector = new MegaCrit.Sts2.Core.TestSupport.TestCardSelector();
+                int removeIndex = activeOwner.Deck.Cards.ToList().FindIndex(card => RaceModifier.ForPlayer(activeOwner)!.CardWear(card) == 8);
+                removeSelector.PrepareToSelect(new[] { removeIndex });
+                using (MegaCrit.Sts2.Core.Commands.CardSelectCmd.UseSelector(removeSelector))
+                {
+                    transport.SendMessage(new RaceMessage { Kind = "active_ready" });
+                    await Wait(() => remoteActiveReady, "both native active item replicas ready");
+                    if (host) SharedItemAction.Enqueue("small_light");
+                    await Wait(() => activeOwner.Deck.Cards.Count == activeDeckBefore - 1 && activeOwner.Creature.MaxHp == activeHpBefore - 3
+                        && !RunManager.Instance.ActionExecutor.IsRunning, "small and light native action resolves on both peers");
+                }
+                Check(shared.Players.Single(player => player.NetId == 2).Creature.MaxHp == otherHpBefore,
+                    "native item action removes one owner card and pays three max health without changing teammate health");
+                var retained = shared.Players.ToDictionary(player => player.NetId,
+                    player => (player.Creature.CurrentHp, player.Gold, Deck: string.Join("|", player.Deck.Cards.Select(NativeCheckpoint.EncodeCard)), Relics: player.Relics.Count));
+                if (host)
+                {
+                    var bearer = RaceSession.Current.Engine.State.Racers["1"];
+                    bearer.Effects["r_key"] = new() { Id = "r_key" }; bearer.ResetCharges = 1;
+                    await AdvancedEffects.ResetRun();
+                }
+                await Wait(() => RaceSession.Current!.Engine.State.Racers.Values.All(racer => racer.ResetCount == 1 && !racer.ResetPending), "both peers finish a host-initiated team reset");
+                Check(shared.CurrentActIndex == 0 && shared.Players.All(player =>
+                    retained[player.NetId] == (player.Creature.CurrentHp, player.Gold, string.Join("|", player.Deck.Cards.Select(NativeCheckpoint.EncodeCard)), player.Relics.Count)),
+                    "shared R key preserves every player's health, gold, deck and relics");
+                Check(RaceSession.Current!.Engine.State.Racers["1"].ResetCharges == 0
+                    && RaceSession.Current.Engine.State.Racers["2"].ResetCharges == 0, "team reset consumes only the initiator's charge");
+                var sellerPlayer = shared.Players.Single(player => player.NetId == 1);
+                Check(sellerPlayer.Deck.Cards.Any(card => RaceModifier.ForPlayer(sellerPlayer)!.CardWear(card) == 7),
+                    "played-card durability survives native peer deck synchronization and team reset");
+                var wearProbe = shared.CreateCard<MegaCrit.Sts2.Core.Models.Cards.StrikeIronclad>(sellerPlayer);
+                SharedCardWear.Write(wearProbe, 0);
+                var wearReloaded = NativeCheckpoint.DecodeCard(NativeCheckpoint.EncodeCard(wearProbe), shared, sellerPlayer);
+                Check(RaceModifier.ForPlayer(sellerPlayer)!.CardWear(wearReloaded) == 0, "zero durability survives card packet round trip");
+                wearProbe.RemoveFromState(); wearReloaded.RemoveFromState();
+                var buyerPlayer = shared.Players.Single(player => player.NetId == 2);
+                var soldCard = sellerPlayer.Deck.Cards.First();
+                int sellerSize = sellerPlayer.Deck.Cards.Count, buyerSize = buyerPlayer.Deck.Cards.Count;
+                string soldId = RaceModifier.ForPlayer(sellerPlayer)!.CardIdentity(soldCard);
+                buyerPlayer.Gold = 500;
+                if (host)
+                {
+                    RaceSession.Current.Engine.State.Racers["2"].Effects["good_connections"] = new() { Id = "good_connections" };
+                    await RaceSession.Current.Submit(RaceSession.Current.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(shared)) });
+                }
+                await Wait(() => RaceSession.Current!.Engine.State.Racers["2"].Has("good_connections"), "market active item fixture replicated");
+                await SharedChoice.Profile(sellerPlayer, "verify-market-seller");
+                await SharedChoice.Profile(buyerPlayer, "verify-market-buyer");
+                int sellerGoldBefore = sellerPlayer.Gold;
+                var marketSelector = new MegaCrit.Sts2.Core.TestSupport.TestCardSelector(); marketSelector.PrepareToSelect(new[] { 0 });
+                using (MegaCrit.Sts2.Core.Commands.CardSelectCmd.UseSelector(marketSelector))
+                {
+                    transport.SendMessage(new RaceMessage { Kind = "market_ready" });
+                    await Wait(() => remoteMarketReady, "both market action replicas ready");
+                    if (!host)
+                    {
+                        SharedItemAction.Enqueue("good_connections");
+                        await Wait(() => NativeChoiceUi.ActiveVeil != null, "buyer chooses seller in native action");
+                        var sellerVeil = NativeChoiceUi.ActiveVeil!;
+                        var sellerButton = sellerVeil.FindChildren("*", "", true, false).OfType<MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton>().First();
+                        HarmonyLib.AccessTools.Method(typeof(MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton), "OnRelease").Invoke(sellerButton, null);
+                        await Wait(() => NativeChoiceUi.ActiveVeil != null && NativeChoiceUi.ActiveVeil != sellerVeil, "buyer confirms market price in native action");
+                        var buyButton = NativeChoiceUi.ActiveVeil!.FindChildren("*", "", true, false).OfType<MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton>().First();
+                        HarmonyLib.AccessTools.Method(typeof(MegaCrit.Sts2.Core.Nodes.Rewards.NRewardButton), "OnRelease").Invoke(buyButton, null);
+                    }
+                    await Wait(() => RaceSession.Current!.Engine.State.Trades.Count == 1 && buyerPlayer.Gold == 400 && sellerPlayer.Gold == sellerGoldBefore + 100
+                        && !RunManager.Instance.ActionExecutor.IsRunning, "full market action and payment complete on both peers");
+                }
+                Check(RaceSession.Current!.Engine.State.Racers["2"].Purchases == 1 && sellerPlayer.Deck.Cards.Count == sellerSize && buyerPlayer.Deck.Cards.Count == buyerSize,
+                    "market action pays the seller 100 gold while both decks remain unchanged until next battle");
+                buyerPlayer.Creature.SetCurrentHpInternal(37);
+                Check(RaceSession.Current!.Engine.State.Trades.Single().Card.Id == soldId,
+                    "both peers assign the same identity to the sold permanent card: local=" + soldId + ", remote=" + RaceSession.Current.Engine.State.Trades.Single().Card.Id);
+                await RunManager.Instance.EnterRoomDebug(RoomType.Monster);
+                await Wait(() => shared.Players.All(player => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play), "shared trade battle starts");
+                Check(RaceSession.Current!.Engine.State.Racers["1"].Health == sellerPlayer.Creature.CurrentHp
+                    && RaceSession.Current.Engine.State.Racers["2"].Health == 37, "room progress preserves distinct health for each owner");
+                Check(!sellerPlayer.Deck.Cards.Contains(soldCard) && sellerPlayer.Deck.Cards.Count == sellerSize - 1
+                    && buyerPlayer.Deck.Cards.Count == buyerSize + 1, "trade removes and delivers exactly one card on both peers");
+                foreach (var modifier in shared.Modifiers.OfType<RaceModifier>()) await modifier.BeforeAdvancedCombat();
+                Check(sellerPlayer.Deck.Cards.Count == sellerSize - 1 && buyerPlayer.Deck.Cards.Count == buyerSize + 1,
+                    "rechecking an acknowledged trade does not duplicate its delivery");
+                await RelicCmd.Obtain<MegaCrit.Sts2.Core.Models.Relics.LizardTail>(buyerPlayer);
+                await CreatureCmd.Damage(new ThrowingPlayerChoiceContext(), buyerPlayer.Creature, 9999,
+                    MegaCrit.Sts2.Core.ValueProps.ValueProp.Unpowered, buyerPlayer.Creature.CombatState!.Enemies.First(), null, null);
+                Check(buyerPlayer.Creature.CurrentHp > 0 && buyerPlayer.Relics.OfType<MegaCrit.Sts2.Core.Models.Relics.LizardTail>().Single().WasUsed
+                    && RaceSession.Current!.Engine.State.Racers["2"].RevivalCount == 1 && RaceSession.Current.Engine.State.Racers["1"].RevivalCount == 0,
+                    "native client revival is counted once for its owner on both peers");
+                for (int wave = 0; wave < 8 && CombatManager.Instance.IsInProgress; wave++)
+                {
+                    foreach (var enemy in buyerPlayer.Creature.CombatState!.Enemies.Where(enemy => enemy.IsAlive).ToArray()) await CreatureCmd.Kill(enemy, true);
+                    await CombatManager.Instance.CheckWinCondition(); await Task.Delay(100);
+                }
+                await Wait(() => RaceSession.Current!.Engine.State.Racers.Values.All(racer => !racer.InBattle), "second shared victory before tail refill");
+                buyerPlayer.Gold = 500;
+                if (host)
+                {
+                    RaceSession.Current!.Engine.State.Racers["2"].Effects["tail_refill"] = new() { Id = "tail_refill" };
+                    await RaceSession.Current.Submit(RaceSession.Current.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(shared)) });
+                }
+                await Wait(() => RaceSession.Current!.Engine.State.Racers["2"].Has("tail_refill"), "tail refill fixture replicated");
+                transport.SendMessage(new RaceMessage { Kind = "tail_ready" });
+                await Wait(() => remoteTailReady, "both tail refill replicas ready");
+                if (!host) SharedItemAction.Enqueue("tail_refill");
+                await Wait(() => buyerPlayer.Gold == 150 && !buyerPlayer.Relics.OfType<MegaCrit.Sts2.Core.Models.Relics.LizardTail>().Single().WasUsed
+                    && !RunManager.Instance.ActionExecutor.IsRunning, "client tail refill action completes on both peers");
+                Check(buyerPlayer.Gold == 150, "tail refill restores the used relic and spends exactly 350 owner gold on both peers");
+
+                await RunManager.Instance.EnterRoomDebug(RoomType.Boss, model: ModelDb.Encounter<TowerHeartEncounter>().ToMutable());
+                await Wait(() => shared.Players.All(player => player.PlayerCombatState?.Phase == PlayerTurnPhase.Play), "shared final boss first turn");
+                var heart = shared.Players[0].Creature.CombatState!.Enemies.Select(enemy => enemy.Monster).OfType<TowerHeart>().Single();
+                var permanentDecks = shared.Players.ToDictionary(player => player.NetId, player => string.Join("|", player.Deck.Cards.Select(NativeCheckpoint.EncodeCard)));
+                var combatPiles = new[] { PileType.Hand, PileType.Draw, PileType.Discard, PileType.Exhaust, PileType.Play };
+                var originalPiles = shared.Players.ToDictionary(player => player.NetId,
+                    player => combatPiles.ToDictionary(pile => pile, pile => pile.GetPile(player).Cards.ToArray()));
+                foreach (var player in shared.Players)
+                    if (player.Creature.GetPower<MegaCrit.Sts2.Core.Models.Powers.ArtifactPower>() is { } sharedHeartWard) await PowerCmd.Remove(sharedHeartWard);
+                await heart.EchoDeck.CopyOpponent(heart);
+                Check(shared.Players.All(player => player.Creature.HasPower<HeartEchoPower>()
+                    && PileType.Draw.GetPile(player).Cards.Count == shared.Players.Single(other => other != player).Deck.Cards.Count
+                    && PileType.Draw.GetPile(player).Cards.All(card => card.Owner == player && card.DeckVersion == null)),
+                    "shared Heart creates independent temporary teammate deck copies for both players");
+                foreach (var player in shared.Players) await heart.EchoDeck.Restore(player);
+                Check(!heart.EchoDeck.Active && shared.Players.All(player => !player.Creature.HasPower<HeartEchoPower>()
+                    && permanentDecks[player.NetId] == string.Join("|", player.Deck.Cards.Select(NativeCheckpoint.EncodeCard))
+                    && combatPiles.All(pile => pile.GetPile(player).Cards.SequenceEqual(originalPiles[player.NetId][pile]))),
+                    "shared Heart restores each exact original pile and never changes either permanent deck");
+                if (host)
+                {
+                    var burrowOwner = RaceSession.Current!.Engine.State.Racers["2"];
+                    burrowOwner.Effects[BurrowRules.EffectId] = new() { Id = BurrowRules.EffectId };
+                    burrowOwner.History["burrow_sanctuary.charges"] = 1;
+                    await RaceSession.Current.Submit(RaceSession.Current.New("profile") with { Profile = StateJson.Serialize(PublicProfiles.Capture(shared)) });
+                }
+                await Wait(() => BurrowRules.Read(RaceSession.Current!.Engine.State.Racers["2"]).Charges == 1, "burrow action fixture replicated");
+                var shieldTarget = PuppetFollower.Guard(buyerPlayer.Creature) ?? buyerPlayer.Creature;
+                int blockBeforeBurrow = shieldTarget.Block;
+                transport.SendMessage(new RaceMessage { Kind = "burrow_ready_fixture" });
+                await Wait(() => remoteBurrowReady, "both burrow native action replicas ready");
+                if (!host) SharedItemAction.Enqueue(BurrowRules.EffectId);
+                await Wait(() => BurrowRules.Read(RaceSession.Current!.Engine.State.Racers["2"]).Phase == BurrowRules.Phase.Burrowed
+                    && CombatManager.Instance.IsPlayerReadyToEndTurn(buyerPlayer) && !RunManager.Instance.ActionExecutor.IsRunning,
+                    "burrow native combat action ends its owner's turn on both peers");
+                Check(shieldTarget.Block == blockBeforeBurrow + buyerPlayer.Creature.MaxHp
+                    && !CombatManager.Instance.IsPlayerReadyToEndTurn(sellerPlayer),
+                    "burrow gives max-health block and ends only the activating teammate's turn");
+                transport.SendMessage(new RaceMessage { Kind = "shared_won" });
+                await Wait(() => remoteWon, "both peers completed shared victory");
+                GD.Print("[FDZF NETWORK COMPLETE] Shared native combat and victory verified.");
+                await Task.Delay(500); // Let ENet flush the final peer-completion message before quitting.
+                game.GetTree().Quit(0); return;
+            }
             if (System.Environment.GetEnvironmentVariable("FDZF_VERIFY_VANILLA") == "1")
             {
                 RaceConfig.ModeEnabled = !host;
@@ -228,7 +593,7 @@ internal static class NativeNetworkVerification
             }
             await Wait(() => session.Engine.State.Racers["1"].Effects.GetValueOrDefault("evil_echo")?.Rank == 1, "evil echo holding crosses actual ENet transport");
             var echoTarget = run.Players[0].Creature.CombatState!.Enemies.First(enemy => enemy.IsAlive);
-            if (echoTarget.GetPower<MegaCrit.Sts2.Core.Models.Powers.ArtifactPower>() is { } artifact) await PowerCmd.Remove(artifact);
+            if (echoTarget.GetPower<MegaCrit.Sts2.Core.Models.Powers.ArtifactPower>() is { } copyWard) await PowerCmd.Remove(copyWard);
             int echoWeak = echoTarget.GetPowerAmount<MegaCrit.Sts2.Core.Models.Powers.WeakPower>();
             await PowerCmd.Apply<MegaCrit.Sts2.Core.Models.Powers.WeakPower>(new ThrowingPlayerChoiceContext(), echoTarget, 1, run.Players[0].Creature, run.Players[0].Deck.Cards.First());
             Check(echoTarget.GetPowerAmount<MegaCrit.Sts2.Core.Models.Powers.WeakPower>() == echoWeak + (host ? 3 : 1),

@@ -1,12 +1,12 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 
 namespace FendaoZhengfeng.Mod;
 
-internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, HashSet<string> Effects, bool Resume, string ResumeBundle = "")
+internal sealed record LobbyRules(string Version, bool Enabled, bool Debug, HashSet<string> Effects, bool Resume, string ResumeBundle = "", bool Synchronous = false)
 {
-    internal static LobbyRules Local() => new(Catalog.RulesVersion, RaceConfig.ModeEnabled, RaceConfig.DebugMode, RaceConfig.EnabledIds(), false);
+    internal static LobbyRules Local() => new(Catalog.RulesVersion, RaceConfig.ModeEnabled, RaceConfig.DebugMode, RaceConfig.EnabledIds(), false, Synchronous: RaceConfig.SynchronousMode);
     // Every modded participant enters this handshake, including clients whose local mode is disabled.
     internal static async Task<LobbyRules> Agree(StartRunLobby lobby)
     {

@@ -31,9 +31,11 @@ internal static class FriendlyFormation
 
     private static readonly ConditionalWeakTable<Creature, object> observed = new();
     private static readonly ConditionalWeakTable<NCreature, MeasuredControls> measuredControls = new();
+    private sealed class LayoutStamp { internal int? Signature; }
+    private static readonly ConditionalWeakTable<NCombatRoom, LayoutStamp> layouts = new();
     private static readonly object observedGate = new();
 
-    internal static void Reflow(IEnumerable<NCreature> creatureNodes)
+    internal static void Reflow(IEnumerable<NCreature> creatureNodes, bool nativeRepositioned = false)
     {
         if (!RaceRuntime.Live) return;
         try
@@ -43,7 +45,7 @@ internal static class FriendlyFormation
                 .GroupBy(node => node.Entity)
                 .Select(group => group.First())
                 .OrderBy(node => node.Entity.IsPlayer ? 0 : 1)
-                .ThenBy(node => node.GetGlobalTransformWithCanvas().Origin.X)
+                .ThenBy(node => node.GetInstanceId())
                 .ThenBy(node => node.Entity.Monster?.Title.GetFormattedText() ?? "")
                 .ToArray();
 
@@ -52,6 +54,10 @@ internal static class FriendlyFormation
 
             if (nodes.Length == 0 || nodes.Any(node => !node.IsInsideTree()))
                 return;
+
+            var room = NCombatRoom.Instance;
+            var stamp = room == null ? null : layouts.GetOrCreateValue(room);
+            if (!nativeRepositioned && room != null && stamp?.Signature == SizeSignature(room)) return;
 
             Viewport viewport = nodes[0].GetViewport();
             Rect2 visible = viewport.GetVisibleRect();
@@ -133,6 +139,8 @@ internal static class FriendlyFormation
 
                 rowTop += rowHeight + selectedGap;
             }
+            // Do not feed rounded, animated screen rectangles back into an unchanged layout.
+            if (room != null && stamp != null) stamp.Signature = SizeSignature(room);
         }
         catch (Exception ex)
         {
@@ -214,8 +222,7 @@ internal static class FriendlyFormation
             AddSize(ref hash, node.Visuals.Bounds.Size);
             AddSize(ref hash, node.Hitbox.Size);
             AddScale(ref hash, node.Visuals.DefaultScale);
-            AddScale(ref hash, node.Visuals.Scale.X);
-            AddScale(ref hash, node.Visuals.Scale.Y);
+            // Attack/idle squash and stretch must not move the entire formation.
             Transform2D nodeTransform = node.GetGlobalTransformWithCanvas();
             AddScale(ref hash, nodeTransform.X.Length());
             AddScale(ref hash, nodeTransform.Y.Length());
@@ -226,14 +233,14 @@ internal static class FriendlyFormation
                 continue;
             foreach (Control control in cache.Values)
             {
-                if (!GodotObject.IsInstanceValid(control)) continue;
+                // Health fill, damage text and icon entrance tweens animate continuously.
+                // Only structural status-container changes require a new layout.
+                if (!GodotObject.IsInstanceValid(control) || control is not NPowerContainer) continue;
                 hash.Add(control.IsVisibleInTree());
-                if (control is NPowerContainer) hash.Add(control.GetChildCount());
-                if (!control.IsVisibleInTree()) continue;
-                Rect2 rect = ScreenRect(control);
-                AddSize(ref hash, rect.Size);
-                AddSize(ref hash, rect.Position - nodeTransform.Origin);
+                hash.Add(control.GetChildCount());
+                AddSize(ref hash, control.Size);
             }
+
         }
 
         return hash.ToHashCode();
@@ -480,7 +487,7 @@ internal static class FriendlyFormationNativePositionPatch
     {
         if (NCombatRoom.Instance is { } room)
             FriendlyFormation.AttachSizeObserver(room);
-        FriendlyFormation.Reflow(creatureNodes);
+        FriendlyFormation.Reflow(creatureNodes, nativeRepositioned: true);
     }
 }
 

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Reflection.Emit;
 using FendaoZhengfeng.Core;
 using Godot;
@@ -104,14 +104,63 @@ internal static class RewardChoicePatch
     static bool Prefix(Reward __instance, ref Task<bool> __result)
     {
         if (!RaceRuntime.Live || originalCalls.Contains(__instance)) return true;
+        if (RaceSession.Current?.Engine.State.Synchronous == true && __instance is RaceActionReward) return true;
         if (!selecting.Add(__instance)) { __result = Task.FromResult(false); return false; }
         __result = Choose(__instance); return false;
     }
+    private static async Task<bool> ChooseShared(Reward reward, RaceSession session)
+    {
+        var owner = reward.Player;
+        var racer = RaceRuntime.RacerFor(owner) ?? throw new InvalidOperationException("Missing reward owner.");
+        string key = RaceRuntime.RewardKey(reward);
+        // A host claim can arrive before the native reward-selection message on another peer.
+        // Core consumption does not mean this replica has applied the inventory mutation yet.
+        if (reward.SuccessfullySelected) return true;
+        var room = RaceRuntime.State!.CurrentRoom?.RoomType;
+        if (reward is RelicReward relic && room is RoomType.Elite or RoomType.Boss)
+        {
+            int action = await SharedChoice.Choose(owner, 2, () => RaceUi.Choose(L10n.T("遗物奖励 · 2选1"),
+                [L10n.T("领取遗物 · ") + relic.Relic!.Title.GetFormattedText(), L10n.T("献祭遗物 · 增益与自身契约3选1")],
+                [relic.Relic!.BigIcon, EffectIcons.Get("choice_reward")]));
+            if (action < 0) return false;
+            if (action == 1)
+            {
+                if (!await SharedBossRewards.ChooseEffect(owner, key, Route.Mixed, room == RoomType.Boss)) return false;
+                reward.OnSkipped();
+                AccessTools.PropertySetter(typeof(Reward), nameof(Reward.SuccessfullySelected)).Invoke(reward, [true]);
+                return true;
+            }
+        }
+        if (reward is CardReward && racer.Has("siphon") && !racer.UsedServices.Contains("siphon:" + racer.BattleKey))
+        {
+            int action = await SharedChoice.Choose(owner, 2, () => RaceUi.Choose(L10n.T("卡牌奖励"),
+                [L10n.T("查看并选择卡牌"), L10n.T("汲取：放弃选牌，获得金币及下场首回合能量")]));
+            if (action < 0) return false;
+            if (action == 1)
+            {
+                await SharedChoice.Commit(owner, "siphon", racer.BattleKey);
+                await RaceModifier.ForPlayer(owner)!.ApplyReceipts(new MegaCrit.Sts2.Core.GameActions.Multiplayer.ThrowingPlayerChoiceContext(), false);
+                await SharedChoice.Commit(owner, "claim", key);
+                reward.OnSkipped();
+                AccessTools.PropertySetter(typeof(Reward), nameof(Reward.SuccessfullySelected)).Invoke(reward, [true]);
+                return true;
+            }
+        }
+        using var income = new RewardIncomeBatch(session, reward);
+        originalCalls.Add(reward);
+        bool success;
+        try { success = await reward.SelectUnsynchronized(); }
+        finally { originalCalls.Remove(reward); }
+        if (success) await SharedChoice.Commit(owner, "claim", key, amount: income.Income);
+        return success;
+    }
+
     private static async Task<bool> Choose(Reward reward)
     {
         try
         {
             var s = RaceSession.Current!;
+            if (s.Engine.State.Synchronous) return await ChooseShared(reward, s);
             var key = RaceRuntime.RewardKey(reward);
             if (s.Engine.State.ConsumedRewards.Contains(s.LocalId + ":" + key)) return false;
             var type = RaceRuntime.State!.CurrentRoom?.RoomType.ToString();
@@ -179,19 +228,20 @@ internal static class GoldIncomePatch
 {
     static void Prefix(Player player, ref decimal amount, bool wasStolenBack, out int __state)
     {
-        __state = 0; if (!RaceRuntime.Live || RaceModifier.Active?.IsSuppressed == true || amount <= 0 || wasStolenBack) return;
+        __state = 0; if (!RaceRuntime.Live || RaceModifier.ForPlayer(player)?.IsSuppressed == true || amount <= 0 || wasStolenBack) return;
         __state = (int)Math.Floor(amount);
-        if (RaceSession.Current!.Me.Has("greedy_pocket") && !RaceSession.Current.Me.InBattle && RaceRuntime.State?.CurrentRoom is CombatRoom) amount = Math.Floor(amount * 1.25m);
+        if (RaceRuntime.RacerFor(player) is { } owner && owner.Has("greedy_pocket") && !owner.InBattle && RaceRuntime.State?.CurrentRoom is CombatRoom) amount = Math.Floor(amount * 1.25m);
     }
-    static void Postfix(ref Task __result, int __state)
-    { if (__state > 0) __result = After(__result, __state); }
-    static async Task After(Task original, int income)
+    static void Postfix(ref Task __result, int __state, Player player)
+    { if (__state > 0) __result = After(__result, __state, player); }
+    static async Task After(Task original, int income, Player player)
     {
         await original;
         if(RaceSession.Current is not {} s)return;
         if(System.Environment.GetEnvironmentVariable("FDZF_NATIVE_VERIFY")=="1" && NativeEventStep.HasEnclosingStep(s)
             && NativeEventStep.AfterGoldForVerification is {} hook) await hook(s);
-        if(!RewardIncomeBatch.Capture(s,income)) await s.Submit(s.New("gold",amount:income));
+        if (RewardIncomeBatch.Capture(s,income)) return;
+        if (!s.Engine.State.Synchronous || player == RaceRuntime.LocalPlayer()) await s.Submit(s.New("gold",amount:income));
     }
 }
 

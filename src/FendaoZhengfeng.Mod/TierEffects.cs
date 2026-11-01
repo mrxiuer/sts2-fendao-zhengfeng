@@ -1,4 +1,4 @@
-using FendaoZhengfeng.Core;
+﻿using FendaoZhengfeng.Core;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
@@ -116,8 +116,8 @@ internal static class LoneCrownHealingPatch
 {
     static void Prefix(Creature creature, ref decimal amount)
     {
-        if (RaceRuntime.Live && creature == RaceRuntime.State!.Players.Single().Creature && creature.CurrentHp > 0
-            && RaceSession.Current!.Me.Has("lone_crown") && RaceRuntime.State.CurrentRoom?.RoomType != RoomType.RestSite)
+        if (RaceRuntime.Live && creature.Player is { } owner && creature.CurrentHp > 0
+            && RaceRuntime.RacerFor(owner)?.Has("lone_crown") == true && RaceRuntime.State!.CurrentRoom?.RoomType != RoomType.RestSite)
             amount = Math.Floor(amount / 2);
     }
 }

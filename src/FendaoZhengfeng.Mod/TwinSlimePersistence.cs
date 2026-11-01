@@ -31,7 +31,7 @@ internal static class TwinSlimePersistence
             return stored;
 
         string roomKey = RaceRuntime.RoomKey;
-        Player? player = RaceRuntime.State?.Players.SingleOrDefault();
+        Player? player = modifier.OwnerPlayer;
         if (player != null
             && player.RunState == modifier.SlimeRunState
             && TwinSlimeRuntime.Find(player) is { } pair
@@ -130,7 +130,7 @@ internal static class TwinSlimePersistence
         }
 
         if (saved!.RoomKey != RaceRuntime.RoomKey
-            || RaceRuntime.State?.Players.SingleOrDefault() is not { } player
+            || modifier.OwnerPlayer is not { } player
             || player.RunState != modifier.SlimeRunState
             || TwinSlimeRuntime.StackCount(player) < saved.Stacks)
         {
@@ -152,7 +152,7 @@ internal static class TwinSlimePersistence
 
     private static bool IsCurrent(RaceModifier modifier)
         => RaceRuntime.Live
-            && ReferenceEquals(RaceModifier.Active, modifier)
+            && RaceRuntime.State?.Modifiers.Contains(modifier) == true
             && ReferenceEquals(RaceRuntime.State, modifier.SlimeRunState);
 
     private static bool IsValid(TwinSlimeSavedState state)

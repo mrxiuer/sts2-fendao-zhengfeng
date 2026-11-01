@@ -77,7 +77,7 @@ internal static class TwinSlimeRuntime
         if (!RaceRuntime.Live || RaceSession.Current is not { } session
             || RaceRuntime.State?.Players.Contains(player) != true)
             return 0;
-        return Math.Max(0, session.Me.Count(TwinSlimeRules.EffectId));
+        return Math.Max(0, RaceRuntime.RacerFor(player)?.Count(TwinSlimeRules.EffectId) ?? 0);
     }
 
     internal static bool ShouldLookLikeSlime(Player player) => StackCount(player) > 0 || Find(player) != null;
@@ -395,12 +395,9 @@ internal static class TwinSlimeRuntime
             return;
         }
 
-        float firstHalf = first.Visuals.Bounds.Size.X * 0.5f;
-        float secondHalf = second.Visuals.Bounds.Size.X * 0.5f;
-        float center = first.Position.X;
-        float gap = 24f;
-        first.Position = new Vector2(center - firstHalf - gap * 0.5f, first.Position.Y);
-        second.Position = new Vector2(center + secondHalf + gap * 0.5f, first.Position.Y);
+        // Reuse the stable allied formation even while encounter metadata is unavailable.
+        // Offsetting from the first body's current position accumulates drift on repeated refreshes.
+        FriendlyFormation.Reflow(room.CreatureNodes);
     }
 
     private static async Task AddSecondBodyAndCopyPowers(Pair pair, PowerModel[] inheritedPowers)

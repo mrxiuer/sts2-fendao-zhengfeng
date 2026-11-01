@@ -31,27 +31,25 @@ internal static class BurrowEffect
 
     // Kept as one operation for native verification: a test may inspect the exact
     // block and break it before asking CombatManager to execute the end-turn.
-    internal static async Task<int> Activate(bool endTurn)
+    internal static async Task<int> Activate(bool endTurn, Player? owner = null)
     {
-        if (!RaceRuntime.Live || RaceSession.Current is not { } session || RaceModifier.Active is not { } modifier)
+        var player = owner ?? RaceRuntime.LocalPlayer();
+        if (!RaceRuntime.Live || RaceSession.Current is not { } session || player == null || RaceModifier.ForPlayer(player) is not { } modifier
+            || RaceRuntime.RacerFor(player) is not { } racer)
             throw new RuleException(L10n.T("地底庇护只能在分道争锋中使用。"));
-        var player = RaceRuntime.State?.Players.SingleOrDefault();
-        if (player == null || !CombatManager.Instance.IsInProgress || CombatManager.Instance.IsEnding
-            || !session.Me.InBattle || player.PlayerCombatState?.Phase != PlayerTurnPhase.Play
-            || player.Creature.CombatState?.CurrentSide != CombatSide.Player)
+        if (!CombatManager.Instance.IsInProgress || CombatManager.Instance.IsEnding || !racer.InBattle
+            || player.PlayerCombatState?.Phase != PlayerTurnPhase.Play || player.Creature.CombatState?.CurrentSide != CombatSide.Player)
             throw new RuleException(L10n.T("地底庇护只能在自己的战斗回合使用。"));
-
-        var before = BurrowRules.Read(session.Me);
-        if (!session.Me.Has(BurrowRules.EffectId)) throw new RuleException(L10n.T("尚未取得地底庇护。"));
+        var before = BurrowRules.Read(racer);
+        if (!racer.Has(BurrowRules.EffectId)) throw new RuleException(L10n.T("尚未取得地底庇护。"));
         if (before.Charges <= 0) throw new RuleException(L10n.T("地底庇护没有储存次数。"));
         if (before.Phase != BurrowRules.Phase.Ready) throw new RuleException(L10n.T("地底庇护仍在冷却中。"));
-
-        string battleKey = session.Me.BattleKey;
-        await session.Submit(session.New("burrow_use", battleKey, amount: modifier.Turn));
+        string battleKey = racer.BattleKey;
+        await session.SubmitSharedLifecycle(modifier.LifecycleCommand("burrow_use", battleKey, amount: modifier.Turn));
         if (!ReferenceEquals(RaceSession.Current, session)) return 0;
-        var applied = BurrowRules.Read(session.Me);
+        var applied = BurrowRules.Read(RaceRuntime.RacerFor(player)!);
         if (applied.Phase != BurrowRules.Phase.Burrowed || applied.Charges != before.Charges - 1
-            || session.Me.BattleKey != battleKey)
+            || RaceRuntime.RacerFor(player)!.BattleKey != battleKey)
             throw new RuleException(L10n.T("遁地指令未被比赛状态确认。"));
 
         int block = 0;
@@ -75,18 +73,18 @@ internal static class BurrowEffect
     /// </summary>
     internal static async Task AfterPlayerTurnStartLate(Player player, RaceModifier modifier)
     {
-        if (!RaceRuntime.Live || RaceSession.Current is not { } session || RaceRuntime.State?.Players.SingleOrDefault() != player
-            || !session.Me.InBattle || !CombatManager.Instance.IsInProgress || CombatManager.Instance.IsEnding) return;
+        if (!RaceRuntime.Live || RaceSession.Current is not { } session || RaceRuntime.RacerFor(player) is not { } racer
+            || !racer.InBattle || !CombatManager.Instance.IsInProgress || CombatManager.Instance.IsEnding) return;
 
-        string battleKey = session.Me.BattleKey;
-        var state = BurrowRules.Read(session.Me);
+        string battleKey = racer.BattleKey;
+        var state = BurrowRules.Read(RaceRuntime.RacerFor(player)!);
         switch (state.Phase)
         {
             case BurrowRules.Phase.Burrowed:
                 if (modifier.Turn <= state.UseTurn) break;
                 BurrowVisuals.SnapBuried(player.Creature);
-                await session.Submit(session.New("burrow_emerge", battleKey, amount: modifier.Turn));
-                state = BurrowRules.Read(session.Me);
+                await session.SubmitSharedLifecycle(modifier.LifecycleCommand("burrow_emerge", battleKey, amount: modifier.Turn));
+                state = BurrowRules.Read(RaceRuntime.RacerFor(player)!);
                 bool stunned = state.Phase == BurrowRules.Phase.Stunned;
                 BurrowVisuals.Emerge(player.Creature, stunned);
                 BurrowStatusHud.Refresh();
@@ -101,7 +99,7 @@ internal static class BurrowEffect
                     PlayerCmd.EndTurn(player, canBackOut: false);
                     break;
                 }
-                await session.Submit(session.New("burrow_ready", battleKey, amount: modifier.Turn));
+                await session.SubmitSharedLifecycle(modifier.LifecycleCommand("burrow_ready", battleKey, amount: modifier.Turn));
                 BurrowVisuals.ClearDaze(player.Creature);
                 BurrowStatusHud.Refresh();
                 break;
@@ -109,26 +107,28 @@ internal static class BurrowEffect
     }
 
     /// <summary>Called from RaceModifier.AfterBlockBroken for the player's creature.</summary>
-    internal static async Task AfterBlockBroken()
+    internal static async Task AfterBlockBroken(Player? owner = null)
     {
-        if (RaceSession.Current is not { } session || !session.Me.InBattle) return;
-        if (BurrowRules.Read(session.Me).Phase != BurrowRules.Phase.Burrowed) return;
-        await session.Submit(session.New("burrow_block_broken", session.Me.BattleKey));
-        var player = RaceRuntime.State?.Players.SingleOrDefault();
+        var player = owner ?? RaceRuntime.LocalPlayer();
+        if (RaceSession.Current is not { } session || RaceRuntime.RacerFor(player) is not { InBattle: true } racer) return;
+        var state = BurrowRules.Read(racer);
+        if (state.Phase != BurrowRules.Phase.Burrowed) return;
+        await session.SubmitSharedLifecycle(RaceModifier.ForPlayer(player)!.LifecycleCommand("burrow_block_broken", racer.BattleKey, amount: state.UseTurn));
         if (player != null) BurrowVisuals.ShieldBroken(player.Creature);
         BurrowStatusHud.Refresh();
     }
 
     /// <summary>Call from RaceModifier.AfterCombatEnd for abnormal exits as well as normal cleanup.</summary>
-    internal static async Task AfterCombatEnd()
+    internal static async Task AfterCombatEnd(RaceModifier modifier)
     {
-        if (RaceSession.Current is not { } session) return;
-        var state = BurrowRules.Read(session.Me);
+        if (RaceSession.Current is not { } session || RaceRuntime.RacerFor(modifier.OwnerPlayer) is not { } racer) return;
+        var state = BurrowRules.Read(racer);
         if (state.Phase != BurrowRules.Phase.Ready)
-            await session.Submit(session.New("burrow_cleanup", session.Me.BattleKey));
-        BurrowVisuals.Restore(RaceRuntime.State?.Players.SingleOrDefault()?.Creature);
+            await session.SubmitSharedLifecycle(modifier.LifecycleCommand("burrow_cleanup", racer.BattleKey));
+        BurrowVisuals.Restore(modifier.OwnerPlayer.Creature);
         BurrowStatusHud.Refresh();
     }
+
 }
 
 public sealed partial class RaceModifier
@@ -137,7 +137,7 @@ public sealed partial class RaceModifier
 
     public override Task AfterBlockBroken(PlayerChoiceContext choiceContext, Creature target, Creature? breaker)
         => target.Player == Player || target.PetOwner == Player && target.Monster is SubstitutePuppet { GuardsOwner: true }
-            ? BurrowEffect.AfterBlockBroken() : Task.CompletedTask;
+            ? BurrowEffect.AfterBlockBroken(Player) : Task.CompletedTask;
 }
 
 /// <summary>Compatibility entry points retained for older callers; effect UI is native.</summary>
